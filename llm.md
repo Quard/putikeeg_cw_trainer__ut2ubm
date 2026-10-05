@@ -23,11 +23,24 @@ Source: `references/internal/sidetone_spec.md` sections 6.2, 9 and 14.
 
 ### Interrupt service routines
 
-Source: `references/internal/sidetone_spec.md` sections 9 and 21.
+Source: `references/internal/sidetone_spec.md` sections 9 and 21, `references/internal/keyer_spec.md` section 3.1
+(decision D-K1).
 
 - An interrupt calls only functions of its own file. The firmware compiles with `--norestartseqatomics`. With
   SDCC 4.6.0, an interrupt that calls a function of another file still gets the `sdcc_atomic_maybe_rollback`
   epilogue, and the link fails. Only `architector` changes this layout.
+- A service of another module comes into the ISR file through a header. The header defines the service as a
+  `static` function. Only the ISR file includes it on the target, so the service is a function of that file.
+  Example: `firmware/inc/cw/keyer_service.h` defines `static void keyer_service(void)`, and only
+  `firmware/src/sidetone/sidetone.c` includes it, at the end of the file, before the Timer 0 ISR. The ISR body is
+  `keyer_service(); sidetone_service();` in this order.
+- Every file that includes such a header calls its `static` function. Otherwise GCC reports an unused function,
+  and `-Werror` stops the host build. Host tests include the header directly.
+- The ISR reads and writes the state that it shares with the main loop directly. That is a memory access, not a
+  call. Example: `firmware/src/cw/keyer.c` defines the shared keyer state, and `firmware/inc/cw/keyer_shared.h`
+  declares it `extern`.
+- `sidetone_timer0_isr` has exactly two calls: `lcall _keyer_service` and `lcall _sidetone_service`. If the build
+  shows an `sdcc_atomic` symbol or another call in this ISR, stop and report it to `architector`.
 - A function that an interrupt calls uses `#pragma nooverlay`. It calls no other function and no library
   arithmetic helper (`__mulint`, `__divulong` and others), because the main loop uses them too.
 - No source uses `<stdatomic.h>` or C11 atomics.
@@ -41,8 +54,9 @@ Project documents in `references/internal/`:
 | --- | --- |
 | `components_and_wiring.md` | Board revision, components, pins, audio routes, measurements. |
 | `menu_subsystem_spec.md` | Menu, settings, EEPROM and button contract. |
-| `ui-ux.md` | UI/UX decision record: display, buttons, Tone preview, device checks. |
+| `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view, `Paddle` setting, device checks. |
 | `sidetone_spec.md` | Sidetone contract: API, envelope, registers, memory, decisions. |
+| `keyer_spec.md` | Keyer, Free Input and long-press contract: ISR layout (D-K1), keyer behavior and timing, Morse table, P3.2 and P5.5 use, `Paddle` setting, memory, device checks DC-K1 to DC-K7. |
 | `sidetone_pwm_envelope_research.md` | Sidetone research and the implemented design. |
 | `sidetone_validation.md` | Sidetone device checks and measurement results. |
 | `paddle_keyer_research.md` | Paddle input and iambic keyer guide. |

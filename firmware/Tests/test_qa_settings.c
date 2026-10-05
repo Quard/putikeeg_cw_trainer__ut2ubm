@@ -17,12 +17,12 @@
 
 static const uint8_t default_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
                                                              0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U};
+static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U};
 
-/* Spec section 5.2. Effective speeds use the current base speed as max. */
-static const uint16_t spec_min[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U};
-static const uint16_t spec_max[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U};
-static const uint16_t spec_step[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+/* Spec section 5.2, and keyer_spec.md section 6.13 for Paddle. Effective speeds use the current base speed as max. */
+static const uint16_t spec_min[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U};
+static const uint16_t spec_max[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U};
+static const uint16_t spec_step[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
 
 static uint16_t oracle_clamp(settings_id_t id, uint32_t value, uint16_t base_speed) {
   uint32_t max = spec_max[id];
@@ -68,6 +68,7 @@ static void values_of(const uint8_t* record, uint16_t* values) {
   values[SETTINGS_ID_MAX_WORD_LEN] = oracle_clamp(SETTINGS_ID_MAX_WORD_LEN, record[11], 0U);
   values[SETTINGS_ID_BACKLIGHT] = oracle_clamp(SETTINGS_ID_BACKLIGHT, record[12], 0U);
   values[SETTINGS_ID_CONTRAST] = oracle_clamp(SETTINGS_ID_CONTRAST, record[13], 0U);
+  values[SETTINGS_ID_PADDLE_SWAP] = (uint16_t)((record[10] >> 1) & 0x01U);
 }
 
 static bool are_values(const uint16_t* values) {
@@ -212,20 +213,87 @@ static void test_every_field_value_loads_clamped(void) {
   }
 }
 
-/* Flags bits 1-7 are ignored on load and written as 0 by the next save. */
+/*
+ * Flags bits 2-7 are ignored on load and written as 0 by the next save; bit 1 is Paddle (keyer_spec.md 6.13).
+ * Every flags byte value is checked.
+ */
 static void test_flag_bits_written_as_zero(void) {
-  uint8_t record[SETTINGS_RECORD_SIZE];
+  unsigned flags;
+  for (flags = 0U; flags <= 0xFFU; ++flags) {
+    uint8_t record[SETTINGS_RECORD_SIZE];
+    settings_load_status_t status;
+    memcpy(record, default_record, sizeof(record));
+    record[10] = (uint8_t)flags;
+    record[14] = settings_crc8(record, 14U);
+    load_record(record, &status);
+    TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
+    TEST_ASSERT_EQUAL(flags & 0x01U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+    TEST_ASSERT_EQUAL((flags >> 1) & 0x01U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+    TEST_ASSERT(!settings_has_unsaved_changes());
+    TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
+    TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
+    TEST_ASSERT_EQUAL(flags & 0x03U, fake_iap_memory()[10]);
+    TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+  }
+}
+
+/*
+ * V-78 / AC-K50: a record of the earlier firmware (flags bit 1 = 0, its own CRC) loads as Normal with no write.
+ * The Reversed vector of keyer_spec.md 6.13 loads as Reversed. Toggling one flag id never moves the other bit.
+ */
+static void test_paddle_record_vectors(void) {
+  static const uint8_t reversed_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                                0x14U, 0x02U, 0x03U, 0x05U, 0x08U, 0x20U, 0x78U};
+  uint8_t old_record[SETTINGS_RECORD_SIZE];
   settings_load_status_t status;
-  memcpy(record, default_record, sizeof(record));
-  record[10] = 0xFEU;
-  record[14] = settings_crc8(record, 14U);
-  load_record(record, &status);
+  unsigned show;
+  unsigned paddle;
+
+  /* Earlier firmware: Show CW Code off, Tone 900 Hz, valid CRC computed over its own bytes. */
+  memcpy(old_record, default_record, sizeof(old_record));
+  old_record[3] = 0x84U;
+  old_record[4] = 0x03U;
+  old_record[10] = 0x00U;
+  old_record[14] = settings_crc8(old_record, 14U);
+  load_record(old_record, &status);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_PADDLE_SWAP));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
-  TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
-  TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-  TEST_ASSERT_EQUAL(0x00U, fake_iap_memory()[10]);
-  TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+  TEST_ASSERT_EQUAL(900U, settings_get(SETTINGS_ID_TONE_HZ));
+  TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
+  TEST_ASSERT_EQUAL(0U, write_operations());
+
+  TEST_ASSERT_EQUAL(0x78U, settings_crc8(reversed_record, 14U));
+  load_record(reversed_record, &status);
+  TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+  TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
+
+  for (show = 0U; show <= 1U; ++show) {
+    for (paddle = 0U; paddle <= 1U; ++paddle) {
+      load_record(default_record, &status);
+      (void)settings_set(SETTINGS_ID_SHOW_CW_CODE, (uint16_t)show);
+      (void)settings_set(SETTINGS_ID_PADDLE_SWAP, (uint16_t)paddle);
+      TEST_ASSERT_EQUAL(show, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+      TEST_ASSERT_EQUAL(paddle, settings_get(SETTINGS_ID_PADDLE_SWAP));
+      /* Values above 1 clamp to 1 and keep the other bit. */
+      (void)settings_set(SETTINGS_ID_PADDLE_SWAP, 0xFFFFU);
+      TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+      TEST_ASSERT_EQUAL(show, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+      (void)settings_set(SETTINGS_ID_PADDLE_SWAP, (uint16_t)paddle);
+      fake_iap_clear_counters();
+      if ((show == 1U) && (paddle == 0U)) {
+        /* A change and a change back: no save. */
+        TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
+        TEST_ASSERT_EQUAL(0U, write_operations());
+      } else {
+        TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
+        TEST_ASSERT_EQUAL((uint8_t)(show | (paddle << 1)), fake_iap_memory()[10]);
+        TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+      }
+    }
+  }
 }
 
 /* settings_set() against the oracle for every id and value, from several base speeds. */
@@ -326,6 +394,7 @@ int main(void) {
   TEST_RUN(test_other_versions_give_defaults);
   TEST_RUN(test_every_field_value_loads_clamped);
   TEST_RUN(test_flag_bits_written_as_zero);
+  TEST_RUN(test_paddle_record_vectors);
   TEST_RUN(test_set_matches_clamp_oracle);
   TEST_RUN(test_read_fail_at_each_byte);
   TEST_RUN(test_retry_after_fail_writes_live_values);

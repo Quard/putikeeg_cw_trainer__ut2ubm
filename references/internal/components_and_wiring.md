@@ -20,6 +20,30 @@ The `enter` button is also connected to the tip of the key/paddle TRS socket.
 
 A 100 kΩ potentiometer controls the volume.
 
+### Firmware use of the paddle pins
+
+The keyer firmware uses the paddle socket pins as follows. Sources:
+[keyer_spec.md](keyer_spec.md) sections 4, 5.3, 6.12 and 14, [ui-ux.md](ui-ux.md) sections 3.1 and 6.7,
+`firmware/inc/board/paddle_pins.h`, `firmware/inc/board/button_pins.h`. The device behavior is unverified until
+the device checks DC-K1 and DC-K2 of `keyer_spec.md` section 14 pass.
+
+| Pin | Firmware setup | Owner | Device status |
+| --- | --- | --- | --- |
+| P3.2 | High-impedance input with the internal pull-up (`P3PU` bit 2). `buttons_init()` sets it up. Active low: a low pin is a closed contact. | Shared. In the menu, `buttons` reads it as `enter`. While Free Input is open, the keyer reads it as the paddle tip, and `buttons_set_enter_enabled(false)` keeps `enter` events off. At the mode end, `buttons_set_enter_enabled(true)` gives it back. A contact held at that moment gives no `enter` until it opens and closes again. | Tip polarity unverified (DC-K2). |
+| P5.5 | High-impedance input (`P5M1` bit 5 = 1, `P5M0` bit 5 = 0) with the internal pull-up (`P5PU` bit 5, about 4.1 kΩ). `keyer_init()` sets it up with `PADDLE_PINS_CONFIGURE()`: the pull-up first, then the mode. Active low. | The keyer only. The menu does not read it. | Pull-up unverified (DC-K1). The repeated tables of the reference manual differ about the P5.5 pull-up. |
+
+Rules:
+
+- The keyer runs in the Timer 0 interrupt. It reads the P3.2 and P5.5 pin bits only. It never writes P3 or P5,
+  their mode registers or `P_SW2`.
+- `P5M1` and `P5M0` change only with `ORL` or `ANL` (`check_asm.sh` rule R5).
+- With `Paddle` = `Normal`, the tip is the dit contact and the ring is the dah contact. `Reversed` swaps them. With
+  `Key Type` = `Straight`, both contacts key.
+- A mono plug shorts the ring to the sleeve. At the start of Free Input, the keyer ignores each closed contact
+  until it opens. So a mono plug that is in the socket before the start works as a straight key on the tip.
+- If the P5.5 pull-up does not work on the fitted chip, the fallback is an `architector` decision: the
+  quasi-bidirectional mode with the latch at 1, or an external pull-up. The firmware has no code for it.
+
 ## Wiring
 
 | MCU Pin | Description |

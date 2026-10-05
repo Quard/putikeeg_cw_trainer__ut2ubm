@@ -2,9 +2,9 @@
 #define MENU_MENU_H
 
 /*
- * Table-driven menu: lists, value edit, placeholder mode screens, the reset-statistics dialog and message screens
- * (references/internal/menu_subsystem_spec.md section 6, references/internal/ui-ux.md). Call from the main loop
- * only; not reentrant.
+ * Table-driven menu: lists, value edit, the Free Input and placeholder mode screens, the reset-statistics dialog
+ * and message screens (references/internal/menu_subsystem_spec.md section 6, references/internal/keyer_spec.md
+ * section 6.14, references/internal/ui-ux.md). Call from the main loop only; not reentrant.
  */
 
 #include <stdbool.h>
@@ -17,6 +17,7 @@
 #define MENU_SCREEN_PLACEHOLDER 2U
 #define MENU_SCREEN_DIALOG 3U
 #define MENU_SCREEN_MESSAGE 4U
+#define MENU_SCREEN_FREE_INPUT 5U
 
 #define MENU_NODE_MAIN 0U
 #define MENU_NODE_SETTINGS 1U
@@ -40,10 +41,16 @@
 /** Shows the main menu with the cursor on its first item and requests a redraw. Call after settings_load(). */
 void menu_init(void);
 
-/** Applies @p event. A change of a visible item requests a redraw; BUTTON_EVENT_NONE does nothing. */
+/**
+ * Applies @p event. A change of a visible item requests a redraw; BUTTON_EVENT_NONE does nothing. Mode screens
+ * act only on long events; the other screens ignore long events.
+ */
 void menu_handle(button_event_t event);
 
-/** Runs the time-based menu work: the Tone preview timeout. Main loop, each pass. Reads the tick only in a preview. */
+/**
+ * Runs the time-based menu work: the Free Input events once its frame is drawn, and the Tone preview timeout.
+ * Main loop, each pass. Reads the tick only in a preview.
+ */
 void menu_poll(void);
 
 /** Returns true while a redraw is pending. */

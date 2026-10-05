@@ -107,11 +107,49 @@ add_library(sidetone_group STATIC
 target_include_directories(sidetone_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
 target_compile_definitions(sidetone_group PUBLIC ${TARGET_DEFINITIONS})
 
+# The keyer tests include cw/keyer_service.h and run the real sidetone for the envelope integration tests.
+set(KEYER_TEST_PATTERN "^test_(qa_)?keyer")
+add_library(keyer_group STATIC
+    "${FIRMWARE_DIR}/src/cw/keyer.c"
+    fakes/fake_paddle_pins.c
+    "${FIRMWARE_DIR}/src/sidetone/sidetone.c"
+    fakes/fake_sidetone_pwm.c
+    fakes/fake_tick.c
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    ${EEPROM_SOURCES})
+target_include_directories(keyer_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
+target_compile_definitions(keyer_group PUBLIC ${TARGET_DEFINITIONS})
+
+set(MORSE_TEST_PATTERN "^test_(qa_)?morse")
+add_library(morse_group STATIC "${FIRMWARE_DIR}/src/cw/morse.c")
+target_include_directories(morse_group PUBLIC ${HOST_INCLUDE_DIRS})
+
+set(FREE_INPUT_TEST_PATTERN "^test_(qa_)?free_input")
+add_library(free_input_group STATIC
+    "${FIRMWARE_DIR}/src/modes/free_input.c"
+    "${FIRMWARE_DIR}/src/cw/morse.c"
+    ${GFX_SOURCES}
+    fakes/fake_keyer.c
+    fakes/fake_sidetone.c
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    ${EEPROM_SOURCES}
+    "${FIRMWARE_DIR}/src/buttons/buttons.c"
+    fakes/fake_tick.c
+    fakes/fake_delay.c
+    fakes/fake_lcd_pins.c
+    fakes/fake_button_pins.c)
+target_include_directories(free_input_group PUBLIC
+    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings")
+target_compile_definitions(free_input_group PUBLIC ${TARGET_DEFINITIONS})
+
 # The menu group also links the buttons, so the start-up tests run the real recovery window.
 set(MENU_TEST_PATTERN "^test_(qa_)?menu")
 file(GLOB MENU_SOURCES CONFIGURE_DEPENDS "${FIRMWARE_DIR}/src/menu/menu*.c")
 add_library(menu_group STATIC
     ${MENU_SOURCES}
+    "${FIRMWARE_DIR}/src/modes/free_input.c"
+    "${FIRMWARE_DIR}/src/cw/morse.c"
+    fakes/fake_keyer.c
     ${GFX_SOURCES}
     "${FIRMWARE_DIR}/src/settings/settings.c"
     ${EEPROM_SOURCES}
@@ -130,7 +168,10 @@ target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS})
 
 set(MODULE_TEST_PATTERNS
     GFX_TEST_PATTERN EEPROM_TEST_PATTERN SETTINGS_TEST_PATTERN BUTTONS_TEST_PATTERN BACKLIGHT_TEST_PATTERN
-    MENU_TEST_PATTERN SIDETONE_TEST_PATTERN)
+    MENU_TEST_PATTERN SIDETONE_TEST_PATTERN KEYER_TEST_PATTERN MORSE_TEST_PATTERN FREE_INPUT_TEST_PATTERN)
+set(KEYER_TEST_PATTERN_LIBRARIES keyer_group)
+set(MORSE_TEST_PATTERN_LIBRARIES morse_group)
+set(FREE_INPUT_TEST_PATTERN_LIBRARIES free_input_group)
 set(SIDETONE_TEST_PATTERN_LIBRARIES sidetone_group)
 set(MENU_TEST_PATTERN_LIBRARIES menu_group)
 set(BACKLIGHT_TEST_PATTERN_LIBRARIES backlight_group)

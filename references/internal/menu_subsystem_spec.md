@@ -10,6 +10,7 @@ Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-
 | This document | Interfaces, data formats, behavior, task split and acceptance criteria. It refines the plan and does not change any user decision. |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | Screen layout, label strings, value formats, edit-mode marker, dialog and placeholder layout, auto-repeat and debounce timing values. |
 | `references/context/STC8H_datasheet.md` | Register facts. Section 8 lists the facts that the developer must check. |
+| `references/internal/keyer_spec.md` (owner `architector`) | Adds long-press events, P3.2 ownership, the `Paddle` setting (flags bit 1) and the Free Input mode screen. Its sections 6.12 to 6.14 are binding for these items. This document repeats them in sections 4.5, 4.8, 4.10, 5, 6.1, 6.3, 6.4, 7 and 14. |
 | `AGENTS.md` | Project rules (memory, software SPI, interrupts, team workflow). |
 
 Precedence rules:
@@ -309,7 +310,8 @@ typedef uint8_t button_event_t;
 #define BUTTON_EVENT_MENU 0x03U   /* menu/back */
 #define BUTTON_EVENT_ENTER 0x04U
 #define BUTTON_EVENT_REPEAT_FLAG 0x80U
-#define BUTTON_EVENT_CODE(event) ((uint8_t)((event) & 0x7FU))
+#define BUTTON_EVENT_LONG_FLAG 0x40U
+#define BUTTON_EVENT_CODE(event) ((uint8_t)((event) & 0x3FU))   /* removes both flags */
 
 /** Configures the pins and pull-ups, checks for the display recovery start and takes the start state. */
 void buttons_init(void);
@@ -319,6 +321,9 @@ bool buttons_is_recovery_start(void);
 
 /** Returns at most one event. The main loop calls it until it returns BUTTON_EVENT_NONE (section 4.11). */
 button_event_t buttons_poll(void);
+
+/** Gives P3.2 to the menu (true) or takes it away (false). Main loop only. */
+void buttons_set_enter_enabled(bool is_enabled);
 ```
 
 `inc/board/buttons_config.h`. Every value can be changed with `-D`. The values are from `ui-ux.md` section 6.2.
@@ -329,7 +334,10 @@ button_event_t buttons_poll(void);
 #define BUTTONS_REPEAT_PERIOD_MS 80U
 #define BUTTONS_SETTLE_MS 1U            /* pull-up settle time before the first sample */
 #define BUTTONS_RECOVERY_HOLD_MS 50U     /* ui-ux.md section 8.1 */
+#define BUTTONS_LONG_PRESS_MS 800U       /* ui-ux.md section 6.2, decision UX-23 */
 ```
+
+A compile-time check keeps `BUTTONS_LONG_PRESS_MS` above 0.
 
 `inc/board/button_pins.h` (target). The host replacement is `Tests/fakes/board/button_pins.h`.
 
@@ -383,7 +391,39 @@ Poll algorithm. It is binding, so that the tests are deterministic.
 button that is held at power-up gives no event until the user releases it and presses it again. Thus the held
 MENU of a recovery start does not close the message screen.
 MENU and ENTER never repeat. A held ENTER (for example a closed key on the paddle socket) gives one event only.
-There are no release events and no long-press events.
+There are no release events.
+
+#### Long presses and P3.2 ownership
+
+`keyer_spec.md` section 6.12 adds these steps to the poll algorithm above. That section is binding. Summary:
+
+- Buttons with a long press: MENU, PREV and NEXT. ENTER has no long press, because it is the paddle tip.
+- Each of the three buttons has its own long-pending bit and press time in xdata. A released-to-pressed change of
+  the debounced bit sets the long-pending bit and the press time = now. A pressed-to-released change clears the
+  long-pending bit.
+- Long events come after the press events (step 3) and before the repeat (step 4). The order is MENU, PREV, NEXT.
+  A button gives its long event when its long-pending bit is set and `(uint16_t)(now - press time) >=
+  BUTTONS_LONG_PRESS_MS`. The poll then clears the bit and returns the event code with `BUTTON_EVENT_LONG_FLAG`.
+  One long event comes per press. A repeat that falls due in the same poll comes on a later poll.
+- The hold counts on the debounced state (D-K4). Both edges of the debounced state lag the pin by
+  `BUTTONS_DEBOUNCE_MS`. Measured from the press event, the pin must still be closed at 780 ms. A release bounce
+  shorter than the debounce does not end the hold.
+- A held PREV or NEXT gives its repeats and also one long event. Lists use the repeats. Mode screens use the long
+  event. When PREV and NEXT presses debounce in the same poll, the repeat belongs to PREV (D-K3).
+- `buttons_init()` clears the long-pending bits and sets `buttons_is_enter_enabled` to true. A button held at
+  start-up gives no long event, because it has no press edge.
+
+P3.2 ownership (`keyer_spec.md` section 6.12, `ui-ux.md` UX-33):
+
+- `buttons_set_enter_enabled(false)`: `buttons_is_enter_enabled` = false. The pending ENTER bit is cleared. While
+  ENTER is disabled, each poll clears the ENTER bit of the raw sample before the debounce, so ENTER gives no press
+  edge.
+- `buttons_set_enter_enabled(true)`: the function reads the raw pins and `tick_now()` once. The ENTER candidate
+  bit and the ENTER debounced bit take the raw ENTER bit (reseed). The ENTER change time = now. The pending ENTER
+  bit is cleared. Then `buttons_is_enter_enabled` = true. The other buttons do not change.
+- Result: a contact held at the end of Free Input gives no ENTER until it opens and closes again.
+- Free Input calls `buttons_set_enter_enabled(false)` at its start and `buttons_set_enter_enabled(true)` at its
+  end. The keyer runs only while ENTER is disabled, so one P3.2 closure is never both ENTER and a key element.
 
 ### 4.6 Backlight `inc/backlight/backlight.h`, `src/backlight/backlight.c`
 
@@ -554,7 +594,8 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_MAX_WORD_LEN 7U
 #define SETTINGS_ID_BACKLIGHT 8U
 #define SETTINGS_ID_CONTRAST 9U
-#define SETTINGS_ID_COUNT 10U
+#define SETTINGS_ID_PADDLE_SWAP 10U  /* 0 Normal, 1 Reversed (keyer_spec.md section 6.13) */
+#define SETTINGS_ID_COUNT 11U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
@@ -659,6 +700,7 @@ follows the pattern of `src/lcd/lcd_commands.h`.
 #define MENU_SCREEN_PLACEHOLDER 2U
 #define MENU_SCREEN_DIALOG 3U
 #define MENU_SCREEN_MESSAGE 4U
+#define MENU_SCREEN_FREE_INPUT 5U          /* keyer_spec.md section 6.14 */
 
 #define MENU_NODE_MAIN 0U
 #define MENU_NODE_SETTINGS 1U
@@ -760,7 +802,7 @@ only file that sets `EA`.
 | 7 | 1 | TX speed, WPM | |
 | 8 | 1 | effective TX speed, WPM | |
 | 9 | 1 | key type | 0 straight, 1 iambic A, 2 iambic B |
-| 10 | 1 | flags | bit 0 = show CW code. Bits 1-7 are written as 0 and ignored on load. |
+| 10 | 1 | flags | bit 0 = show CW code. Bit 1 = paddle swap (1 = `Reversed`). Bits 2-7 are written as 0 and ignored on load. |
 | 11 | 1 | max word length | |
 | 12 | 1 | backlight level | |
 | 13 | 1 | contrast | |
@@ -772,6 +814,14 @@ CRC-8: polynomial `0x07`, initial value `0x00`, no reflection, no final XOR, MSB
 value: ASCII `123456789` gives `0xF4`.
 
 Default record (test vector): `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54`.
+
+Default record with `Paddle` = `Reversed` (test vector, `keyer_spec.md` section 6.13):
+`43 57 01 58 02 20 20 14 14 02 03 05 08 20 78`.
+
+The `Paddle` setting changes neither the layout nor the layout version. A record of the earlier firmware has bit 1
+= 0, so it reads as `Normal`, and its CRC stays valid. `settings_get()` returns flags bit 0 for
+`SETTINGS_ID_SHOW_CW_CODE` and flags bit 1 for `SETTINGS_ID_PADDLE_SWAP`, each as 0 or 1. `settings_set()` for
+these two ids changes only the bit of the id.
 
 ### 5.2 Parameters
 
@@ -787,6 +837,7 @@ Default record (test vector): `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54`.
 | `MAX_WORD_LEN` | Max word length | 4 | 8 | 1 | 5 | none |
 | `BACKLIGHT` | Backlight | 0 | 10 | 1 | 8 | none |
 | `CONTRAST` | Contrast | 0 | 63 | 1 | `LCD_DEFAULT_CONTRAST` (32) | none |
+| `PADDLE_SWAP` | Paddle | 0 | 1 | 1 | 0 (Normal) | choice (0 Normal, 1 Reversed) |
 
 The final unit and choice strings come from `ui-ux.md`.
 
@@ -812,7 +863,7 @@ Node `MENU_NODE_MAIN` (root, title `CW Trainer`):
 | --- | --- | --- | --- |
 | 0 | `Receiving` | mode | `MENU_MODE_RECEIVING` (0) |
 | 1 | `Sending` | mode | `MENU_MODE_SENDING` (1) |
-| 2 | `Free Input` | mode | `MENU_MODE_FREE_INPUT` (2) |
+| 2 | `Free Input` | mode | `MENU_MODE_FREE_INPUT` (2), screen `MENU_SCREEN_FREE_INPUT` |
 | 3 | `Settings` | submenu | `MENU_NODE_SETTINGS` |
 
 Node `MENU_NODE_SETTINGS` (title `Settings`, flag: save on exit):
@@ -835,6 +886,7 @@ Node `MENU_NODE_CW` (title `Settings > CW`):
 | 3 | `TX Speed` | value | `SETTINGS_ID_TX_WPM` |
 | 4 | `TX Eff. Speed` | value | `SETTINGS_ID_TX_EFF_WPM` |
 | 5 | `Key Type` | choice | `SETTINGS_ID_KEY_TYPE` (`Straight`, `Iambic A`, `Iambic B`) |
+| 6 | `Paddle` | choice | `SETTINGS_ID_PADDLE_SWAP` (`Normal`, `Reversed`), field width 8 |
 
 Node `MENU_NODE_DISPLAY` (title `Settings > Display`):
 
@@ -854,14 +906,20 @@ needs more items, `architector` adds the scroll rule of `ui-ux.md` section 5.5 t
 
 ### 6.3 State machine
 
-The table uses `BUTTON_EVENT_CODE(event)`. "Press" means that the repeat flag is clear.
+The table uses `BUTTON_EVENT_CODE(event)`. "Press" means that the repeat flag and the long flag are clear. "Long"
+means that the long flag is set (section 4.5).
+
+Lists, edit mode, the dialog and the message screen ignore long events: no state change and no redraw request. The
+press of the same hold already acted (`ui-ux.md` UX-24). The mode screens (PLACEHOLDER and FREE_INPUT) act only on
+long events (`keyer_spec.md` section 6.14, `ui-ux.md` UX-31).
 
 | Screen | Event | Action |
 | --- | --- | --- |
 | LIST | NEXT | Cursor + 1. At the last item, a press goes to item 0 and a repeat stays. |
 | LIST | PREV | Cursor - 1. At item 0, a press goes to the last item and a repeat stays. |
 | LIST | ENTER on submenu | Push the child node with cursor 0. |
-| LIST | ENTER on mode | Screen PLACEHOLDER for that mode. |
+| LIST | ENTER on mode `Free Input` | Screen FREE_INPUT with a redraw request, then `free_input_enter()`. |
+| LIST | ENTER on mode `Receiving` or `Sending` | Screen PLACEHOLDER for that mode. |
 | LIST | ENTER on value or choice | Screen EDIT on the same row. |
 | LIST | ENTER on action | Screen DIALOG with choice No (each time it opens). |
 | LIST | MENU, depth > 1, node without the save-on-exit flag | Pop to the parent. The parent cursor stays on the item that opened the node. |
@@ -871,8 +929,12 @@ The table uses `BUTTON_EVENT_CODE(event)`. "Press" means that the repeat flag is
 | EDIT | PREV | For `value < step`, set 0. Else set `value - step`. Both go through `settings_set`. At min, nothing changes. |
 | EDIT | after a change | Contrast: `lcd_set_contrast(value)`. Backlight: `backlight_set_level(value)`. Other ids: nothing. |
 | EDIT | ENTER or MENU | Screen LIST. The value stays. MENU in EDIT does not leave the node. |
-| PLACEHOLDER | MENU | Screen LIST, same cursor. |
-| PLACEHOLDER | NEXT, PREV, ENTER | Nothing. |
+| PLACEHOLDER | Long MENU | Screen LIST, same cursor. |
+| PLACEHOLDER | Long NEXT or long PREV, and every event without the long flag | Nothing. |
+| FREE_INPUT | Long MENU | `free_input_leave()`, then screen LIST with a redraw request. The cursor stays on `Free Input`. |
+| FREE_INPUT | Long PREV | `free_input_clear()`. |
+| FREE_INPUT | Long NEXT | `free_input_delimiter()`. |
+| FREE_INPUT | Every event without the long flag | Nothing. |
 | DIALOG | NEXT | Choice Yes. |
 | DIALOG | PREV | Choice No. |
 | DIALOG | ENTER, choice No | Screen LIST, same cursor. |
@@ -901,6 +963,14 @@ tries the save again.
 The message screen has two texts. `Statistics reset` / `OK` has the title `Reset Statistics` (`ui-ux.md` section
 5.8). `Not saved` / `OK` has the title `Settings` (`ui-ux.md` Q-4).
 
+Free Input screen (`ui-ux.md` section 5.9, `keyer_spec.md` sections 6.11 and 6.14):
+
+- `menu_render()` draws only the title bar `Free Input`, once at the mode start, after its usual full clear. It
+  uses the code that draws the placeholder title. No other path requests a redraw while Free Input is open.
+- `free_input` draws the decoded text into rows 1-7 of `lcd_fb`. `menu_poll()` calls `free_input_poll()` only on
+  screen FREE_INPUT with no redraw pending, so a character never comes before the title bar.
+- `menu_show_message()` on screen FREE_INPUT calls `free_input_leave()` first.
+
 `menu_render` can redraw the full screen each time. It paints every pixel of the screen, so no pixel of the earlier
 screen stays.
 
@@ -918,7 +988,9 @@ Gap line (decision of 2026-10-05, conflict between `ui-ux.md` sections 4.2 and 9
 
 ## 7. Interaction with other rules
 
-- There is no new interrupt handler. ISRs do not touch LCD pins, button pins, P0.3, IAP or PWMB.
+- There is no new interrupt handler. ISRs do not touch LCD pins, button pins, P0.3, IAP or PWMB. Exception from
+  `keyer_spec.md` section 8: the keyer part of the Timer 0 ISR reads the P3.2 and P5.5 pin bits. It never writes
+  them.
 - These registers change only with `ORL` or `ANL` and a constant mask of the bits of the module: `P0M0`, `P0M1`,
   `P3M0`, `P3M1`, `P_SW2`, `PCON` and `RSTCFG`. The new modules never write port 2.
 - `BUTTON_PINS_CONFIGURE()` and `BACKLIGHT_PWM_CONFIGURE()` set `EAXFR`. It stays set. No code clears it. The xdata
@@ -1280,7 +1352,7 @@ QA runs two times: after T2 (font decoder and text output, the highest risk) and
 | A decoder error that the golden generator shares | Hand-checked vectors (T1) and the independent QA check (section 13). |
 | Stack use of the text path | The margin rule of section 11 and the count from the assembly. |
 | Full-screen render time in software | Device check 6. The fallback is a row-level redraw (architect decision). |
-| ENTER shares P3.2 with the paddle tip, so a plugged key can press ENTER | Out of scope. Recorded for the keyer work. |
+| ENTER shares P3.2 with the paddle tip, so a plugged key can press ENTER | In the menu this stays: a held key gives one ENTER (section 4.5). In Free Input the keyer owns P3.2 (`keyer_spec.md` section 6.12, `ui-ux.md` UX-33). |
 | EEPROM operation at low battery voltage | The LVD flag check before each erase and program (section 3.6, Q-5). A drop during the one 4-6 ms erase is not caught. Then the page is blank and the defaults load. CRC and magic-last protect the record. |
 | HX4004A needs a different PWM frequency or polarity | Both are configurable with `-D`. Device check 3. |
 

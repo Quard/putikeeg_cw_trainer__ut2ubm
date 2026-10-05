@@ -3,6 +3,7 @@
 #include "backlight/backlight.h"
 #include "lcd/lcd.h"
 #include "menu_internal.h"
+#include "modes/free_input.h"
 #include "settings/settings.h"
 #include "sidetone/sidetone.h"
 #include "stats/stats.h"
@@ -19,6 +20,7 @@ MEM_XDATA bool menu_is_redraw_pending;
 /* Working values of menu_handle(); SDCC would put them in internal RAM. */
 static MEM_XDATA uint8_t handle_code;
 static MEM_XDATA bool handle_is_repeat;
+static MEM_XDATA bool handle_is_long;
 static MEM_XDATA uint16_t edit_value;
 
 /* Tone preview, references/internal/ui-ux.md section 6.5. */
@@ -96,7 +98,12 @@ static void menu_enter_item(void) {
       menu_is_redraw_pending = true;
     }
   } else if (item->kind == MENU_KIND_MODE) {
-    menu_show_screen(MENU_SCREEN_PLACEHOLDER);
+    if (item->target == MENU_MODE_FREE_INPUT) {
+      menu_show_screen(MENU_SCREEN_FREE_INPUT);
+      free_input_enter();
+    } else {
+      menu_show_screen(MENU_SCREEN_PLACEHOLDER);
+    }
   } else if (item->kind == MENU_KIND_ACTION) {
     menu_current_choice = MENU_DIALOG_NO;
     menu_show_screen(MENU_SCREEN_DIALOG);
@@ -186,6 +193,41 @@ static void menu_handle_dialog(void) {
   }
 }
 
+/* Mode screens act only on long presses (ui-ux.md sections 6.1 and 6.6). */
+static void menu_handle_mode_screen(void) {
+  if (!handle_is_long) {
+    return;
+  }
+  if (handle_code == BUTTON_EVENT_MENU) {
+    if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+      free_input_leave();
+    }
+    menu_show_screen(MENU_SCREEN_LIST);
+  } else if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+    if (handle_code == BUTTON_EVENT_PREV) {
+      free_input_clear();
+    } else if (handle_code == BUTTON_EVENT_NEXT) {
+      free_input_delimiter();
+    }
+  }
+}
+
+/* Lists, edit mode, the dialog and messages ignore long events: the press of the same hold already acted (UX-24). */
+static void menu_handle_other_screen(void) {
+  if (handle_is_long) {
+    return;
+  }
+  if (menu_current_screen == MENU_SCREEN_LIST) {
+    menu_handle_list();
+  } else if (menu_current_screen == MENU_SCREEN_EDIT) {
+    menu_handle_edit();
+  } else if (menu_current_screen == MENU_SCREEN_DIALOG) {
+    menu_handle_dialog();
+  } else if ((handle_code == BUTTON_EVENT_ENTER) || (handle_code == BUTTON_EVENT_MENU)) {
+    menu_show_screen(MENU_SCREEN_LIST);
+  }
+}
+
 void menu_init(void) {
   menu_stack_nodes[0] = MENU_NODE_MAIN;
   menu_stack_cursors[0] = 0U;
@@ -199,24 +241,22 @@ void menu_init(void) {
 void menu_handle(button_event_t event) {
   handle_code = BUTTON_EVENT_CODE(event);
   handle_is_repeat = ((event & BUTTON_EVENT_REPEAT_FLAG) != 0U);
+  handle_is_long = ((event & BUTTON_EVENT_LONG_FLAG) != 0U);
   if (handle_code == BUTTON_EVENT_NONE) {
     return;
   }
-  if (menu_current_screen == MENU_SCREEN_LIST) {
-    menu_handle_list();
-  } else if (menu_current_screen == MENU_SCREEN_EDIT) {
-    menu_handle_edit();
-  } else if (menu_current_screen == MENU_SCREEN_DIALOG) {
-    menu_handle_dialog();
-  } else if ((handle_code == BUTTON_EVENT_ENTER) || (handle_code == BUTTON_EVENT_MENU)) {
-    /* A message closes with enter or menu/back; a placeholder only with menu/back. */
-    if ((menu_current_screen == MENU_SCREEN_MESSAGE) || (handle_code == BUTTON_EVENT_MENU)) {
-      menu_show_screen(MENU_SCREEN_LIST);
-    }
+  if ((menu_current_screen == MENU_SCREEN_PLACEHOLDER) || (menu_current_screen == MENU_SCREEN_FREE_INPUT)) {
+    menu_handle_mode_screen();
+  } else {
+    menu_handle_other_screen();
   }
 }
 
 void menu_poll(void) {
+  /* After the frame: a character never comes before the title bar. */
+  if ((menu_current_screen == MENU_SCREEN_FREE_INPUT) && !menu_is_redraw_pending) {
+    free_input_poll();
+  }
   if (!menu_is_preview_running) {
     return;
   }
@@ -243,6 +283,9 @@ void menu_show_message(uint8_t message_id) {
     return;
   }
   menu_leave_tone_edit();
+  if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+    free_input_leave();
+  }
   menu_current_message = message_id;
   menu_show_screen(MENU_SCREEN_MESSAGE);
 }

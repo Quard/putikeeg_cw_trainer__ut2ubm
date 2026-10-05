@@ -10,6 +10,7 @@
 static const menu_text_t MEM_CODE menu_show_code_texts[2] = {"Off", "On"};
 static const menu_text_t MEM_CODE menu_key_texts[3] = {"Straight", "Iambic A", "Iambic B"};
 static const menu_text_t MEM_CODE menu_backlight_texts[1] = {"Off"};
+static const menu_text_t MEM_CODE menu_paddle_texts[2] = {"Normal", "Reversed"};
 
 static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Receiving", NULL, NULL, MENU_KIND_MODE, MENU_MODE_RECEIVING, 0U},
@@ -33,6 +34,7 @@ static const menu_item_t MEM_CODE menu_cw_items[] = {
     {"TX Speed", "WPM", NULL, MENU_KIND_VALUE, SETTINGS_ID_TX_WPM, 6U},
     {"TX Eff. Speed", "WPM", NULL, MENU_KIND_VALUE, SETTINGS_ID_TX_EFF_WPM, 6U},
     {"Key Type", NULL, menu_key_texts, MENU_KIND_CHOICE, SETTINGS_ID_KEY_TYPE, 8U},
+    {"Paddle", NULL, menu_paddle_texts, MENU_KIND_CHOICE, SETTINGS_ID_PADDLE_SWAP, 8U},
 };
 
 static const menu_item_t MEM_CODE menu_display_items[] = {

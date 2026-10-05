@@ -16,18 +16,24 @@
 #define RECORD_FIRST_FIELD RECORD_TONE_LOW
 #define RECORD_FIELD_COUNT 11U /* bytes 3..13 */
 #define RECORD_FLAG_SHOW_CW_CODE 0x01U
+#define RECORD_FLAG_PADDLE_SWAP 0x02U
 
 #define SETTINGS_BACKLIGHT_DEFAULT 8U
 
-/* The current values live in record form; field offsets by id. Show CW Code is flags bit 0, kept as 0 or 1. */
+/* The current values live in record form; field offsets by id. Show CW Code is flags bit 0, Paddle is bit 1. */
 static const MEM_CODE uint8_t settings_offsets[SETTINGS_ID_COUNT] = {
-    RECORD_TONE_LOW, 5U, 6U, 7U, 8U, 9U, RECORD_FLAGS, 11U, 12U, 13U,
+    RECORD_TONE_LOW, 5U, 6U, 7U, 8U, 9U, RECORD_FLAGS, 11U, 12U, 13U, RECORD_FLAGS,
 };
-static const MEM_CODE uint16_t settings_mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U};
-static const MEM_CODE uint16_t settings_maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U};
-static const MEM_CODE uint8_t settings_steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+/* Flags-byte bit by id, or 0 for an id with a byte of its own. A table, so settings_store() stays a leaf. */
+static const MEM_CODE uint8_t settings_flag_masks[SETTINGS_ID_COUNT] = {
+    0U, 0U, 0U, 0U, 0U, 0U, RECORD_FLAG_SHOW_CW_CODE, 0U, 0U, 0U, RECORD_FLAG_PADDLE_SWAP,
+};
+static const MEM_CODE uint16_t settings_mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U};
+static const MEM_CODE uint16_t settings_maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U,
+                                                                    1U,    8U,  10U, 63U, 1U};
+static const MEM_CODE uint8_t settings_steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
 static const MEM_CODE uint16_t settings_defaults[SETTINGS_ID_COUNT] = {
-    600U, 32U, 32U, 20U, 20U, SETTINGS_KEY_IAMBIC_B, 1U, 5U, SETTINGS_BACKLIGHT_DEFAULT, LCD_DEFAULT_CONTRAST,
+    600U, 32U, 32U, 20U, 20U, SETTINGS_KEY_IAMBIC_B, 1U, 5U, SETTINGS_BACKLIGHT_DEFAULT, LCD_DEFAULT_CONTRAST, 0U,
 };
 
 static MEM_XDATA uint8_t settings_record[SETTINGS_RECORD_SIZE];
@@ -64,6 +70,16 @@ static settings_id_t settings_effective_of(settings_id_t id) {
 
 static void settings_store(settings_id_t id, uint16_t value) {
   const uint8_t offset = settings_offsets[id];
+  const uint8_t flag_mask = settings_flag_masks[id];
+
+  if (flag_mask != 0U) {
+    if (value != 0U) {
+      settings_record[offset] |= flag_mask;
+    } else {
+      settings_record[offset] &= (uint8_t)~flag_mask;
+    }
+    return;
+  }
   settings_record[offset] = (uint8_t)value;
   if (id == SETTINGS_ID_TONE_HZ) {
     settings_record[RECORD_TONE_HIGH] = (uint8_t)(value >> 8);
@@ -89,6 +105,8 @@ static uint16_t settings_clamp(settings_id_t id, MEM_XDATA uint16_t value) {
 
 static void settings_set_defaults(void) {
   settings_id_t id;
+  /* The flag ids change only their own bits, so bits 2-7 of a bad record need this clear. */
+  settings_record[RECORD_FLAGS] = 0U;
   for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {
     settings_store(id, settings_defaults[id]);
   }
@@ -123,7 +141,7 @@ settings_load_status_t settings_load(void) {
   settings_id_t id;
 
   if (status == SETTINGS_LOAD_OK) {
-    settings_record[RECORD_FLAGS] &= RECORD_FLAG_SHOW_CW_CODE;
+    settings_record[RECORD_FLAGS] &= (uint8_t)(RECORD_FLAG_SHOW_CW_CODE | RECORD_FLAG_PADDLE_SWAP);
     /* Id order clamps each base speed before its effective speed. */
     for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {
       settings_store(id, settings_clamp(id, settings_get(id)));
@@ -173,11 +191,16 @@ bool settings_is_edited(void) { return settings_is_edited_flag; }
 
 uint16_t settings_get(settings_id_t id) {
   uint16_t value;
+  uint8_t flag_mask;
 
   if (id >= SETTINGS_ID_COUNT) {
     return 0U;
   }
   value = settings_record[settings_offsets[id]];
+  flag_mask = settings_flag_masks[id];
+  if (flag_mask != 0U) {
+    return ((value & flag_mask) != 0U) ? 1U : 0U;
+  }
   if (id == SETTINGS_ID_TONE_HZ) {
     value |= (uint16_t)((uint16_t)settings_record[RECORD_TONE_HIGH] << 8);
   }

@@ -25,6 +25,7 @@
 #define MENU BUTTON_EVENT_MENU
 #define ENTER BUTTON_EVENT_ENTER
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
+#define LONG(code) ((button_event_t)((code) | BUTTON_EVENT_LONG_FLAG))
 
 #define ON_TRUE 1U
 #define ON_FALSE 0U
@@ -484,8 +485,8 @@ static void test_v52_no_sound_outside_tone_edit(void) {
   steps(REPEAT(PREV), 5U);
   steps(PREV, 2U);
   poll_500();
-  /* 2. Each placeholder, all four buttons. */
-  for (row = 0U; row < 3U; ++row) {
+  /* 2. Each placeholder, all four buttons; only a long menu/back closes it. */
+  for (row = 0U; row < 2U; ++row) {
     steps(REPEAT(PREV), 5U);
     steps(NEXT, row);
     step(ENTER);
@@ -494,6 +495,8 @@ static void test_v52_no_sound_outside_tone_edit(void) {
     step(NEXT);
     step(ENTER);
     step(MENU);
+    TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
+    step(LONG(MENU));
     TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
     poll_500();
   }

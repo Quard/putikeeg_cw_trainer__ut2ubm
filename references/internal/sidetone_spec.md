@@ -942,6 +942,12 @@ stack margin 178 -> 160 B. All are within the limits of section 14.
 - Rule for later work: an ISR calls only functions of its own file. If an ISR must call a function of another
   file, the build fails at the link. The later keyer change then decides the layout again (one ISR file with all
   services, or the flag removed and AC-21 changed). Only `architector` makes that decision.
+- D-R2-1 revision for the keyer change, decision D-K1 of `keyer_spec.md` section 3.1. The keyer service is a
+  `static` function in `inc/cw/keyer_service.h`. Only `sidetone.c` includes that header, at the end of the file, so
+  the function belongs to `sidetone.c`. The ISR body becomes `keyer_service(); sidetone_service();`. This replaces
+  "calls `sidetone_service()` and nothing else" in sections 5.4 and 5.6. The macros `KEYER_SIDETONE_ON()` and
+  `KEYER_SIDETONE_OFF()` in `sidetone.c` are the ISR-side entry that section 3.10 reserved. The flag stays, and the
+  rule "an ISR calls only functions of its own file" stays.
 
 ## 22. Final review decisions (2026-10-05)
 

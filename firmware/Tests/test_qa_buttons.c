@@ -1,7 +1,9 @@
 /*
  * QA tests for the buttons module: random bounce trains with irregular poll intervals, repeat catch-up with slow
- * main-loop passes, bounce of a second button during a repeat, and the recovery window with a late tick.
- * The oracles come from menu_subsystem_spec.md section 4.5 and ui-ux.md section 6.2, not from buttons.c.
+ * main-loop passes, bounce of a second button during a repeat, the recovery window with a late tick, and long
+ * presses with slow passes, release bounce, the tick wrap and the P3.2 ownership.
+ * The oracles come from menu_subsystem_spec.md section 4.5, keyer_spec.md section 6.12 and ui-ux.md sections 6.2
+ * and 6.6, not from buttons.c.
  */
 #include <string.h>
 
@@ -15,6 +17,7 @@
 
 #define LOG_CAPACITY 4096U
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
+#define LONG(code) ((button_event_t)((code) | BUTTON_EVENT_LONG_FLAG))
 #define MAX_SEGMENTS 128U
 /* Every bounce run is longer than the largest poll gap, so each run is seen by at least one poll. */
 #define MAX_POLL_GAP 8U
@@ -178,7 +181,8 @@ static void test_random_bounce_irregular_polls(void) {
 /*
  * NEXT held for a long time with slow main-loop passes (1..300 ms apart, at most 4 events each, as main.c does).
  * After a final drain at time t, the repeat count is the number of due times press + 400 + 80 k <= t (UX-16:
- * no lost step). The backlog never grows past what a 300 ms pass produces.
+ * no lost step). The backlog never grows past what a 300 ms pass produces. The hold also gives exactly one long
+ * event when t >= press + 800: the first event of the first pass at or after that time (long before repeat).
  */
 static void test_repeat_catch_up_with_slow_passes(void) {
   unsigned trial;
@@ -189,8 +193,11 @@ static void test_repeat_catch_up_with_slow_passes(void) {
     uint32_t time = 0U;
     uint32_t press_time = 0U;
     size_t repeats = 0U;
+    size_t longs = 0U;
     size_t i;
     uint32_t due;
+    uint32_t first_pass_after_long = 0xFFFFFFFFU;
+    bool is_long_first_of_pass = false;
 
     start_released((uint16_t)base);
     fake_button_pins_set(BUTTON_BIT_NEXT);
@@ -202,13 +209,30 @@ static void test_repeat_catch_up_with_slow_passes(void) {
     press_time = event_log[0].time - base;
     TEST_ASSERT_EQUAL(BUTTON_EVENT_NEXT, event_log[0].event);
     while (time < hold_time) {
+      const size_t before = event_count;
       (void)pass_at(base + time, 4U);
+      if ((first_pass_after_long == 0xFFFFFFFFU) && (time >= press_time + BUTTONS_LONG_PRESS_MS)) {
+        first_pass_after_long = base + time;
+        is_long_first_of_pass = (event_count > before) && (event_log[before].event == LONG(BUTTON_EVENT_NEXT));
+      }
       time += rng_range(1U, 300U);
     }
     /* Final drain with the button still held. */
-    while (pass_at(base + time, 4U) != 0U) {
+    {
+      const size_t before = event_count;
+      while (pass_at(base + time, 4U) != 0U) {
+      }
+      if ((first_pass_after_long == 0xFFFFFFFFU) && (time >= press_time + BUTTONS_LONG_PRESS_MS)) {
+        first_pass_after_long = base + time;
+        is_long_first_of_pass = (event_count > before) && (event_log[before].event == LONG(BUTTON_EVENT_NEXT));
+      }
     }
     for (i = 1U; i < event_count; ++i) {
+      if (event_log[i].event == LONG(BUTTON_EVENT_NEXT)) {
+        ++longs;
+        TEST_ASSERT_EQUAL(first_pass_after_long, event_log[i].time);
+        continue;
+      }
       TEST_ASSERT_EQUAL(REPEAT(BUTTON_EVENT_NEXT), event_log[i].event);
       ++repeats;
     }
@@ -217,14 +241,22 @@ static void test_repeat_catch_up_with_slow_passes(void) {
       due = 1U + (time - press_time - BUTTONS_REPEAT_DELAY_MS) / BUTTONS_REPEAT_PERIOD_MS;
     }
     TEST_ASSERT_EQUAL(due, repeats);
+    TEST_ASSERT_EQUAL((time >= press_time + BUTTONS_LONG_PRESS_MS) ? 1U : 0U, longs);
+    if (longs != 0U) {
+      TEST_ASSERT(is_long_first_of_pass);
+    }
   }
 }
 
-/* A bounce of PREV shorter than the debounce time during a NEXT repeat changes nothing. */
+/*
+ * A bounce of PREV shorter than the debounce time during a NEXT repeat changes nothing: no PREV press and no PREV
+ * long event. NEXT gives its one long event at press + 800, before the repeat due in the same poll.
+ */
 static void test_prev_bounce_during_next_repeat(void) {
   uint32_t time;
   size_t i;
   size_t repeats = 0U;
+  size_t longs = 0U;
   start_released(0U);
   for (time = 0U; time < 1500U; ++time) {
     uint8_t mask = BUTTON_BIT_NEXT;
@@ -236,11 +268,20 @@ static void test_prev_bounce_during_next_repeat(void) {
   }
   TEST_ASSERT_EQUAL(BUTTON_EVENT_NEXT, event_log[0].event);
   for (i = 1U; i < event_count; ++i) {
+    if (event_log[i].event == LONG(BUTTON_EVENT_NEXT)) {
+      ++longs;
+      TEST_ASSERT_EQUAL(event_log[0].time + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+      /* The repeat due at 800 ms (400 + 5 x 80) comes right after the long event. */
+      TEST_ASSERT(i + 1U < event_count);
+      TEST_ASSERT_EQUAL(REPEAT(BUTTON_EVENT_NEXT), event_log[i + 1U].event);
+      continue;
+    }
     TEST_ASSERT_EQUAL(REPEAT(BUTTON_EVENT_NEXT), event_log[i].event);
-    TEST_ASSERT_EQUAL(event_log[0].time + BUTTONS_REPEAT_DELAY_MS + (i - 1U) * BUTTONS_REPEAT_PERIOD_MS,
+    TEST_ASSERT_EQUAL(event_log[0].time + BUTTONS_REPEAT_DELAY_MS + repeats * BUTTONS_REPEAT_PERIOD_MS,
                       event_log[i].time);
     ++repeats;
   }
+  TEST_ASSERT_EQUAL(1U, longs);
   TEST_ASSERT_EQUAL(1U + (1499U - event_log[0].time - BUTTONS_REPEAT_DELAY_MS) / BUTTONS_REPEAT_PERIOD_MS, repeats);
 }
 
@@ -314,6 +355,326 @@ static void test_recovery_menu_needs_new_press(void) {
   TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[0].event);
 }
 
+/*
+ * Long press against an independent poll-level model, with clean edges and random poll gaps of 1..max_gap ms.
+ * Model: the first poll that sees a pin change starts the debounce; the press event is the first poll at least
+ * BUTTONS_DEBOUNCE_MS later (P); the release is detected the same way (R). The long event comes at the first poll
+ * L >= P + BUTTONS_LONG_PRESS_MS, and only when L < R (the poll that detects the release clears the pending bit
+ * before the long check). Randomised hold lengths cluster around the threshold.
+ */
+static void test_long_press_model_random_polls(void) {
+  static const uint8_t bits[3] = {BUTTON_BIT_MENU, BUTTON_BIT_PREV, BUTTON_BIT_NEXT};
+  static const button_event_t codes[3] = {BUTTON_EVENT_MENU, BUTTON_EVENT_PREV, BUTTON_EVENT_NEXT};
+  static uint32_t polls[8192];
+  unsigned trial;
+  size_t long_trials = 0U;
+  size_t short_trials = 0U;
+
+  rng_state = 31337U;
+  for (trial = 0U; trial < 3000U; ++trial) {
+    const size_t which = trial % 3U;
+    const uint32_t max_gap = (trial % 5U == 0U) ? 1U : rng_range(1U, 40U);
+    const uint32_t base = (trial % 4U == 0U) ? 64500U : 500U;
+    const uint32_t raw_press = rng_range(30U, 80U);
+    const uint32_t raw_release = raw_press + rng_range(BUTTONS_LONG_PRESS_MS - 60U, BUTTONS_LONG_PRESS_MS + 60U);
+    const uint32_t end = raw_release + 200U;
+    size_t poll_count = 0U;
+    size_t i;
+    uint32_t time = 0U;
+    uint32_t c1 = 0xFFFFFFFFU;
+    uint32_t press_event = 0xFFFFFFFFU;
+    uint32_t c2 = 0xFFFFFFFFU;
+    uint32_t release_event = 0xFFFFFFFFU;
+    uint32_t long_event = 0xFFFFFFFFU;
+    size_t longs = 0U;
+    size_t presses = 0U;
+
+    while (time < end) {
+      polls[poll_count++] = time;
+      time += rng_range(1U, max_gap);
+    }
+    for (i = 0U; i < poll_count; ++i) {
+      const uint32_t t = polls[i];
+      if ((c1 == 0xFFFFFFFFU) && (t >= raw_press)) {
+        c1 = t;
+      }
+      if ((c1 != 0xFFFFFFFFU) && (press_event == 0xFFFFFFFFU) && (t >= c1 + BUTTONS_DEBOUNCE_MS) && (t < raw_release)) {
+        press_event = t;
+      }
+      if ((press_event != 0xFFFFFFFFU) && (c2 == 0xFFFFFFFFU) && (t >= raw_release)) {
+        c2 = t;
+      }
+      if ((c2 != 0xFFFFFFFFU) && (release_event == 0xFFFFFFFFU) && (t >= c2 + BUTTONS_DEBOUNCE_MS)) {
+        release_event = t;
+      }
+      if ((press_event != 0xFFFFFFFFU) && (long_event == 0xFFFFFFFFU) && (t >= press_event + BUTTONS_LONG_PRESS_MS) &&
+          ((release_event == 0xFFFFFFFFU) || (t < release_event))) {
+        long_event = t;
+      }
+    }
+
+    start_released((uint16_t)base);
+    for (i = 0U; i < poll_count; ++i) {
+      const uint32_t t = polls[i];
+      fake_button_pins_set(((t >= raw_press) && (t < raw_release)) ? bits[which] : 0U);
+      (void)pass_at(base + t, 4U);
+    }
+    for (i = 0U; i < event_count; ++i) {
+      if (event_log[i].event == codes[which]) {
+        ++presses;
+        TEST_ASSERT_EQUAL(base + press_event, event_log[i].time);
+      } else if (event_log[i].event == LONG(codes[which])) {
+        ++longs;
+        TEST_ASSERT_EQUAL(base + long_event, event_log[i].time);
+      } else {
+        TEST_ASSERT_EQUAL(REPEAT(codes[which]), event_log[i].event);
+        TEST_ASSERT(which != 0U);
+      }
+    }
+    TEST_ASSERT_EQUAL(1U, presses);
+    TEST_ASSERT_EQUAL((long_event != 0xFFFFFFFFU) ? 1U : 0U, longs);
+    if (long_event != 0xFFFFFFFFU) {
+      ++long_trials;
+    } else {
+      ++short_trials;
+    }
+  }
+  /* Both outcomes must occur, or the model check proves little. */
+  printf("long-press model: %u long, %u short\n", (unsigned)long_trials, (unsigned)short_trials);
+  TEST_ASSERT(long_trials >= 500U);
+  TEST_ASSERT(short_trials >= 500U);
+}
+
+/*
+ * AC-K47: release bounce trains (each run shorter than the debounce) during the hold neither cancel nor restart
+ * the hold. The long event still comes exactly at press + BUTTONS_LONG_PRESS_MS, once, and no second press event
+ * comes. 1 ms polls.
+ */
+static void test_long_press_release_bounce(void) {
+  static const uint8_t bits[3] = {BUTTON_BIT_MENU, BUTTON_BIT_PREV, BUTTON_BIT_NEXT};
+  static const button_event_t codes[3] = {BUTTON_EVENT_MENU, BUTTON_EVENT_PREV, BUTTON_EVENT_NEXT};
+  unsigned trial;
+
+  rng_state = 2024U;
+  for (trial = 0U; trial < 600U; ++trial) {
+    const size_t which = trial % 3U;
+    static bool level[3000];
+    uint32_t time;
+    uint32_t t;
+    size_t i;
+    size_t longs = 0U;
+    size_t presses = 0U;
+    uint32_t press_time = 0U;
+
+    /* Pressed from 10 to 2000; bounce trains of released runs (1..19 ms) with pressed runs in between. */
+    for (t = 0U; t < 3000U; ++t) {
+      level[t] = (t >= 10U) && (t < 2000U);
+    }
+    t = 40U;
+    while (t < 1950U) {
+      const uint32_t run = rng_range(1U, BUTTONS_DEBOUNCE_MS - 1U);
+      uint32_t k;
+      for (k = 0U; (k < run) && (t + k < 1950U); ++k) {
+        level[t + k] = false;
+      }
+      t += run + rng_range(1U, 120U);
+    }
+    start_released(1000U);
+    for (time = 0U; time < 3000U; ++time) {
+      fake_button_pins_set(level[time] ? bits[which] : 0U);
+      (void)pass_at(1000U + time, 4U);
+    }
+    for (i = 0U; i < event_count; ++i) {
+      if (event_log[i].event == codes[which]) {
+        ++presses;
+        press_time = event_log[i].time;
+      } else if (event_log[i].event == LONG(codes[which])) {
+        ++longs;
+        TEST_ASSERT_EQUAL(press_time + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+      }
+    }
+    TEST_ASSERT_EQUAL(1U, presses);
+    TEST_ASSERT_EQUAL(1030U, press_time);
+    TEST_ASSERT_EQUAL(1U, longs);
+  }
+}
+
+/* Simultaneous holds: long events of buttons due in the same poll come out MENU, PREV, NEXT, each once. */
+static void test_long_press_order_same_poll(void) {
+  uint32_t time;
+  size_t longs = 0U;
+  size_t i;
+  start_released(65000U);
+  for (time = 0U; time < 1500U; ++time) {
+    fake_button_pins_set(((time >= 10U) && (time < 1400U))
+                             ? (uint8_t)(BUTTON_BIT_MENU | BUTTON_BIT_PREV | BUTTON_BIT_NEXT)
+                             : 0U);
+    (void)pass_at(65000U + time, 8U);
+  }
+  /* Presses at 30 (MENU, PREV, NEXT), then at 830 the three long events, then the PREV repeat due at 830. */
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[0].event);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_PREV, event_log[1].event);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_NEXT, event_log[2].event);
+  for (i = 0U; i < event_count; ++i) {
+    if ((event_log[i].event & BUTTON_EVENT_LONG_FLAG) != 0U) {
+      TEST_ASSERT_EQUAL(65000U + 30U + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+      ++longs;
+    }
+  }
+  TEST_ASSERT_EQUAL(3U, longs);
+  for (i = 0U; i < event_count; ++i) {
+    if (event_log[i].event == LONG(BUTTON_EVENT_MENU)) {
+      TEST_ASSERT_EQUAL(LONG(BUTTON_EVENT_PREV), event_log[i + 1U].event);
+      TEST_ASSERT_EQUAL(LONG(BUTTON_EVENT_NEXT), event_log[i + 2U].event);
+      /* D-K3: PREV and NEXT presses that debounce in the same poll give the repeat to PREV. */
+      TEST_ASSERT_EQUAL(REPEAT(BUTTON_EVENT_PREV), event_log[i + 3U].event);
+      TEST_ASSERT_EQUAL(event_log[i].time, event_log[i + 3U].time);
+    }
+  }
+}
+
+/*
+ * The P3.2 ownership never touches the long state of the other buttons: MENU held across disable/enable cycles
+ * of ENTER (with P3.2 low and high) still gives its long event at press + 800 exactly. While disabled, P3.2 never
+ * gives ENTER, and after enabling with P3.2 low no ENTER comes until a release and a new press.
+ */
+static void test_enter_ownership_keeps_long_state(void) {
+  uint32_t time;
+  size_t i;
+  size_t enters = 0U;
+  size_t longs = 0U;
+  start_released(0U);
+  for (time = 0U; time < 2500U; ++time) {
+    uint8_t mask = 0U;
+    if ((time >= 10U) && (time < 1500U)) {
+      mask |= BUTTON_BIT_MENU;
+    }
+    /* P3.2 low 100..700 (keyer contact), and 1000..1300. */
+    if (((time >= 100U) && (time < 700U)) || ((time >= 1000U) && (time < 1300U))) {
+      mask |= BUTTON_BIT_ENTER;
+    }
+    if (time == 50U) {
+      buttons_set_enter_enabled(false);
+    }
+    if (time == 400U) {
+      buttons_set_enter_enabled(true); /* P3.2 low here: no ENTER for this closure */
+    }
+    if (time == 401U) {
+      buttons_set_enter_enabled(false);
+    }
+    if (time == 650U) {
+      buttons_set_enter_enabled(true); /* still low */
+    }
+    fake_button_pins_set(mask);
+    (void)pass_at(time, 4U);
+  }
+  for (i = 0U; i < event_count; ++i) {
+    if (event_log[i].event == BUTTON_EVENT_ENTER) {
+      ++enters;
+      /* Only the new closure at 1000 gives ENTER, 20 ms later. */
+      TEST_ASSERT_EQUAL(1000U + BUTTONS_DEBOUNCE_MS, event_log[i].time);
+    } else if (event_log[i].event == LONG(BUTTON_EVENT_MENU)) {
+      ++longs;
+      TEST_ASSERT_EQUAL(30U + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+    } else {
+      TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[i].event);
+    }
+  }
+  TEST_ASSERT_EQUAL(1U, enters);
+  TEST_ASSERT_EQUAL(1U, longs);
+}
+
+/* A pending ENTER that the menu has not read yet is dropped by the disable (AC-K48). */
+static void test_disable_drops_pending_enter(void) {
+  uint32_t time;
+  start_released(0U);
+  for (time = 0U; time < 200U; ++time) {
+    fake_button_pins_set((time >= 10U) && (time < 100U) ? (uint8_t)(BUTTON_BIT_ENTER | BUTTON_BIT_MENU) : 0U);
+    if (time == 30U) {
+      /* Debounce both, but read only one event: MENU comes first, ENTER stays pending. */
+      (void)pass_at(time, 1U);
+      buttons_set_enter_enabled(false);
+      continue;
+    }
+    (void)pass_at(time, 4U);
+  }
+  TEST_ASSERT_EQUAL(1U, event_count);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[0].event);
+}
+
+/*
+ * D-K3 / AC-K46: PREV and NEXT presses that debounce in the same poll give every repeat to PREV, at the normal
+ * times; NEXT never repeats until it is pressed again. Also across the tick wrap and with slow passes.
+ */
+static void test_same_poll_repeat_goes_to_prev(void) {
+  static const uint32_t bases[3] = {0U, 65200U, 1000U};
+  unsigned k;
+  for (k = 0U; k < 3U; ++k) {
+    uint32_t time;
+    size_t i;
+    size_t repeats = 0U;
+    const uint32_t base = bases[k];
+    const uint32_t gap = (k == 2U) ? 7U : 1U;
+    uint32_t last_poll = 0U;
+    start_released((uint16_t)base);
+    for (time = 0U; time < 1500U; time += gap) {
+      fake_button_pins_set((time >= 10U) ? (uint8_t)(BUTTON_BIT_PREV | BUTTON_BIT_NEXT) : 0U);
+      (void)pass_at(base + time, 8U);
+      last_poll = base + time;
+    }
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_PREV, event_log[0].event);
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_NEXT, event_log[1].event);
+    TEST_ASSERT_EQUAL(event_log[0].time, event_log[1].time);
+    for (i = 2U; i < event_count; ++i) {
+      TEST_ASSERT(event_log[i].event != REPEAT(BUTTON_EVENT_NEXT));
+      if (event_log[i].event == REPEAT(BUTTON_EVENT_PREV)) {
+        ++repeats;
+      }
+    }
+    TEST_ASSERT_EQUAL(1U + (last_poll - event_log[0].time - BUTTONS_REPEAT_DELAY_MS) / BUTTONS_REPEAT_PERIOD_MS,
+                      repeats);
+  }
+}
+
+/*
+ * D-K4 / AC-K45 exact boundary, 1 ms polls: the pin opens BUTTONS_LONG_PRESS_MS - BUTTONS_DEBOUNCE_MS (780) ms after
+ * the press event P: no long event, because the debounced release lands on the poll at P + 800 and clears the hold
+ * before the long check. The pin opens 1 ms later: one long event at exactly P + 800.
+ */
+static void test_long_press_exact_boundary(void) {
+  static const uint8_t bits[3] = {BUTTON_BIT_MENU, BUTTON_BIT_PREV, BUTTON_BIT_NEXT};
+  static const button_event_t codes[3] = {BUTTON_EVENT_MENU, BUTTON_EVENT_PREV, BUTTON_EVENT_NEXT};
+  size_t which;
+  uint32_t extra;
+  for (which = 0U; which < 3U; ++which) {
+    for (extra = 0U; extra <= 1U; ++extra) {
+      const uint32_t open_after = BUTTONS_LONG_PRESS_MS - BUTTONS_DEBOUNCE_MS + extra;
+      uint32_t press_event = 0xFFFFFFFFU;
+      uint32_t time;
+      size_t i;
+      size_t longs = 0U;
+      start_released(65400U);
+      for (time = 65410U; time < 65410U + 2000U; ++time) {
+        const bool is_low = (press_event == 0xFFFFFFFFU) || (time < press_event + open_after);
+        fake_button_pins_set(is_low ? bits[which] : 0U);
+        (void)pass_at(time, 4U);
+        if ((press_event == 0xFFFFFFFFU) && (event_count != 0U)) {
+          press_event = event_log[0].time;
+          TEST_ASSERT_EQUAL(codes[which], event_log[0].event);
+        }
+      }
+      TEST_ASSERT_EQUAL(65410U + BUTTONS_DEBOUNCE_MS, press_event);
+      for (i = 0U; i < event_count; ++i) {
+        if (event_log[i].event == LONG(codes[which])) {
+          ++longs;
+          TEST_ASSERT_EQUAL(press_event + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+        }
+      }
+      TEST_ASSERT_EQUAL(extra, longs);
+    }
+  }
+}
+
 int main(void) {
   TEST_RUN(test_random_bounce_irregular_polls);
   TEST_RUN(test_repeat_catch_up_with_slow_passes);
@@ -321,5 +682,12 @@ int main(void) {
   TEST_RUN(test_press_debounce_across_tick_wrap);
   TEST_RUN(test_recovery_window_with_late_tick);
   TEST_RUN(test_recovery_menu_needs_new_press);
+  TEST_RUN(test_long_press_model_random_polls);
+  TEST_RUN(test_long_press_release_bounce);
+  TEST_RUN(test_long_press_exact_boundary);
+  TEST_RUN(test_long_press_order_same_poll);
+  TEST_RUN(test_same_poll_repeat_goes_to_prev);
+  TEST_RUN(test_enter_ownership_keeps_long_state);
+  TEST_RUN(test_disable_drops_pending_enter);
   return TEST_FINISH();
 }

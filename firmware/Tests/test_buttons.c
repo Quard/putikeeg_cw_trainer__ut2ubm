@@ -131,19 +131,29 @@ static void test_short_release_is_ignored(void) {
 static void check_repeat(uint8_t mask, button_event_t code) {
   uint16_t press_time;
   size_t i;
+  size_t repeat = 0U;
+  size_t long_count = 0U;
   start(0U, 200U);
   hold(mask, BUTTONS_DEBOUNCE_MS);
   press_time = now;
   hold(mask, 1000U);
   hold(0U, 100U);
-  TEST_ASSERT_EQUAL(9U, event_count);
+  /* One press, 8 repeats and the long event of the same hold. */
+  TEST_ASSERT_EQUAL(10U, event_count);
   TEST_ASSERT_EQUAL(code, event_log[0].event);
   TEST_ASSERT_EQUAL(press_time, event_log[0].time);
   for (i = 1U; i < event_count; ++i) {
+    if (event_log[i].event == (button_event_t)(code | BUTTON_EVENT_LONG_FLAG)) {
+      TEST_ASSERT_EQUAL((uint16_t)(press_time + BUTTONS_LONG_PRESS_MS), event_log[i].time);
+      ++long_count;
+      continue;
+    }
     TEST_ASSERT_EQUAL(REPEAT(code), event_log[i].event);
-    TEST_ASSERT_EQUAL((uint16_t)(press_time + BUTTONS_REPEAT_DELAY_MS + (i - 1U) * BUTTONS_REPEAT_PERIOD_MS),
+    TEST_ASSERT_EQUAL((uint16_t)(press_time + BUTTONS_REPEAT_DELAY_MS + repeat * BUTTONS_REPEAT_PERIOD_MS),
                       event_log[i].time);
+    ++repeat;
   }
+  TEST_ASSERT_EQUAL(1U, long_count);
 }
 
 static void test_v08_repeat_next_and_prev(void) {
@@ -155,8 +165,10 @@ static void test_no_repeat_for_menu_and_enter(void) {
   start(0U, 0U);
   hold(MENU, 3000U);
   hold(0U, 30U);
-  TEST_ASSERT_EQUAL(1U, event_count);
+  /* The press and the long event, no repeat. */
+  TEST_ASSERT_EQUAL(2U, event_count);
   TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[0].event);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU | BUTTON_EVENT_LONG_FLAG, event_log[1].event);
 }
 
 static void test_v24_held_enter_and_next(void) {

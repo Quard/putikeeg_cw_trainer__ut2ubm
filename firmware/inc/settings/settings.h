@@ -24,7 +24,8 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_MAX_WORD_LEN 7U
 #define SETTINGS_ID_BACKLIGHT 8U
 #define SETTINGS_ID_CONTRAST 9U
-#define SETTINGS_ID_COUNT 10U
+#define SETTINGS_ID_PADDLE_SWAP 10U /* 0 Normal, 1 Reversed */
+#define SETTINGS_ID_COUNT 11U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U

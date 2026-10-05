@@ -3,6 +3,7 @@
 
 #include "backlight/backlight.h"
 #include "buttons/buttons.h"
+#include "cw/keyer.h"
 #include "eeprom/eeprom.h"
 #include "gfx/gfx.h"
 #include "lcd/lcd.h"
@@ -29,6 +30,7 @@ void main(void) {
     settings_use_display_defaults();
   }
   sidetone_init(settings_get(SETTINGS_ID_TONE_HZ));
+  keyer_init();
   lcd_init();
   lcd_set_contrast((uint8_t)settings_get(SETTINGS_ID_CONTRAST));
   backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));

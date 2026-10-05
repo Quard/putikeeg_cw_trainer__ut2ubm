@@ -168,9 +168,9 @@ static void test_out_of_range_fields_are_clamped(void) {
 }
 
 static void test_ranges(void) {
-  static const uint16_t mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U};
-  static const uint16_t maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 32U, 50U, 20U, 2U, 1U, 8U, 10U, 63U};
-  static const uint16_t steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+  static const uint16_t mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U};
+  static const uint16_t maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 32U, 50U, 20U, 2U, 1U, 8U, 10U, 63U, 1U};
+  static const uint16_t steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
   settings_id_t id;
   start_empty();
   for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {

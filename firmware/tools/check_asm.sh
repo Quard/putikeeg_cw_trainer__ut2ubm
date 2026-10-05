@@ -10,9 +10,9 @@
 # Every direct operand is resolved to a number first: hex (0xa0, 0x00a0, 0a0h, a0h), decimal (160), binary
 # (0b...), names from the file's "name = value" equates (with or without the leading _, any case), the
 # predefined names p2, ie, ea, ie2, t4t3m, auxintif, p2m0, p2m1, p0m0, p0m1, p3m0, p3m1, p_sw2, pcon, rstcfg, p1,
-# p1m1, p1m0, tmod, auxr, dotted bits (p2.3, ie.7, 0xa8.7) and +/- sums of these. The instruction decides the
-# meaning: in setb, clr, cpl, jbc, jb, jnb, "mov bit,c" and "anl/orl c,bit" the number is a bit address, everywhere
-# else a byte address.
+# p1m1, p1m0, tmod, auxr, p5, p5m1, p5m0, dotted bits (p2.3, ie.7, 0xa8.7) and +/- sums of these. The instruction
+# decides the meaning: in setb, clr, cpl, jbc, jb, jnb, "mov bit,c" and "anl/orl c,bit" the number is a bit address,
+# everywhere else a byte address.
 #
 # Rules on resolved addresses:
 #   R1  No byte write to 0xA0 (P2): mov, orl, anl, xrl, inc, dec, djnz, pop or xch.
@@ -22,8 +22,8 @@
 #   R4  Byte writes to 0x95 (P2M1) and 0x96 (P2M0) only in lcd_spi.c, as exactly one "orl 0x96,#0x1f" and one
 #       "anl 0x95,#0xe0"; the masks are compared as numbers.
 #   R5  Byte 0xAF (IE2), 0xD1 (T4T3M), 0xEF (AUXINTIF), 0x93 (P0M1), 0x94 (P0M0), 0xB1 (P3M1), 0xB2 (P3M0),
-#       0xBA (P_SW2), 0x87 (PCON), 0xFF (RSTCFG), 0x90 (P1), 0x91 (P1M1), 0x92 (P1M0), 0x89 (TMOD) and 0x8E (AUXR)
-#       change only with orl or anl.
+#       0xBA (P_SW2), 0x87 (PCON), 0xFF (RSTCFG), 0x90 (P1), 0x91 (P1M1), 0x92 (P1M0), 0x89 (TMOD), 0x8E (AUXR),
+#       0xC8 (P5), 0xC9 (P5M1) and 0xCA (P5M0) change only with orl or anl.
 # Fail closed: a written operand that the scan cannot resolve but that contains a protected name or address is a
 # violation. Data operands such as (_tick_count_ms + 1) contain no protected name and stay accepted.
 #
@@ -146,10 +146,11 @@ BEGIN {
   predefined["p0m1"] = 147; predefined["p0m0"] = 148; predefined["p3m1"] = 177; predefined["p3m0"] = 178
   predefined["p_sw2"] = 186; predefined["pcon"] = 135; predefined["rstcfg"] = 255
   predefined["p1"] = 144; predefined["p1m1"] = 145; predefined["p1m0"] = 146; predefined["tmod"] = 137
-  predefined["auxr"] = 142
+  predefined["auxr"] = 142; predefined["p5"] = 200; predefined["p5m1"] = 201; predefined["p5m0"] = 202
   # R5: bytes that several modules or an interrupt share, so they change only with orl or anl. TMOD holds Timer 1
-  # in its high nibble, AUXR holds EXTRAM, port 1 holds the audio pins and the plug input.
-  split("175 209 239 147 148 177 178 186 135 255 144 145 146 137 142", shared_list, " ")
+  # in its high nibble, AUXR holds EXTRAM, port 1 holds the audio pins and the plug input, port 5 holds the
+  # paddle ring input.
+  split("175 209 239 147 148 177 178 186 135 255 144 145 146 137 142 200 201 202", shared_list, " ")
   for (i in shared_list) shared_bytes[shared_list[i] + 0] = 1
 }
 FNR == NR {
@@ -373,6 +374,14 @@ readonly -a BUILTIN_CASES=(
   "accept_auxr_orl_anl|sidetone.c|"$'\tanl\t_AUXR,#0x7f\n\torl\t0x8e,#0x00'
   "r5_mov_auxr|sidetone.c|"$'\tmov\t_AUXR,#0x02'
   "accept_p1_bits_and_reads|sidetone.c|"$'\tsetb\t_P1_1\n\tclr\t0x92\n\tmov\t_P1_2,c\n\tmov\tc,_P1_0\n\tmov\ta,_TMOD'
+  "accept_p5_orl_anl|keyer.c|"$'\torl\t_P5,#0x20\n\tanl\tp5,#0xdf'
+  "r5_mov_p5|keyer.c|"$'\tmov\t_P5,#0xff'
+  "accept_p5m1_orl_anl|keyer.c|"$'\torl\t_P5M1,#0x20\n\tanl\t0xc9,#0xff'
+  "r5_mov_p5m1|keyer.c|"$'\tmov\t_P5M1,#0x20'
+  "accept_p5m0_orl_anl|keyer.c|"$'\tanl\t_P5M0,#0xdf\n\torl\tp5m0,#0x00'
+  "r5_mov_p5m0|keyer.c|"$'\tmov\t0xca,a'
+  "accept_p5_5_bit_reads|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tmov\tc,_P5_5\n\tjb\t_P5_5,00101$\n\tjnb\t0xcd,00102$'
+  "accept_p5_5_bit_writes|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tsetb\t0xcd\n\tclr\t_P5_5\n\tmov\ta,_P5'
 )
 
 self_test() {

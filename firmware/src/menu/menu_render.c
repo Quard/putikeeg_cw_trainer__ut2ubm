@@ -181,7 +181,7 @@ void menu_render(void) {
     render_row = MESSAGE_ROW;
     if (menu_current_screen == MENU_SCREEN_PLACEHOLDER) {
       draw_centered(menu_text_not_ready);
-    } else {
+    } else if (menu_current_screen == MENU_SCREEN_DIALOG) {
       draw_centered(menu_text_reset_question);
       draw_button(BUTTON_NO_FIRST_CELL, BUTTON_SHORT_CELLS, menu_text_no, menu_current_choice == MENU_DIALOG_NO);
       draw_button(BUTTON_YES_FIRST_CELL, BUTTON_LONG_CELLS, menu_text_yes, menu_current_choice == MENU_DIALOG_YES);

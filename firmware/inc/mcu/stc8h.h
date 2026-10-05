@@ -71,6 +71,16 @@ __sfr __at(0x91) P1M1;
 __sfr __at(0x92) P1M0;
 #define P1PU (*(volatile __xdata uint8_t*)0xFE11U)
 
+/*
+ * Port 5, datasheet sections 9.1.1 to 9.1.3. P5 is bit-addressable, so P5.5 is bit 0xCD; bits 7:6 do not exist.
+ * M1 = 1, M0 = 0 is a high-impedance input. P5PU bit 5 is the P5.5 pull-up.
+ */
+__sfr __at(0xC8) P5;
+__sbit __at(0xCD) P5_5;
+__sfr __at(0xC9) P5M1;
+__sfr __at(0xCA) P5M0;
+#define P5PU (*(volatile __xdata uint8_t*)0xFE15U)
+
 /* Datasheet sections 7.2.4 and 13.2.12: bit 7 T0x12 selects SYSclk / 1 for Timer 0; bit 1 EXTRAM must stay 0. */
 __sfr __at(0x8E) AUXR;
 #define AUXR_T0X12 0x80U

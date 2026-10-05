@@ -21,8 +21,15 @@
 #define BUTTONS_RECOVERY_HOLD_MS 50U
 #endif
 
+#ifndef BUTTONS_LONG_PRESS_MS
+#define BUTTONS_LONG_PRESS_MS 800U /* ui-ux.md section 6.2, decision UX-23 */
+#endif
+
 #if (BUTTONS_REPEAT_PERIOD_MS == 0) || (BUTTONS_REPEAT_DELAY_MS == 0)
 #error "The repeat delay and period must be above 0"
+#endif
+#if BUTTONS_LONG_PRESS_MS == 0
+#error "The long-press time must be above 0"
 #endif
 
 #endif /* BOARD_BUTTONS_CONFIG_H */

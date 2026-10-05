@@ -26,6 +26,7 @@
 #define MENU BUTTON_EVENT_MENU
 #define ENTER BUTTON_EVENT_ENTER
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
+#define LONG(code) ((button_event_t)((code) | BUTTON_EVENT_LONG_FLAG))
 #define NO_BAND (-1)
 #define FB_SIZE (LCD_PAGE_COUNT * LCD_WIDTH)
 
@@ -320,14 +321,15 @@ static bool main_menu_is(int selected) {
   return is_ok;
 }
 
-static bool cw_list_is(const char* const values[6], int selected) {
-  static const char* const labels[6] = {"Tone", "RX Speed", "RX Eff. Speed", "TX Speed", "TX Eff. Speed", "Key Type"};
+static bool cw_list_is(const char* const values[7], int selected) {
+  static const char* const labels[7] = {"Tone",          "RX Speed", "RX Eff. Speed", "TX Speed",
+                                        "TX Eff. Speed", "Key Type", "Paddle"};
   int i;
   bool is_ok = title_is("Settings > CW");
-  for (i = 0; i < 6; ++i) {
+  for (i = 0; i < 7; ++i) {
     is_ok = is_ok && list_row_is(i + 1, labels[i], values[i], i == selected);
   }
-  return is_ok && row_is_blank(7);
+  return is_ok;
 }
 
 static void open_cw(void) {
@@ -360,7 +362,7 @@ static void test_v01_power_on_empty(void) {
 }
 
 static void test_v02_bad_crc_record(void) {
-  static const char* const cw_values[6] = {"600 Hz", "32 WPM", "32 WPM", "20 WPM", "20 WPM", "Iambic B"};
+  static const char* const cw_values[7] = {"600 Hz", "32 WPM", "32 WPM", "20 WPM", "20 WPM", "Iambic B", "Normal"};
   fake_iap_reset();
   put_record(5U, 3U);
   fake_iap_memory()[14] ^= 0xFFU;
@@ -510,7 +512,7 @@ static void test_v10_lower_base_lowers_effective(void) {
 static void test_v11_key_type_choices(void) {
   start_empty();
   open_cw();
-  send_times(PREV, 1U);
+  send_times(PREV, 2U);
   send(ENTER);
   TEST_ASSERT(probe_edit(6, 8));
   TEST_ASSERT(edit_row_is(6, "Key Type", "Iambic B", 8, true, false));
@@ -677,10 +679,13 @@ static void check_placeholder(int index, const char* title) {
   menu_handle(PREV);
   menu_handle(NEXT);
   menu_handle(ENTER);
+  menu_handle(MENU);
   menu_handle(REPEAT(NEXT));
+  menu_handle(LONG(PREV));
+  menu_handle(LONG(NEXT));
   TEST_ASSERT(!menu_needs_redraw());
   TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
-  send(MENU);
+  send(LONG(MENU));
   TEST_ASSERT(main_menu_is(index));
   TEST_ASSERT(probe_sel(index + 1));
 }
@@ -688,7 +693,6 @@ static void check_placeholder(int index, const char* title) {
 static void test_v19_placeholders(void) {
   check_placeholder(0, "Receiving");
   check_placeholder(1, "Sending");
-  check_placeholder(2, "Free Input");
 }
 
 static void open_dialog(void) {
@@ -911,7 +915,7 @@ static void test_full_navigation(void) {
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_CW, menu_node());
   send(PREV);
-  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  TEST_ASSERT_EQUAL(6U, menu_cursor());
   send(MENU);
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
@@ -1111,6 +1115,99 @@ static void test_v39_enter_held_is_normal_start(void) {
   TEST_ASSERT(main_menu_is(0));
 }
 
+/* V-74: long holds in lists, the edit and the dialog act only through their press and repeat events. */
+static void test_v74_long_holds_outside_mode_screens(void) {
+  static uint8_t before[FB_SIZE];
+  uint8_t page;
+
+  start_empty();
+  for (page = 0U; page < LCD_PAGE_COUNT; ++page) {
+    memcpy(&before[page * LCD_WIDTH], lcd_fb_page(page), LCD_WIDTH);
+    lcd_fb_clear_dirty(page);
+  }
+  run_pins(BUTTON_BIT_MENU, 2000U);
+  run_pins(0U, 100U);
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask());
+  for (page = 0U; page < LCD_PAGE_COUNT; ++page) {
+    TEST_ASSERT_EQUAL(0, memcmp(&before[page * LCD_WIDTH], lcd_fb_page(page), LCD_WIDTH));
+  }
+
+  start_empty();
+  open_cw();
+  run_pins(BUTTON_BIT_MENU, 2000U);
+  run_pins(0U, 100U);
+  TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
+  TEST_ASSERT(title_is("Settings"));
+  TEST_ASSERT(probe_sel(1));
+  TEST_ASSERT(submenu_row_is(1, "CW", true));
+
+  start_empty();
+  run_pins(BUTTON_BIT_NEXT, 1000U);
+  run_pins(0U, 100U);
+  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT(probe_sel(4));
+
+  start_empty();
+  open_cw();
+  send(ENTER);
+  run_pins(0U, 50U);
+  run_pins(BUTTON_BIT_NEXT, BUTTONS_DEBOUNCE_MS + 1000U);
+  run_pins(0U, 100U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_EDIT, menu_screen());
+  TEST_ASSERT_EQUAL(690U, settings_get(SETTINGS_ID_TONE_HZ));
+
+  start_empty();
+  open_dialog();
+  run_pins(BUTTON_BIT_NEXT, BUTTONS_DEBOUNCE_MS + 1000U);
+  run_pins(0U, 100U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_DIALOG, menu_screen());
+  TEST_ASSERT_EQUAL(MENU_DIALOG_YES, menu_dialog_choice());
+  TEST_ASSERT(dialog_is(true));
+  TEST_ASSERT_EQUAL(0U, fake_stats_reset_count());
+}
+
+/* V-76 */
+static void test_v76_paddle_row(void) {
+  start_empty();
+  open_cw();
+  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", false));
+}
+
+/* V-77 */
+static void test_v77_paddle_edit_and_save(void) {
+  start_empty();
+  open_cw();
+  send(PREV);
+  send(ENTER);
+  TEST_ASSERT(probe_edit(7, 8));
+  TEST_ASSERT(edit_row_is(7, "Paddle", "Normal", 8, false, true));
+  send(NEXT);
+  TEST_ASSERT(edit_row_is(7, "Paddle", "Reversed", 8, true, false));
+  menu_handle(NEXT);
+  TEST_ASSERT(!menu_needs_redraw());
+  send(ENTER);
+  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", true));
+  send(MENU);
+  send(MENU);
+  TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
+  TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
+  (void)power_on(0U);
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+  open_cw();
+  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", false));
+}
+
+/* V-78: a record of the earlier firmware has flags bit 1 = 0. */
+static void test_v78_earlier_record_reads_normal(void) {
+  fake_iap_reset();
+  put_record(32U, 8U);
+  (void)power_on(0U);
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+  open_cw();
+  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", false));
+  TEST_ASSERT(list_row_is(6, "Key Type", "Iambic B", false));
+}
+
 int main(void) {
   TEST_RUN(test_v01_power_on_empty);
   TEST_RUN(test_v02_bad_crc_record);
@@ -1148,5 +1245,9 @@ int main(void) {
   TEST_RUN(test_v37_recovery_then_tone_edit);
   TEST_RUN(test_v38_recovery_contrast_back_and_forth);
   TEST_RUN(test_v39_enter_held_is_normal_start);
+  TEST_RUN(test_v74_long_holds_outside_mode_screens);
+  TEST_RUN(test_v76_paddle_row);
+  TEST_RUN(test_v77_paddle_edit_and_save);
+  TEST_RUN(test_v78_earlier_record_reads_normal);
   return TEST_FINISH();
 }

@@ -15,17 +15,22 @@ Status of the content:
 ## 1. Scope
 
 - Product: Putikeeg CW Trainer, board CW_MINI_V2.0D, custom firmware.
-- UI scope in this version: the menu tree, the Settings editor, placeholder screens for the three modes, the
-  Reset Statistics dialog, button input, the live effect of contrast and backlight, and the Tone preview
-  (section 6.5).
-- Out of scope in this version: the Receiving, Sending and Free Input modes, paddle keying, any sound other than the
-  Tone preview, statistics.
+- UI scope in this version:
+  - The menu tree, the Settings editor and the `Paddle` setting.
+  - Placeholder screens for Receiving and Sending.
+  - The Free Input mode (section 5.9) and the keyer for the three key types (section 6.7).
+  - Long presses (section 6.6) and the other button input.
+  - The Reset Statistics dialog.
+  - The live effect of contrast and backlight, and the Tone preview (section 6.5).
+- Out of scope in this version: the Receiving and Sending modes, statistics, any sound other than the Tone preview
+  and the keyer sidetone in Free Input.
 - Users: amateur radio operators who learn or practise Morse code. They know the terms WPM, RX, TX, Iambic A/B and
   Farnsworth (effective) speed.
 - Environment: a handheld device or a device on a desk, indoor light, viewing distance about 30-60 cm
   (unverified). Long practice sessions.
-- Frequent tasks: start a mode from the main menu (most frequent), change a speed or the tone (sometimes),
-  change contrast or backlight (rare), reset statistics (rare).
+- Frequent tasks: key text in Free Input and read the decoded result (most frequent, long sessions), start a mode
+  from the main menu (frequent), change a speed, the key type or the tone (sometimes), change contrast or backlight
+  (rare), reset statistics (rare).
 
 ## 2. Sources
 
@@ -37,8 +42,8 @@ Status of the content:
 | `firmware/inc/lcd/lcd_fb.h`, `firmware/inc/board/lcd_config.h` | 128 x 64 framebuffer, 8 pages of 8 rows, contrast range 0-63, default 0x20. |
 | `references/context/STC8H_datasheet.md` | EEPROM sector erase about 4-6 ms, byte program about 30-40 us. Avoid EEPROM writes at low voltage. |
 | `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
-
-`llm.md` is not present at the repository root (AGENTS.md asks agents to read it).
+| `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. It refers to sections 5.9, 6.6 and 6.7 of this file. |
+| `references/internal/paddle_keyer_research.md`, `paddle_keyer_howtoimplement_research.md` | Iambic A/B behaviour, squeeze release, entry mask, straight-key mode. |
 
 ## 3. Inventories
 
@@ -49,8 +54,8 @@ Status of the content:
 | C-1 | `next` button | P0.0 | Active low, no external pull-up. | Physical position on the case is not documented (unverified). |
 | C-2 | `prev` button | P0.1 | Active low, no external pull-up. | Same as C-1. |
 | C-3 | `menu/back` button | P0.2 | Active low, no external pull-up. | |
-| C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | A paddle dit contact or a straight key also presses `enter`. Inserting a plug can short the tip for a short time (unverified). |
-| C-5 | Paddle ring | P5.5 | Dah contact. | Not used by the menu. The menu ignores it. |
+| C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | In the menu, a paddle dit contact or a straight key also presses `enter`. In Free Input, the keyer owns the pin and the `enter` button keys like the tip contact (section 6.7). Inserting a plug can short the tip for a short time (unverified). |
+| C-5 | Paddle ring | P5.5 | Dah contact (with `Paddle` = `Normal`). Active low, internal pull-up (plan). | The menu ignores it. Only the keyer in Free Input reads it. A mono plug shorts the ring to the sleeve (research Step 3). |
 | C-6 | `on/off` button | none | Not read by the MCU (no pin in the wiring table). | Unverified: the effect of the button on the MCU power is not known. |
 | C-7 | Volume potentiometer | analog | Not read by the MCU. Sets the sidetone loudness in the analog path (`components_and_wiring.md`). | The firmware has no volume control. At the lowest setting the Tone preview can be silent. |
 
@@ -63,7 +68,7 @@ and increase. If the buttons on the case are in a different order, this file nee
 | --- | --- | --- | --- |
 | O-1 | LCD, 128 x 64, monochrome, probably ST7567 | 8 text rows x 25 columns with the 5 x 8 font | Contrast 0-63 (`lcd_set_contrast`), default 0x20 = 32. The full-screen transfer time is not measured yet. |
 | O-2 | LCD backlight, HX4004A on P0.3 | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
-| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Used only for the Tone preview (section 6.5). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
+| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Used for the Tone preview (section 6.5) and for the keyer sidetone in Free Input (section 6.7). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
 
 ### 3.3 Font facts (decoded from `u8g2_fonts.h`)
 
@@ -101,6 +106,7 @@ Decoding every glyph with the same arithmetic as the driver gives:
 - Row 0 is the title bar. Rows 1-7 are content. Every text row and its highlight stay inside one LCD page, so a
   cursor move dirties two pages and a value change dirties one page.
 - Text never wraps. A string that is too long is cut at column 24. All strings in this file fit. A cut is a defect.
+  The only exception is the decoded text in Free Input, which wraps per character (section 5.9).
 
 ### 4.2 Video modes (decision UX-2)
 
@@ -150,7 +156,7 @@ not exist on this display. The band is a shape, not a shade.
 4  |TX Speed         20 WPM  |
 5  |TX Eff. Speed    20 WPM  |
 6  |Key Type       Iambic B  |
-7  |                         |
+7  |Paddle           Normal  |
 ```
 
 - Label in column 0.
@@ -182,6 +188,7 @@ the value changes.
 | CW | `TX Speed` | value | `5 WPM` .. `50 WPM`, step 1 | 6 | `20 WPM` |
 | CW | `TX Eff. Speed` | value | `5 WPM` .. TX Speed, step 1 | 6 | = TX Speed |
 | CW | `Key Type` | choice | `Straight`, `Iambic A`, `Iambic B` | 8 | `Iambic B` |
+| CW | `Paddle` | choice | `Normal`, `Reversed` | 8 | `Normal` |
 | Display | `Backlight` | value | `Off` (level 0), `1` .. `10` | 3 | `8` |
 | Display | `Contrast` | value | `0` .. `63`, step 1 | 2 | `32` |
 
@@ -189,7 +196,8 @@ Order of the items in each list is the order in this table. Choice order (prev =
 towards the last entry) is the order in the "Values shown" column.
 
 Fit rule: `len(label) <= 20 - fw`. This keeps one blank column between the label and the `<` edit marker. Every
-row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 of 14 allowed).
+row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 of 14 allowed). `Paddle` uses 6 of
+12 allowed.
 
 `RX` = receive, `TX` = send (decision UX-3, decided by the user). The full words do not fit with the edit markers.
 
@@ -205,7 +213,7 @@ row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 
 4  |TX Speed         20 WPM  |
 5  |TX Eff. Speed    20 WPM  |
 6  |Key Type       Iambic B  |
-7  |                         |
+7  |Paddle           Normal  |
 ```
 
 - The highlight moves from the whole row to the value field. The label goes back to normal video. This change of
@@ -229,22 +237,25 @@ Examples at the limits:
 
 ### 5.5 Scrolling (decision UX-5)
 
-No list in this version has more than 7 items (main 4, Settings 5, CW 6, Display 2), so no list scrolls now.
+No list in this version has more than 7 items (main 4, Settings 5, CW 7, Display 2), so no list scrolls now. CW
+uses all 7 rows. An eighth CW item needs this scroll rule.
 The rule applies to later lists:
 
 - The window shows 7 items. Minimum movement: the window moves only by the rows that keep the cursor inside it.
 - After a wrap (section 6.3) the window shows the first 7 or the last 7 items.
 - The title bar shows `i/n` (section 5.1). There is no scroll bar.
 
-### 5.6 Placeholder screen (decision plan + UX-6)
+### 5.6 Placeholder screen (decision plan + UX-6, UX-31)
 
 ```
 0  |Receiving                | title bar, inverted
 3  |        Not ready        | column 8
 ```
 
-- Title: `Receiving`, `Sending` or `Free Input`. Body: `Not ready` in row 3, column 8. All other rows blank.
+- Title: `Receiving` or `Sending`. Body: `Not ready` in row 3, column 8. All other rows blank.
 - No highlight on the screen.
+- Only a long `menu/back` works (section 6.1). A short press does nothing. The keyer is off: the tip acts as
+  `enter`, and `enter` does nothing here.
 
 ### 5.7 Reset Statistics dialog (decision plan + UX-7)
 
@@ -281,25 +292,144 @@ Message screen rules: body text in rows 2-3 (one line: row 3), each line centere
 `enter` or `menu/back` closes the screen. The same layout is used for any later one-button message (for example a
 save error, see question Q-4).
 
+### 5.9 Free Input screen (decision UX-25 to UX-30)
+
+Purpose: the user keys with the paddle or a straight key, hears the sidetone and reads the decoded text. The screen
+shows only the text. It has no cursor, no status and no hint.
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Free Input               | title bar, inverted (section 5.1)
+1  |CQ CQ DE UT2UBM UT2UBM K | text, normal video
+2  |-------------------------| delimiter: one 1 px line, y = 8r + 3, x 2-126 (not '-' glyphs)
+3  |UR 5NN = NAME VADIM = QTH| a full line: the next character wraps
+4  |KY*V KYIV + 73 <SK>      | '*' = unknown pattern, '+' = AR, '<SK>' = prosign SK
+5  |                         |
+6  |                         |
+7  |                         |
+```
+
+The mockup is illustrative. Legibility on the glass is device check D-21.
+
+#### Layout
+
+- Font: `FONTS_ID_5X8`, the UI font. The grid of section 4.1 applies: cell `(r, c)` is at `x = 2 + 5c`, `y = 8r`.
+- Row 0: the title bar with `Free Input` (section 5.1). It does not change while the mode is open.
+- Rows 1-7: the text area, 7 lines of 25 cells, normal video. No highlight, no cursor mark, no inverted cell.
+- Letters are capitals. The decoder gives only printable ASCII (UX-11).
+- The firmware draws each character straight into the framebuffer. There is no text buffer. After the mode ends,
+  the text is gone.
+
+#### Cursor
+
+The cursor is the cell where the next character goes. It is not drawn. Its row is 1-7 and its column is 0-25.
+Column 25 means "line full": the line has no free cell, but the next line does not exist yet.
+
+Invariant: every cell at the cursor and after it, in the text area, is blank.
+
+| Event | Rule |
+| --- | --- |
+| Mode start, clear | Cursor at row 1, column 0. |
+| Character | If the column is 25, first go to a new line. Then draw the character at the cursor and add 1 to the column. |
+| Word space | If the column is 0 or 25, do nothing. Else add 1 to the column. The cell stays blank. |
+| New line | If the row is below 7, add 1 to the row. Else scroll. The column becomes 0. |
+| Scroll | Move the content of rows 2-7 up to rows 1-6. Clear row 7. The cursor stays on row 7. The title bar does not move. |
+
+Results of these rules:
+
+- Wrap is per character. A word can break across two lines, for example `VAD` at the end of one line and `IM` at
+  the start of the next. There is no word wrap.
+- The wrap is lazy. A full line stays the last line until the next character comes. So the screen never scrolls to
+  show an empty line, and a full row 7 stays on the screen while the user pauses.
+- A line never starts with a space. A space at the end of a full line is dropped. The line break then acts as the
+  word space.
+- Two word spaces in a row cannot occur: the keyer gives one word-gap event per pause (`keyer_spec.md`).
+- A token of more than one cell (`<SK>`) has no special rule. Each of its characters wraps like other text. Example:
+  with the cursor in column 23, `<S` goes to columns 23-24 and `K>` starts the next line.
+- The text area keeps the last 7 lines, at most 175 characters.
+
+#### Characters
+
+When the character gap comes (section 6.7), the decoder turns the elements of one character into one glyph.
+
+| Pattern | Display | Decision |
+| --- | --- | --- |
+| A pattern in the Morse table | Its character: `A` to `Z`, `0` to `9` and the punctuation of the table. | plan |
+| AR `.-.-.` | `+` | plan, user |
+| BT `-...-` | `=` | plan, user |
+| SK `...-.-` | `<SK>`: four cells, the angle brackets included, no space inside. Each of the four characters follows the character rule, so `<SK>` can split across two lines like any word. | UX-28, user |
+| Other prosigns with the same code as a punctuation mark | If the table has that mark: the mark. Examples: KN `-.--.` gives `(`, AS `.-...` gives `&`. | UX-28 |
+| A pattern that is not in the table, more than 6 elements, or a lost event | `*` (one cell) | UX-27, user |
+| The 8-dit error sign | `*` | user |
+| A character gap with no elements (for example after a clear) | Nothing. The cursor does not move. | UX-30 |
+
+Rules for the Morse table (`keyer_spec.md`, owner `architector`):
+
+- It contains at least `A` to `Z`, `0` to `9`, `.` `,` `?` `/` `=` `+` `-`. Other punctuation is the choice of
+  `architector`.
+- It contains no lowercase letter, no space, no `*`, no `<` and no `>`. The glyph `*` means "unknown" and nothing
+  else. In Free Input, `<` and `>` appear only in `<SK>`.
+- `*` has no Morse code in the ITU table, so it never looks like a correct character. `*` uses cell columns 0-3
+  and cell rows 1-6 only (section 3.3), so it does not touch its neighbours.
+
+#### Delimiter (long `next`, decision UX-29)
+
+- If the column is not 0, go to a new line first (with a scroll on row 7). At the start position (row 1, column 0)
+  the delimiter uses row 1.
+- Draw one horizontal line in that row: pixel row `y = 8r + 3`, `x` = 2 to 126 (the 25 text cells). All other
+  pixels of the row stay off. Margin pixels x 0, 1 and 127 stay off.
+- Set the column to 25. The next character starts a new line under the delimiter. Until then the delimiter can be
+  the last row, and no empty row shows under it.
+- Two delimiters in a row give two lines on two rows.
+- The delimiter does not change the decoder. A character in progress during the long press still shows, on the row
+  after the delimiter.
+- The line scrolls with the text, because it is part of the row.
+- A continuous line is different from the `-` glyph: the glyph is short and has a gap at each cell edge.
+
+#### Clear (long `prev`, decision UX-30)
+
+- All pixels of rows 1-7 go off. The title bar stays and is not drawn again.
+- The cursor goes to row 1, column 0.
+- The elements of the character in progress are dropped. The next character starts from its first element.
+- The keyer and the sidetone do not change. A tone that sounds while the user clears continues until the key opens.
+- The device does not ask again before it clears. The 800 ms hold is the protection (UX-23).
+
 ## 6. Control mapping
 
-### 6.1 Per state (decision plan + UX-9)
+### 6.1 Per state (decision plan + UX-9, UX-23, UX-24)
 
-`press` = a debounced press event. `repeat` = an auto-repeat event (prev and next only, section 6.2).
+`press` = a debounced press event. `repeat` = an auto-repeat event (prev and next only, section 6.2). `long` = a
+long-press event (`menu/back`, `prev` and `next` only, section 6.6).
+
+Short presses and repeats:
 
 | State | `prev` press | `next` press | `prev`/`next` repeat | `enter` | `menu/back` |
 | --- | --- | --- | --- | --- | --- |
-| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open placeholder. Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
+| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Free Input) or the placeholder (Receiving, Sending). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
 | List, edit | Decrease the value by one step, or the previous choice. Stops at the limit. Applies at once. | Increase, or the next choice. Stops at the limit. Applies at once. | Same as press, stops at the limit | Leave edit mode, keep the value. Cursor stays on the row. | Leave edit mode, keep the value (same as `enter`). Does not leave the list. |
-| Placeholder | nothing | nothing | nothing | nothing | Back to the main menu, cursor on the mode item that opened it. |
+| Placeholder | nothing | nothing | nothing | nothing | nothing |
+| Free Input | nothing | nothing | nothing | No event. The keyer owns P3.2: the `enter` button keys like the tip contact (section 6.7). | nothing |
 | Dialog | Focus `No` (no wrap) | Focus `Yes` (no wrap) | Same as press | Activate the focused button. `No`: back to Settings. `Yes`: reset statistics, show the message screen. | Same as `No`. |
 | Message | nothing | nothing | nothing | `Statistics reset`: back to Settings, cursor on `Reset Statistics`. `Display Defaults`: the main menu, cursor on `Receiving`. | Same as `enter`. |
+
+Long presses:
+
+| State | Long `menu/back` | Long `prev` | Long `next` |
+| --- | --- | --- | --- |
+| List (browse or edit), dialog, message | nothing | nothing | nothing |
+| Placeholder | Back to the main menu, cursor on the mode item that opened it. | nothing | nothing |
+| Free Input | Stop the keyer (a sounding tone falls in 8 ms). Back to the main menu, cursor on `Free Input`. The text is lost. | Clear the text area (section 5.9). | Draw the delimiter (section 5.9). |
+
+"nothing" means: no state change, no redraw, no dirty page, no sound. In a list, the short press already acted on the
+press edge. The long event of the same press must not act again (UX-24).
 
 Other rules:
 
 - "Applies at once": contrast goes to the LCD and the backlight level goes to the PWM at each step. The other
-  values change only in memory until the save. They have no visible effect in this version. Tone is the only value
-  with an audible effect: the Tone preview (section 6.5).
+  values change only in memory until the save. In the menu, Tone is the only value with an audible effect: the Tone
+  preview (section 6.5). `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` take effect at the next start
+  of Free Input (section 6.7). The other values have no effect in this version.
 - Effective-speed rule (plan): an effective speed can never be higher than its base speed. Lowering a base speed
   below its effective speed lowers the effective speed in the same step. Raising a base speed never changes the
   effective speed.
@@ -307,8 +437,10 @@ Other rules:
   the parent on the item that was opened.
 - After power-on the main menu shows with the cursor on `Receiving`. A display recovery start shows the
   `Display Defaults` message first (section 8.1).
-- There is no inactivity timeout anywhere in this version. There is no long-press function. The Tone preview
-  timeout (section 6.5) is not a menu timeout: it ends the sound and changes no screen.
+- There is no inactivity timeout anywhere in this version. Free Input stays open until a long `menu/back`. The
+  Tone preview timeout (section 6.5) is not a menu timeout: it ends the sound and changes no screen.
+- Long presses act only in the mode screens (section 6.6). Lists, edit mode, the dialog and the message screen keep
+  their short-press behaviour without a change.
 
 ### 6.2 Button timing (decision UX-12)
 
@@ -319,9 +451,13 @@ Other rules:
 | Auto-repeat buttons | `prev` and `next` only | A held `enter` or `menu/back` gives one event per press. |
 | First repeat | 400 ms after the press event | |
 | Repeat period | 80 ms (12.5 steps per second) | Full Tone range: 60 steps, about 5.1 s. Full Contrast range: 63 steps, about 5.4 s. No acceleration. |
-| Two of prev/next held | The repeat belongs to the one pressed last. Releasing it stops the repeat. The other one does not start repeating again until it is pressed again. | |
+| Two of prev/next held | The repeat belongs to the one pressed last. Releasing it stops the repeat. The other one does not start repeating again until it is pressed again. When both presses debounce in the same poll, the repeat belongs to prev. | |
 | Button held at start-up | Gives no event until it is released and pressed again. | Protects against a closed key/paddle at power-on. After the display recovery gesture (section 8.1), the held `menu/back` does not close the message screen. |
 | Two press events due in the same poll | Order: `menu/back`, `enter`, `prev`, `next`. | Deterministic for tests. |
+| Long press (UX-23) | `BUTTONS_LONG_PRESS_MS` = **800 ms** after the press event, while the debounced state stays pressed. One long event per press. Buttons: `menu/back`, `prev`, `next`. The hold counts on the debounced state. Both of its edges lag the pin by 20 ms, so a pin hold and a debounced hold have the same length. Measured from the press event, the pin must still be closed at 780 ms. | `enter` has no long press: it is the paddle tip. A release bounce shorter than 20 ms does not end the hold (debounced state). |
+| Long press and repeat | A held `prev` or `next` gives its repeats and also one long event. Each screen uses only one of them: lists use repeats, mode screens use the long event. | The repeat at 800 ms (400 + 5 x 80) and the long event fall due together. |
+| Events due in the same poll | Order: press events, then long events (`menu/back`, `prev`, `next`), then a repeat. A later event is not lost: it comes on a later poll. | Deterministic for tests. |
+| Long press and start-up | A button held at start-up gives no long event until it is released and pressed again. | Same rule as the press event. |
 | Timing tolerance | +/- 2 ms against the 1 ms tick | For host tests. |
 
 ### 6.3 Wrap and limits (decision UX-13)
@@ -339,11 +475,14 @@ Other rules:
 - A key held closed gives one `enter` event only. The other three buttons keep working.
 - If inserting a plug causes a short tip contact longer than 20 ms, it gives one `enter` (unverified, D-5). The
   dialog focus starts on `No`, so such an event never resets statistics. In a list it can open an item or enter
-  edit mode. `menu/back` undoes that without a change.
+  edit mode. `menu/back` undoes that without a change. If it opens Free Input, a long `menu/back` closes it.
+- In Free Input, P3.2 belongs to the keyer, not to the menu (UX-33, section 6.7). One closure of P3.2 is never both
+  `enter` and a key element.
 
 ### 6.5 Tone preview (decision UX-20, user Q-3)
 
-User decision (Q-3): a Tone edit plays the tone. This is the only sound in this version. There is no keyer.
+User decision (Q-3): a Tone edit plays the tone. This is the only sound in the menu. The keyer sounds only in Free
+Input (section 6.7). Outside Free Input the keyer is off, and the paddle gives no tone (UX-34).
 
 Facts that the design uses (`sidetone_spec.md` sections 3.9, 6.3, 10.3):
 
@@ -435,6 +574,87 @@ decision first.
 | Display recovery start | Silent. The `Display Defaults` message screen makes no sound. |
 | Volume at its minimum | No sound. The edit works as before. |
 
+### 6.6 Long press (decision UX-23, UX-24, UX-36, user)
+
+User decision: in every mode screen, a long `menu/back` exits, a long `prev` clears the screen and a long `next`
+draws a delimiter. The placeholders use only the long `menu/back`.
+
+| Item | Value |
+| --- | --- |
+| Threshold | 800 ms after the press event (section 6.2). The user holds the button about 0.8 s: the press event and the release both lag the pin by 20 ms. |
+| Moment of the action | At the threshold, while the button is still held. Not at the release. |
+| Count | One action per press. A longer hold does nothing more. |
+| Feedback | The result of the action is the only feedback: the main menu appears, the text area goes blank, or the delimiter line appears. There is no beep, no progress mark and no flash. |
+| Short press, repeat and `enter` in a mode screen | Ignored: no state change, no redraw, no sound (section 6.1). |
+
+How the user learns it: hold the button until the screen changes, then release. The screen changes during the hold.
+This tells the user the moment to let go.
+
+Special cases:
+
+- Clear on an empty text area changes nothing on the screen. That is correct: there is nothing to clear.
+- After the exit, the button is still held. The menu gets no event from it: the long event comes once per press, and
+  `menu/back` has no repeat.
+- `prev` and `next` held together: each gives its own long event at its own 800 ms moment, in that order. In Free
+  Input this gives a clear and a delimiter.
+- A long press while the user keys: the keyer runs on. Only the clear drops the character in progress
+  (section 5.9).
+- A button held at start-up gives no long event (section 6.2).
+
+### 6.7 Keyer from the user's view (decision plan, UX-33 to UX-35, UX-37)
+
+The keyer runs only in Free Input. The mode start starts the keyer, and the mode end stops it. At the mode start the
+keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` once. The settings cannot change while the
+mode is open. `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` have no effect on Free Input.
+
+#### Key Type
+
+| Value | What the user does | What the device does |
+| --- | --- | --- |
+| `Straight` | Keys with a straight key, a bug, or one paddle lever as a key. | The tip contact and the ring contact both key. The tone sounds while a contact is closed. A mark shorter than 2 dits is a dit. A mark of 2 dits or longer is a dah. `Paddle` has no effect. |
+| `Iambic A` | Keys with a dual-lever paddle. | The dit lever gives dits and the dah lever gives dahs, for as long as the lever is held. Lengths are exact: dah = 3 dits, gap = 1 dit, at `TX Speed`. A squeeze gives alternate elements. A squeeze from idle starts with a dit. When the user opens both levers during a squeeze, the keyer ends the current element and stops. A single tap on the other lever during an element adds that element. |
+| `Iambic B` | Same as `Iambic A`. | Same as `Iambic A`, with one difference: when the user opens both levers during a squeeze, the keyer adds one more element of the other kind. |
+
+The exact state machine is in `keyer_spec.md` (owner `architector`).
+
+#### Speed and gaps
+
+- `TX Speed` sets the dit length: 1200 / WPM ms (5 WPM = 240 ms, 20 WPM = 60 ms, 50 WPM = 24 ms).
+- Character end: when the keyer is idle for 2 dits after the last element, the character shows on the screen.
+- Word space: when the pause reaches 5 units of the `TX Eff. Speed` spacing, a word space follows. If
+  `TX Eff. Speed` equals `TX Speed`, this is 5 dits. A lower `TX Eff. Speed` needs a longer pause. The exact formula
+  is in `keyer_spec.md`.
+- User decision: the thresholds come from the settings. The decoder does not adapt to the speed of the user.
+
+#### Sidetone
+
+- Pitch: the `Tone` setting. Route: automatic (O-3).
+- `Straight`: the tone follows the contact. It rises in 8 ms after the close and falls in 8 ms after the open.
+- `Iambic A` and `Iambic B`: the tone starts with the element. Its 8 ms fall ends at the end of the element, so the
+  element and the gap keep their exact lengths.
+- The display never delays the tone: the keyer runs in the timer interrupt.
+
+#### Paddle (decision UX-32)
+
+| `Paddle` | Tip (P3.2, also the `enter` button) | Ring (P5.5) |
+| --- | --- | --- |
+| `Normal` | dit | dah |
+| `Reversed` | dah | dit |
+
+With `Reversed`, the `enter` button keys dahs in an iambic mode. With `Straight`, both contacts key, so the setting
+has no effect.
+
+#### P3.2 ownership (decision UX-33)
+
+- Mode start: the `enter` press that opens Free Input gives no element and no tone. This is true for the `enter`
+  button and for a dit lever that acts as `enter`. At the mode start, a closed contact stays ignored until it
+  opens. After that it keys as normal. The ring contact follows the same rule, so a mono plug (ring shorted to
+  the sleeve) works as a straight key on the tip.
+- Inside the mode: the menu gets no `enter` event. The `enter` button keys like the tip contact.
+- Mode end: after the long `menu/back`, the menu gets P3.2 back. A contact that is held at that moment gives no
+  `enter` until it opens and closes again. So a held lever never opens a menu item.
+- One closure of P3.2 is never both `enter` and a key element.
+
 ## 7. Feedback
 
 | Situation | What the user sees | Decision |
@@ -446,6 +666,12 @@ decision first.
 | Base speed lowered below the effective speed | The effective-speed row changes in the same redraw as the base row. Both rows are on the CW screen. | UX-14 |
 | Contrast or backlight edit | The LCD contrast or backlight changes at each step. | plan |
 | Tone edit | The user hears the tone for 300 ms at the edit start and after each change. Leaving the edit stops it at once (8 ms fall). At a limit, nothing new sounds. | UX-20, UX-21, UX-22 |
+| Long press in a mode screen | The result of the action at 800 ms, during the hold. Nothing else. | UX-23 |
+| Short press or repeat in a mode screen | Nothing. | UX-24 |
+| Key element in Free Input | The sidetone, at once. The screen does not show elements. | plan, UX-26 |
+| Character keyed in Free Input | The glyph appears after the 2-dit pause. Target: visible within 100 ms after the character gap (unverified, D-21). | UX-26 |
+| Pattern not in the table | `*` in its cell. | UX-27 |
+| Word space in Free Input | No visible change until the next character, which starts one cell later. | UX-26 |
 | Save on leaving Settings | Nothing extra. The main menu appears with the cursor on `Settings`. The erase and write take about 5-7 ms (datasheet: erase 4-6 ms, 15 bytes x 40 us), which the user does not notice. | UX-15 |
 | Save not needed | Same screen, no EEPROM access. A save needs two conditions: at least one edit step changed a value during this Settings visit, and the current values differ from the stored record. A value changed and changed back does not cause a write. A visit without an edit step does not cause a write, also after a display recovery start. | UX-15 |
 | Reset Statistics `Yes` | The message screen `Statistics reset` / `OK`. | UX-8 |
@@ -463,6 +689,11 @@ decision first.
 | F-6 | Backlight `Off` in the dark | No light. | Level 0 is a valid setting. | Same as F-5. |
 | F-8 | `menu/back` held at start-up | The message screen `Display Defaults`, then the main menu. | Section 8.1. | - |
 | F-7 | EEPROM write fails (read-back mismatch, CMD_FAIL or low supply) | The message screen: title `Settings`, text `Not saved`, `OK`. `enter` or `menu/back` closes it to the main menu with the cursor on `Settings`. | `eeprom_write` reads back each byte. The save stops with `SETTINGS_SAVE_FAILED`. The values stay active. The magic is written last, so a stopped save leaves no valid record (`menu_subsystem_spec.md` sections 3.5 and 3.6). | The next exit from Settings tries the save again. If the user switches off first, the next power-on uses the defaults (F-2). |
+| F-9 | A mono plug is inserted while Free Input is open (the ring closes after the mode start). | `Straight`: a tone without end and no new character. Iambic: a stream of dahs (`Normal`) or dits (`Reversed`) and no new character until the plug is pulled. Then `*` shows. | The keyer sees a closed contact. The entry mask works only at the mode start. | Long `menu/back`, then open Free Input again: the mask now ignores the ring. The manual says: insert the plug before you open Free Input. No stuck-key timeout (UX-37). |
+| F-10 | A plug is inserted or removed while Free Input is open. | A short tone and maybe one extra character (`E`, `T` or `*`). | A short contact closure is a real element for the keyer. | Long `prev` clears the screen. |
+| F-11 | The main loop falls behind and the keyer event queue overflows (more than 8 events). | `*` in place of the character in progress. The text continues after it. | The keyer drops the new event and sets an overflow flag. Sound and keying stay correct. | None needed. If it happens often, record it for `architector` (D-21). |
+| F-12 | Power loss while Free Input is open. | After power-on, the main menu. The text is gone. | No mode state survives. The settings stay as stored. | Open Free Input again. |
+| F-13 | No plug, or the key is not connected. | `Free Input` and a blank text area. No sound. | The keyer idles. The `enter` button still keys the tip. | Connect the key. |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
@@ -527,7 +758,7 @@ debounced press and release.
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
 | V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`. `TEXT(2,0,"Sending")`, `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. Rows 5-7 have all pixels off. No EEPROM erase or write. |
-| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`. Settings shows `On`, `5`. Display shows `8`, `32`. |
+| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `5`. Display shows `8`, `32`. |
 | V-03 | Main menu: press prev, then press next. | After prev: `SEL(4)`, `PLAIN(1)`. After next: `SEL(1)`. |
 | V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `Settings` (`SEL(4)`). It does not wrap to `Receiving`. |
 | V-05 | Enter Settings. Enter CW. Press menu/back. | Title `Settings`, `SEL(1)` on `CW`. Then title `Settings > CW`, `SEL(1)` on `Tone`. Then title `Settings`, `SEL(1)` on `CW`. No EEPROM access. |
@@ -544,7 +775,7 @@ debounced press and release.
 | V-16 | Open Settings, change nothing, go back to the main menu. Then change Tone 600 -> 610 -> 600 and go back. | No EEPROM erase or write in both cases. |
 | V-17 | Edit Tone 600 -> 620. Press menu/back once. | Still on `Settings > CW`, `SEL(1)`, `620 Hz`. No EEPROM access. |
 | V-18 | Main menu: press menu/back. | Framebuffer unchanged, no dirty page. |
-| V-19 | Main menu: enter on Receiving. Press prev, next, enter. Press menu/back. | Title `Receiving`, `TEXT(3,8,"Not ready")`, `PLAIN(1)`..`PLAIN(7)`. prev/next/enter change nothing. menu/back: main menu with `SEL(1)` on `Receiving`. Same for `Sending` (`SEL(2)` after back) and `Free Input` (`SEL(3)`). |
+| V-19 | Main menu: enter on Receiving. Press prev, next, enter, menu/back. Long prev, long next. Then long menu/back. | Title `Receiving`, `TEXT(3,8,"Not ready")`, `PLAIN(1)`..`PLAIN(7)`. The short presses and the long prev and next change nothing: framebuffer unchanged, no dirty page. Long menu/back: main menu with `SEL(1)` on `Receiving`. Same for `Sending` (`SEL(2)` after back). |
 | V-20 | Settings: enter on Reset Statistics. Enter. | Dialog: title `Reset Statistics`, `TEXT(3,4,"Reset statistics?")`, `BUTTON(37,56)` with `No` inverted, `Yes` normal. After enter: Settings, `SEL(5)` on `Reset Statistics`. `stats_reset()` not called. |
 | V-21 | Open the dialog. Next. Next. Enter. Enter. | `BUTTON(67,91)` after the first next. The second next changes nothing. First enter: `stats_reset()` called once. `TEXT(3,4,"Statistics reset")`, `BUTTON(52,71)` with `OK`. Second enter: Settings, `SEL(5)`. |
 | V-22 | Open the dialog. Next. Menu/back. | Same as No: Settings, `stats_reset()` not called. |
@@ -597,8 +828,51 @@ Probes and steps:
 | V-49 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: next`. `AT 10200: enter`. `AT 11000: enter`. | `ADD[tone(610), on(true)]` at 10100. `ADD[on(false)]` at 10200. `ADD[tone(610), on(true)]` at 11000: a new edit plays the stored current value. |
 | V-50 | `CWTONE(600)`. `AT 65400: enter`. `POLL 65401..65535`, then `POLL 0..163`. `AT 164: poll`. | `ADD[tone(600), on(true)]` at 65400. `ADD[]` up to 163. `ADD[on(false)]` at 164. |
 | V-51 | `CWTONE(600)`. `AT 10000: enter`. At 10100: `menu_handle(next)`, `menu_handle(REPEAT(next))`, then one `menu_poll()`. `POLL 10101..10399`. `AT 10400: poll`. | `ADD[tone(610), on(true), tone(620), on(true)]` at 10100. `ADD[]` up to 10399. `ADD[on(false)]` at 10400. |
-| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open each placeholder and press all four buttons there. 3. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 4. Edit each value and choice item except Tone up to both limits, with presses and repeats. 5. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 6. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. |
+| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open the Receiving and Sending placeholders and give all four buttons short presses, and `menu/back`, `prev`
+and `next` long presses there. 3. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 4. Edit each value and choice item except Tone up to both limits, with presses and repeats. 5. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 6. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. |
 | V-53 | Recovery start as V-33, then reset the fake sidetone log. Release P0.2, close the message with `menu/back`. `POLL` for 1000 ms. | `SLOG` is empty. |
+
+### 9.2 Free Input and long-press tests (sections 5.9, 6.6, 6.7)
+
+These tests use a fake keyer event source and the probes of section 9. Notation:
+
+- `FI`: power-on with an empty fake EEPROM, move the cursor to `Free Input`, press `enter`.
+- `KEY(s)`: for each character of `s`, the fake keyer gives the DIT and DAH events of its Morse code and then one
+  CHAR_GAP. A space in `s` is one WORD_GAP. `KEYP(p)` does the same for one pattern `p` of `.` and `-`.
+- `En`: the text of `n` letters `E`. `Ln(X)`: a line of 25 letters `X`.
+- `LONG(X)`: hold button `X` until its long event comes, then release it.
+- `BLANK(r)`: all pixels of row `r` are off.
+- `LINE(r)`: pixels `(x, 8r + 3)` are on for x = 2..126. All other pixels of rows `8r` to `8r + 7` are off.
+- Global rule for the Free Input tests (V-54 to V-73): in rows 1-7, the pixels with x = 0, 1 and 127 are off.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-54 | `FI`. | `TITLE`, `TEXT(0,0,"Free Input",inv)`. `BLANK(1)`..`BLANK(7)`. The keyer starts once with `Iambic B`, `Normal`, 20 WPM, 20 WPM. The menu `enter` is off. |
+| V-55 | `FI` with P3.2 low from the `enter` press on. Keep P3.2 low for 2 s, then release. | No ENTER event. No DIT event and no sidetone request from the closed contact. The screen does not change. |
+| V-56 | `FI`. `KEY("CQ DE")`. | `TEXT(1,0,"CQ DE")`. Every other cell of rows 1-7 is blank. |
+| V-57 | `FI`. One WORD_GAP. `KEY("E")`. | `TEXT(1,0,"E")`: no space at the line start. |
+| V-58 | `FI`. `KEY(E25)`. One WORD_GAP. `KEY("T")`. | Row 1 is `L25(E)`. `TEXT(2,0,"T")`: the space at the end of a full line is dropped. |
+| V-59 | `FI`. `KEY(E24)`. One WORD_GAP. `KEY("T")`. | Row 1: 24 letters `E`, cell (1,24) blank. `TEXT(2,0,"T")`. |
+| V-60 | `FI`. Key 7 lines `L25(A)` to `L25(G)`. Check. Then `KEY("H")`. | After 175 characters: rows 1-7 show `A` to `G`, no scroll yet. After `H`: rows 1-6 show `B` to `G`, `TEXT(7,0,"H")`, the rest of row 7 blank. `TITLE` holds. Page 0 is not dirty. |
+| V-61 | `FI`. `KEYP("........")`. `KEYP(".......")`. A pattern with an empty table slot. Set the overflow flag, then `KEYP(".-")`. | Four cells `*`: `TEXT(1,0,"****")`. |
+| V-62 | `FI`. `KEYP(".-.-.")`, `KEYP("-...-")`, `KEYP("...-.-")`. | `TEXT(1,0,"+=<SK>")`. |
+| V-63 | `FI`. `KEY(E23)`. `KEYP("...-.-")`. Then a new `FI`: `KEY(E25)`, one WORD_GAP, `KEYP("...-.-")`. | First: `<S` in cells (1,23) and (1,24), `TEXT(2,0,"K>")`. Second: row 1 is `L25(E)`, `TEXT(2,0,"<SK>")`, no space at the line start. |
+| V-64 | `FI`. `KEY("ABC")`. DIT, DIT. `LONG(prev)`. DAH, CHAR_GAP. | After the clear: `BLANK(1)`..`BLANK(7)`, `TITLE` holds, page 0 is not dirty. Then `TEXT(1,0,"T")`: the two dits are dropped. |
+| V-65 | `FI`. `LONG(prev)`. One CHAR_GAP with no elements. One WORD_GAP. `KEY("A")`. | No change before `A`. `TEXT(1,0,"A")`. |
+| V-66 | `FI`. `KEY("AB")`. `LONG(next)`. `KEY("C")`. | `TEXT(1,0,"AB")`, `LINE(2)`. Then `TEXT(3,0,"C")`, `BLANK(4)`. |
+| V-67 | `FI`. `LONG(next)`. `KEY("C")`. Then `LONG(next)`, `LONG(next)`. | `LINE(1)`, `TEXT(2,0,"C")`, `LINE(3)`, `LINE(4)`. |
+| V-68 | `FI`. Key 7 lines `L25(A)` to `L25(G)`. `LONG(next)`. `KEY("H")`. | After the delimiter: rows 1-6 show `B` to `G`, `LINE(7)`. After `H`: rows 1-5 show `C` to `G`, `LINE(6)`, `TEXT(7,0,"H")`. |
+| V-69 | `FI`. DIT. `LONG(next)`. DAH, CHAR_GAP. | `LINE(1)`, then `TEXT(2,0,"A")`: the delimiter keeps the character in progress. |
+| V-70 | `FI`. `KEY("AB")`. Press prev, next, menu/back. P3.2 low 100 ms, then high. Hold prev for 600 ms, release. Hold next for 600 ms, release. | No redraw, no dirty page from the buttons, still Free Input. The keyer is not stopped. P3.2 gives no ENTER event. |
+| V-71 | `FI`. `KEY("AB")`. `LONG(menu)`. Press enter. | After the long press: main menu, `SEL(3)` on `Free Input`. The keyer stops once. The menu `enter` is on. After enter: Free Input with `BLANK(1)`..`BLANK(7)`: the text is gone. |
+| V-72 | `FI`. P3.2 low. `LONG(menu)` while P3.2 stays low. Keep P3.2 low 2 s more, release, then press enter. | Main menu, `SEL(3)`. No ENTER event while P3.2 stays low. One ENTER after the new press. |
+| V-73 | `FI`. Hold menu/back with its debounced state pressed for 790 ms after its press event (the pin opens 770 ms after the press event), release. Then a debounced hold of 810 ms (the pin opens 790 ms after the press event). Then `FI` and hold it for 5 s. | 790 ms: still Free Input. 810 ms: the main menu shows at 800 ms (+/- 2 ms). 5 s: one exit only. The menu gets no event during the rest of the hold and after the release. |
+| V-74 | Lists with long holds: main menu, hold menu/back 2 s. Settings > CW, hold menu/back 2 s. Main menu, hold next 1000 ms. Tone edit at 600 Hz, hold next 1000 ms. Dialog, hold next 1000 ms. | Main menu: no change (as V-18). CW: Settings with `SEL(1)` on `CW`, no second step. Main menu: as V-04. Tone: 690 Hz, as V-08. Dialog: focus `Yes`, nothing else. |
+| V-75 | `buttons` only: hold prev. At 800 ms after the press event, the long event and a repeat are due in the same poll. | The first poll gives the long event of prev. The next poll gives the repeat. |
+| V-76 | Settings > CW. | 7 rows. `TEXT(7,0,"Paddle")`, `TEXT(7,17,"Normal")`. |
+| V-77 | CW: enter on Paddle. Next. Next. Enter. Leave Settings. Re-init from the fake EEPROM. | `EDIT(7,8)`. `Normal`: only `>`. `Reversed` (`TEXT(7,15,"Reversed",inv)`): only `<`. The second next changes nothing. One save. After re-init: `Reversed`. |
+| V-78 | Valid record from the earlier firmware (flags bit 1 = 0). | `Paddle` shows `Normal`. |
+| V-79 | Settings: `Key Type` = `Straight`, `Paddle` = `Reversed`, TX Speed 25, TX Eff. Speed 15. Leave Settings. `FI`-style entry from the main menu. | The keyer starts once with `Straight`, swapped, 25 WPM, 15 WPM. |
 
 ## 10. Durable decisions
 
@@ -609,10 +883,10 @@ Probes and steps:
 | UX-3 | Labels and value formats in section 5.3, fixed field width per item. `RX`/`TX` labels decided by the user. | Fits 25 columns with edit markers. Value does not jump while it changes. | Full words `Receive`/`Send` (do not fit with markers). `Recv`/`Send` short forms. |
 | UX-4 | Edit mode = highlight shrinks to the value field, `<`/`>` markers show the possible directions. | Two cues (shape and markers) for the mode. Markers also show the limits. | Blinking value (needs a timer, weak on slow LCD). `*` marker only (too small). |
 | UX-5 | Scroll window of 7, minimum movement, `i/n` in the title bar. | No extra pixels. Testable as text. | Scroll bar (needs a column). |
-| UX-6 | Placeholder: title + `Not ready`, only menu/back works. | Plan. | - |
+| UX-6 | Placeholder: title + `Not ready`. Only a long menu/back works (UX-31). Free Input is no longer a placeholder. | Plan, user. | - |
 | UX-7 | Dialog `No`/`Yes`, focus `No` at every open, menu/back = `No`. | Plan. Also protects against a spurious `enter` from the paddle socket. | - |
 | UX-8 | `Statistics reset` / `OK` message after `Yes` (accepted by the user). | Gives a completion signal for an action that cannot be undone. | Silent return (the user cannot tell `Yes` from `No`). |
-| UX-9 | Control mapping in section 6.1. Menu/back at the root does nothing. | One rule for back everywhere. No hidden function at the root. | menu/back at the root toggles something (hidden mode). |
+| UX-9 | Control mapping in section 6.1. Menu/back at the root does nothing. In lists, short menu/back goes back. In mode screens, long menu/back exits. | One rule for back in each screen family. No hidden function at the root. | menu/back at the root toggles something (hidden mode). |
 | UX-10 | Title Case for labels and titles, sentence case for sentences. | Matches the names the user gave to the items. | - |
 | UX-11 | ASCII 0x20-0x7E only. | Avoids `char` signedness in the glyph search. | Latin-1 arrows such as `»`. |
 | UX-12 | Debounce 20 ms stable. Repeat 400 ms / 80 ms on prev and next only. Held-at-start buttons ignored. | Plan values. One event per press for enter keeps a held key harmless. | Edge-triggered press with lockout (more sensitive to plug-insertion glitches). |
@@ -626,6 +900,21 @@ Probes and steps:
 | UX-20 | Tone preview (section 6.5): the tone plays at the start of a Tone edit and after each change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. No other sound in the menu. | User decision (Q-3). The user hears the value that the display shows. The stop on leave ties the sound to the edit: `enter` means "done". Silence at a limit keeps UX-13. | A sound for the Tone row in browse mode (noise during a cursor move). Tone continues after leaving until the timeout (sound without a visible owner). A beep at a limit (a second limit signal next to the marker, and noise during a held repeat). A beep on save or on other items (no user request). |
 | UX-21 | `MENU_TONE_PREVIEW_MS` = 300 ms, counted from the hook that starts or restarts the tone. | 300 ms is one dah at 12 WPM, a familiar length for the user. It is long enough to judge the pitch after the 8 ms rise. Single presses about 0.5 s apart give one separate beep each. It is shorter than the 400 ms repeat delay, so a hold gives one beep, a short silence and then the chain. | 150 ms (short for a low tone, and the rise and fall take 16 ms of it). 1000 ms or continuous while in edit (tiring in long sessions, and the user cannot stop it without leaving the edit). |
 | UX-22 | A repeat event uses the same rule as a press. The retune dip (about 17-19 ms each 80 ms) during a held repeat is accepted. | The user hears the pitch move and can release by ear. The dip is shaped, not a click. No interface change. | Silence during repeats and one tone after the release. There is no release event. It needs a buttons change, or a new hook where `menu_poll()` starts the tone after a pause in the repeats. Sound on press events only (the user cannot hear the final value of a hold without one more step). Sound on every n-th repeat only (the sound lags the display). Glide without silence (needs an ARR change during a ramp, a sidetone interface change). Each alternative needs an `architector` decision. |
+| UX-23 | Long press: 800 ms after the press event, on `menu/back`, `prev` and `next`. One action per press, at the threshold while the button is held. No feedback other than the result of the action. | The user decided on long presses. 800 ms is twice the repeat delay, so a normal press or a short hold never triggers it. Exit and clear destroy the text, so the hold must be deliberate. The screen changes during the hold. This is the signal to release. | 500 ms (close to a slow press, risk of lost text). 1500 ms or more (slow for a frequent clear). Action at the release (the user cannot see that the hold is long enough). A beep (mixes with the sidetone during practice). A progress bar (pixels and code for a 0.8 s wait). A separate value per button (more to learn, no gain). |
+| UX-24 | In mode screens, short presses, repeats and `enter` do nothing. In lists, dialogs and message screens, long events do nothing. | The other hand rests near the buttons during keying: an accidental short press must not lose the text. Each screen family uses one gesture set, so one press never acts twice. | Short menu/back exits Free Input (the user asked for long). Short prev/next scroll the text (needs a text buffer). |
+| UX-25 | Free Input screen: `FONTS_ID_5X8`, the grid of section 4.1, title bar `Free Input` in row 0, text in rows 1-7 (7 x 25 cells). No status, no cursor mark, no hint. | Same font, grid and title rule as every other screen. 175 visible characters keep about 30 words of context. One text row is one LCD page, so a scroll is a page copy. The settings are one menu level away, and the sound shows the speed and the key type at once. | `FONTS_ID_8X16` (16 x 3 with a title: 48 characters, a scroll every 16 characters, a second grid, a scroll moves 2 pages per line). No title (one more line, but the screen does not say which mode is open). Key type or speed in the title (code and strings for a value the user just set). A blinking or static cursor (code and a timer, small gain). |
+| UX-26 | Text rules of section 5.9. A character comes at the character gap. A word space is a blank cell. The wrap is per character and lazy. A scroll moves the text up by one line. A line never starts with a space. No text buffer. | Cheapest in RAM and flash: the framebuffer is the only store. The lazy wrap never shows an empty last line. Dropped edge spaces keep the left edge aligned. | Word wrap (needs a buffer of the current word). Clear a full screen (loses all context at once). Show the elements of the character in progress (code, and the sidetone already gives this feedback). |
+| UX-27 | Unknown glyph: `*`. One cell for any pattern that is not in the table, more than 6 elements, the 8-dit error sign, or a lost event. | User decision: one unknown glyph. `*` has no Morse code, so it never looks like a correct character. ASCII, no ink in cell column 4. | `?` (a valid Morse character). An inverted cell (heavy in running text, more code). `#` (touches its neighbours). Nothing (hides the error from the student). A separate glyph for the error sign (the user decided against it). |
+| UX-28 | Prosigns: AR = `+`, BT = `=`, SK = `<SK>` (four cells, per-character wrap). Prosigns with the code of a punctuation mark show that mark (KN = `(`, AS = `&`). Others are `*`. | User decision (Q-9). SK has no punctuation mark. The brackets show a prosign, not the letters `S` and `K`. `<` and `>` are edit markers only in lists, and Free Input has no edit mode, so there is no conflict. Per-character wrap needs no extra rule. | `SK` (looks the same as `S` then `K`). Keep `<SK>` on one line (needs a look-ahead rule for one token). A rare ASCII sign such as `%` (the student must learn a code for it). `*` for SK (a correct prosign must not look like an error). |
+| UX-29 | Delimiter: a 1 px line at `y = 8r + 3`, x 2-126, in its own text row. The next character starts a new row. | Clear separation of practice blocks for about 30 bytes of code. A continuous line cannot look like keyed text. | A blank row (looks like unused space). A row of `-` glyphs (looks like keyed `-` characters). A dashed line (more code, no gain). |
+| UX-30 | Clear: rows 1-7 off, cursor home, the character in progress dropped. Title not redrawn. No question to the user. | Practice text has a low value, and the 800 ms hold protects it. Dropping the partial character gives a clean restart. | A Yes/No dialog (slow for a frequent action). Keep the partial character (its first elements are from before the clear). |
+| UX-31 | Receiving and Sending placeholders: `Not ready`, only a long menu/back exits. | User decision: long menu/back exits any mode. The placeholders follow the same rule as the real modes. The real modes later keep the same gesture. | Short menu/back in placeholders only (two exit rules for the same screen family). |
+| UX-32 | `Paddle` setting in CW, 7th item: choice `Normal`, `Reversed`, fw 8, default `Normal`. `Normal`: tip = dit, ring = dah. It applies at the next Free Input start. | User decision: a setting. `Normal`/`Reversed` say what changes better than `Off`/`On`. Fit rule: 6 <= 12. The CW list fills all 7 rows without a scroll. Old records read as `Normal`. | `Paddle Swap` with `Off`/`On` (less clear which side is the dit). `Swap Paddle` (a verb as a label). A swap gesture at the mode start (hidden function). |
+| UX-33 | P3.2 belongs to the keyer while Free Input is open, and to the menu at all other times. A contact closed at the mode start is ignored until it opens. A contact held at the mode end gives no `enter` until it opens and closes again. | The `enter` press that opens Free Input must not key a dit. A held lever at the exit must not open a menu item. A mono plug then works as a straight key. | Ignore the paddle for a fixed time after the start (a held contact still keys after the delay). Use a different button to open Free Input (the hardware has none free). |
+| UX-34 | The keyer and its sidetone run only in Free Input. In the menu the paddle gives no tone. | The tip acts as `enter` in the menu: a tone on each menu `enter` is noise. One clear place for practice. | A practice tone in the menu (noise, and conflicts with the Tone preview). |
+| UX-35 | Key Type semantics of section 6.7. The thresholds come from `TX Speed` and `TX Eff. Speed`. A straight-key mark of 2 dits or longer is a dah. | User decision: no adaptive decoding. The student practises at the speed of the settings. | Adaptive speed tracking (more code, and the student gets no feedback on the speed). |
+| UX-36 | No hint about the long `menu/back` on the placeholders or in Free Input. The user manual explains it. | User decision (Q-7). No string and no code. Free Input has no free row. | A `Hold menu to exit` line in row 5 of the placeholders. |
+| UX-37 | No stuck-key timeout. A contact that closes after the mode start keys until it opens or the user exits (F-9). The manual tells the user to insert the plug before opening Free Input. | User decision (Q-8). The state is harmless, and the recovery is one long `menu/back`. No keyer code. | Mute or mask a contact that stays closed for some seconds (keyer code, and a new rule for a real long mark). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -645,14 +934,32 @@ Probes and steps:
 | D-12 | Hold `next` from 400 Hz to 1000 Hz, then hold `prev` back. | The chain sounds as a series of pitch steps, not as clicks or a buzz. The user can release near a target pitch. The tone ends about 0.3 s after the release, and at the limit also while the button is held. If the chain is unpleasant, record it for `architector` (UX-22 alternatives). |
 | D-13 | Stop timing on a logic analyzer (P1.1 or P1.2) while the screen redraws. Leave with `enter` and with `menu/back`. Let a preview time out. | After a leave, the output is quiet within about 10 ms of the event. A timeout ends 300 ms after the hook, plus at most one main-loop pass, plus the 8 ms fall. |
 | D-14 | Insert and remove the headphone plug during a single preview and during a held repeat. | The route changes at the next silence. No click on either output. A spurious `enter` from the socket (D-5) ends the edit and stops the tone. |
+| D-15 | Long press feel: hold `menu/back`, `prev` and `next` in Free Input. Also use the menu with normal presses and holds of `prev`/`next` for a few minutes. | The action comes while the button is held, about 0.8 s after the press. It never comes by accident during normal menu use. The user finds 800 ms neither slow nor too easy. |
+| D-16 | Open Free Input with the `enter` button, and with the dit lever as `enter` (keep it closed for 2 s). Repeat with a straight key on the tip. | No tone and no character until the contact opens and closes again. Then it keys as normal. |
+| D-17 | Hold the dit lever (or the straight key) and leave Free Input with a long `menu/back`. Keep the lever closed for 2 s, then release. | The main menu shows. No item opens. After the release, a new `enter` works. |
+| D-18 | Iambic A and Iambic B at 20 and 30 WPM: single elements, held levers, squeeze, and squeeze release at different moments. Listen, and capture P1.1 or P1.2 with a logic analyzer. | Dah = 3 dits and gap = 1 dit within 1 ms. On a squeeze release, B gives one more element than A. A squeeze from idle starts with a dit. |
+| D-19 | Straight key at TX Speed 15 and 20 WPM, by an operator who keys well. Repeat with TX Eff. Speed 10. | Characters decode as keyed. Word spaces appear at normal word pauses. With TX Eff. Speed 10, a normal character pause does not give a word space. Record the error rate for `architector`. |
+| D-20 | `Paddle` = `Reversed` in Iambic B. Key both levers and the `enter` button. | The ring lever gives dits. The tip lever and the `enter` button give dahs. |
+| D-21 | Legibility and speed of the Free Input text: 5 x 8 font at 30-60 cm during keying. Key a full screen at 50 WPM with long words, so that the screen scrolls. Measure the 7-page flush time. | The text is readable at a glance. A character appears within about 100 ms after the character gap. No character is lost or turns into `*` during a scroll (F-11). The sidetone has no gap or click during the flush. |
+| D-22 | Mono plug with a straight key: insert it before Free Input opens, then key. Then insert it while Free Input is open. | Before: the tip keys, the ring short has no effect. During: record the behaviour (F-9). A long `menu/back` stops the tone. |
+| D-23 | Delimiter and clear on the glass. Key text with `-` and `_` characters around a delimiter. | The delimiter line is clearly different from the `-` and `_` glyphs. Clear leaves the title bar intact and gives no flicker of the title. |
+| D-24 | Receiving and Sending placeholders: a user who has not read the manual tries to leave. | Record whether the user finds the long `menu/back`. If not, record it for the user. Decision UX-36: no hint on the screen. |
 
 ## 12. Open questions
 
 Resolved by the user: Q-1 (UX-19), Q-2 (UX-3), Q-3 (a Tone edit plays the tone, see UX-20 to UX-22 and section 6.5),
-Q-6 (UX-18), the `Statistics reset` screen (UX-8).
+Q-6 (UX-18), the `Statistics reset` screen (UX-8). From the keyer plan: long presses in modes (UX-23), straight-key
+thresholds from the TX settings (UX-35), one unknown glyph (UX-27), the `Paddle` setting (UX-32).
+Resolved by the user during the keyer specification:
+
+- Q-7: no hint on the mode screens. The manual explains the long `menu/back` (UX-36).
+- Q-8: no stuck-key timeout. The manual tells the user to insert the plug before opening Free Input (UX-37).
+- Q-9: SK shows as `<SK>` (UX-28).
+
 Resolved by `architector`: Q-4 (`eeprom_write` reads back each byte, and a failed save shows `Not saved` / `OK`, see
 F-7 and `menu_subsystem_spec.md` sections 3.5 and 3.6).
 
 | ID | Question | Impact | Owner |
 | --- | --- | --- | --- |
 | Q-5 | The datasheet advises against EEPROM writes at low supply voltage. The board has no documented battery-voltage input. | A save at a low battery can corrupt the record (then F-2 applies). | `architector` |
+| Q-10 | `Show CW Code` has no effect on Free Input. Does the user want the dots and dashes of each character there later? | A second line per character halves the text area. Not in this plan. | user |

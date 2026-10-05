@@ -4,7 +4,8 @@ Custom firmware and reverse-engineered hardware documentation for the
 Putikeeg CW Trainer. The firmware targets the STC8H3K64S2 with SDCC's MCS-51
 backend and drives the trainer's 128 × 64 LCD and four front-panel controls.
 
-The [user manual](docs/user_manual.md) describes the menu and the settings.
+The [user manual](docs/user_manual.md) describes the menu, the settings and the
+Free Input mode. The [release notes](docs/release_notes.md) list the changes.
 
 ## Prerequisites
 
@@ -39,9 +40,9 @@ Run the host tests with:
 ## Sidetone hardware bring-up
 
 The firmware plays a CW sidetone on board revision `CW_MINI_V2.0D`. In this
-version, the only sound is the Tone preview in `Settings > CW > Tone` (see the
-[user manual](docs/user_manual.md)). The normal build has no special sidetone
-configuration.
+version, the device plays the keyer sidetone in Free Input and the Tone preview
+in `Settings > CW > Tone` (see the [user manual](docs/user_manual.md)). The
+normal build has no special sidetone configuration.
 
 The route is automatic. P1.0 detects the headphone plug. With the plug in
 (P1.0 LOW), the headphone route P1.2 plays. Without the plug, the speaker route
