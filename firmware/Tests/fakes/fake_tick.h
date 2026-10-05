@@ -12,6 +12,9 @@ void fake_tick_reset(uint16_t start_ms);
 /** Sets how far the value moves after each read. The value wraps from 65535 to 0. */
 void fake_tick_set_advance_per_read(uint16_t step_ms);
 
+/** Sets the value the next read returns. Keeps the step and the read count. */
+void fake_tick_set_now(uint16_t now_ms);
+
 /** Returns the number of tick_now() calls since fake_tick_reset(). */
 size_t fake_tick_read_count(void);
 

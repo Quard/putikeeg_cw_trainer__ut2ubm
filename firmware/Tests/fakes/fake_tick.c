@@ -14,6 +14,8 @@ void fake_tick_reset(uint16_t start_ms) {
 
 void fake_tick_set_advance_per_read(uint16_t step_ms) { fake_tick_step = step_ms; }
 
+void fake_tick_set_now(uint16_t now_ms) { fake_tick_value = now_ms; }
+
 size_t fake_tick_read_count(void) { return fake_tick_reads; }
 
 uint16_t tick_now(void) {

@@ -1,38 +1,52 @@
 #include <8051.h>
 #include <stdint.h>
 
+#include "backlight/backlight.h"
+#include "buttons/buttons.h"
+#include "eeprom/eeprom.h"
+#include "gfx/gfx.h"
 #include "lcd/lcd.h"
-#include "lcd/lcd_fb.h"
+#include "menu/menu.h"
+#include "settings/settings.h"
 #include "tick/tick.h"
 
-/* Bring-up image: border, top-left triangle and a diagonal, to check orientation and pixel mapping on the panel. */
-static void draw_test_pattern(void) {
-  int16_t i;
-  int16_t j;
-
-  for (i = 0; i < (int16_t)LCD_WIDTH; ++i) {
-    lcd_fb_set_pixel(i, 0, LCD_PIXEL_ON);
-    lcd_fb_set_pixel(i, (int16_t)LCD_HEIGHT - 1, LCD_PIXEL_ON);
-  }
-  for (i = 0; i < (int16_t)LCD_HEIGHT; ++i) {
-    lcd_fb_set_pixel(0, i, LCD_PIXEL_ON);
-    lcd_fb_set_pixel((int16_t)LCD_WIDTH - 1, i, LCD_PIXEL_ON);
-    lcd_fb_set_pixel(i, i, LCD_PIXEL_ON);
-  }
-  for (i = 0; i < 16; ++i) {
-    for (j = 0; (i + j) < 16; ++j) {
-      lcd_fb_set_pixel(j, i, LCD_PIXEL_ON);
-    }
-  }
-}
+/* Repeats that came due during a slow redraw take effect before the next redraw; the limit keeps a pass short. */
+#define MAIN_EVENTS_PER_PASS 4U
 
 void main(void) {
+  uint8_t event_count;
+  button_event_t event;
+
   tick_init();
-  /* The only place that enables interrupts. delay_ms() inside lcd_init() needs the tick. */
+  /* The only place that enables interrupts. delay_ms() in buttons_init() and lcd_init() needs the tick. */
   EA = 1;
+  eeprom_init();
+  /* The buttons are sampled first, so a recovery start never shows the stored contrast and backlight. */
+  buttons_init();
+  (void)settings_load();
+  if (buttons_is_recovery_start()) {
+    settings_use_display_defaults();
+  }
   lcd_init();
-  draw_test_pattern();
-  lcd_flush();
+  lcd_set_contrast((uint8_t)settings_get(SETTINGS_ID_CONTRAST));
+  backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
+  gfx_init();
+  menu_init();
+  if (buttons_is_recovery_start()) {
+    menu_show_message(MENU_MESSAGE_DISPLAY_DEFAULTS);
+  }
+
   for (;;) {
+    for (event_count = 0U; event_count < MAIN_EVENTS_PER_PASS; ++event_count) {
+      event = buttons_poll();
+      if (event == BUTTON_EVENT_NONE) {
+        break;
+      }
+      menu_handle(event);
+    }
+    if (menu_needs_redraw()) {
+      menu_render();
+    }
+    lcd_flush_step();
   }
 }

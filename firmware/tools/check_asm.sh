@@ -9,9 +9,9 @@
 #
 # Every direct operand is resolved to a number first: hex (0xa0, 0x00a0, 0a0h, a0h), decimal (160), binary
 # (0b...), names from the file's "name = value" equates (with or without the leading _, any case), the
-# predefined names p2, ie, ea, ie2, t4t3m, auxintif, p2m0, p2m1, dotted bits (p2.3, ie.7, 0xa8.7) and +/- sums
-# of these. The instruction decides the meaning: in setb, clr, cpl, jbc, jb, jnb, "mov bit,c" and
-# "anl/orl c,bit" the number is a bit address, everywhere else a byte address.
+# predefined names p2, ie, ea, ie2, t4t3m, auxintif, p2m0, p2m1, p0m0, p0m1, p3m0, p3m1, p_sw2, pcon, rstcfg,
+# dotted bits (p2.3, ie.7, 0xa8.7) and +/- sums of these. The instruction decides the meaning: in setb, clr, cpl,
+# jbc, jb, jnb, "mov bit,c" and "anl/orl c,bit" the number is a bit address, everywhere else a byte address.
 #
 # Rules on resolved addresses:
 #   R1  No byte write to 0xA0 (P2): mov, orl, anl, xrl, inc, dec, djnz, pop or xch.
@@ -20,7 +20,8 @@
 #   R3  Outside main.c: no setb on bit 0xAF and no orl into byte 0xA8.
 #   R4  Byte writes to 0x95 (P2M1) and 0x96 (P2M0) only in lcd_spi.c, as exactly one "orl 0x96,#0x1f" and one
 #       "anl 0x95,#0xe0"; the masks are compared as numbers.
-#   R5  Byte 0xAF (IE2), 0xD1 (T4T3M) and 0xEF (AUXINTIF) change only with orl or anl.
+#   R5  Byte 0xAF (IE2), 0xD1 (T4T3M), 0xEF (AUXINTIF), 0x93 (P0M1), 0x94 (P0M0), 0xB1 (P3M1), 0xB2 (P3M0),
+#       0xBA (P_SW2), 0x87 (PCON) and 0xFF (RSTCFG) change only with orl or anl.
 # Fail closed: a written operand that the scan cannot resolve but that contains a protected name or address is a
 # violation. Data operands such as (_tick_count_ms + 1) contain no protected name and stay accepted.
 #
@@ -64,7 +65,7 @@ function term(text,   key) {
   return number(text)
 }
 function is_protected(address) {
-  return (address >= 160 && address <= 175) || address == 149 || address == 150 || address == 209 || address == 239
+  return (address >= 160 && address <= 175) || address == 149 || address == 150 || (address in shared_bytes)
 }
 # Returns the address, -1 when it is unknown (a data label), or -2 when it cannot be resolved but contains a
 # protected token; the token is then in protected_token.
@@ -107,8 +108,8 @@ function emit(rule) { print rule "\t" shown; }
 function byte_write(op, destination, source,   address, mask) {
   address = resolve(destination)
   if (address == -2) {
-    if (protected_token <= 167) emit("R1")
-    else if (protected_token <= 174) emit("R2")
+    if (protected_token >= 160 && protected_token <= 167) emit("R1")
+    else if (protected_token >= 168 && protected_token <= 174) emit("R2")
     else if (protected_token == 149 || protected_token == 150) emit("R4")
     else emit("R5")
     return
@@ -123,7 +124,7 @@ function byte_write(op, destination, source,   address, mask) {
     if (op == "orl" && address == 150 && mask == 31) orl_count++
     else if (op == "anl" && address == 149 && mask == 224) anl_count++
     else emit("R4")
-  } else if (address == 175 || address == 209 || address == 239) {
+  } else if (address in shared_bytes) {
     if (op != "orl" && op != "anl") emit("R5")
   }
 }
@@ -140,6 +141,11 @@ function bit_write(op, destination,   address) {
 BEGIN {
   predefined["p2"] = 160; predefined["ie"] = 168; predefined["ea"] = 175; predefined["ie2"] = 175
   predefined["t4t3m"] = 209; predefined["auxintif"] = 239; predefined["p2m0"] = 150; predefined["p2m1"] = 149
+  predefined["p0m1"] = 147; predefined["p0m0"] = 148; predefined["p3m1"] = 177; predefined["p3m0"] = 178
+  predefined["p_sw2"] = 186; predefined["pcon"] = 135; predefined["rstcfg"] = 255
+  # R5: bytes that several modules or an interrupt share, so they change only with orl or anl.
+  split("175 209 239 147 148 177 178 186 135 255", shared_list, " ")
+  for (i in shared_list) shared_bytes[shared_list[i] + 0] = 1
 }
 FNR == NR {
   line = tolower($0)
@@ -334,6 +340,23 @@ readonly -a BUILTIN_CASES=(
   "r4_alias_outside|lcd.c|"$'MODE\t=\t0x96\n\torl\tMODE,#0x1f'
   "r5_c_alias_t4t3m|tick_timer3.c|"$'_TIMER34\t=\t0x00d1\n\tmov\t_TIMER34,#0x08'
   "r5_decimal_ie2|tick_timer3.c|"$'\tmov\t175,#0x20'
+  "accept_p0m1_orl_anl|buttons.c|"$'\torl\t_P0M1,#0x07\n\tanl\tp0m1,#0xf7'
+  "r5_mov_p0m1|buttons.c|"$'\tmov\t_P0M1,#0x07'
+  "accept_p0m0_orl_anl|backlight.c|"$'\tanl\t_P0M0,#0xf8\n\torl\t0x94,#0x08'
+  "r5_mov_p0m0|backlight.c|"$'\tmov\t0x94,a'
+  "accept_p3m1_orl_anl|buttons.c|"$'\torl\t_P3M1,#0x04\n\tanl\tp3m1,#0xff'
+  "r5_xch_p3m1|buttons.c|"$'\txch\ta,_P3M1'
+  "accept_p3m0_orl_anl|buttons.c|"$'\tanl\t_P3M0,#0xfb\n\torl\t0b2h,#0x00'
+  "r5_mov_p3m0|buttons.c|"$'\tmov\t_P3M0,#0x00'
+  "accept_p_sw2_orl_anl|backlight.c|"$'\torl\t_P_SW2,#0x80\n\tanl\t186,#0xff'
+  "r5_mov_p_sw2|backlight.c|"$'\tmov\t_P_SW2,#0x80'
+  "accept_pcon_orl_anl|eeprom.c|"$'\tanl\t_PCON,#0xdf\n\torl\tpcon,#0x00'
+  "r5_mov_pcon|eeprom.c|"$'\tmov\t_PCON,#0x00'
+  "r5_pcon_unresolved_expression|eeprom.c|"$'\tmov\t(_PCON * 1),a'
+  "accept_rstcfg_orl_anl|eeprom.c|"$'\torl\t_RSTCFG,#0x03\n\tanl\t0xff,#0xfc'
+  "r5_mov_rstcfg|eeprom.c|"$'\tmov\t_RSTCFG,#0x03'
+  "r5_pop_rstcfg|eeprom.c|"$'\tpop\t0xff'
+  "accept_p0_bits_near_pcon|buttons.c|"$'\tsetb\t0x87\n\tclr\t_P0_7\n\tmov\ta,_PCON'
 )
 
 self_test() {

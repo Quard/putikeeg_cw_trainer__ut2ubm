@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-# Host unit tests for the LCD, tick and delay modules. Built with the host compiler, separate from the SDCC firmware project.
+# Host unit tests for the firmware modules. Built with the host compiler, separate from the SDCC firmware project.
 project(putikeeg_cw_trainer_host_tests LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
@@ -45,7 +45,8 @@ foreach(chunk IN LISTS LCD_CHUNK_SIZES)
 endforeach()
 
 # test_tick* and test_delay* (QA: test_qa_tick*, test_qa_delay*) test the tick and delay modules once each.
-# All other test_*.c files are LCD tests and run against every chunk size.
+# The module groups below link their own sources. All other test_*.c files are LCD tests and run against
+# every chunk size.
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_*.c")
 set(TICK_TEST_PATTERN "^test_(qa_)?tick")
 set(DELAY_TEST_PATTERN "^test_(qa_)?delay")
@@ -56,9 +57,89 @@ target_include_directories(tick_real PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR
 add_library(delay_on_fake_tick STATIC "${FIRMWARE_DIR}/src/delay/delay.c" fakes/fake_tick.c)
 target_include_directories(delay_on_fake_tick PUBLIC ${HOST_INCLUDE_DIRS})
 
+# Module test groups: a test_<group>*.c or test_qa_<group>*.c file links the sources of its group, once.
+set(GFX_TEST_PATTERN "^test_(qa_)?gfx")
+set(GFX_SOURCES
+    "${FIRMWARE_DIR}/src/gfx/font_u8g2.c"
+    "${FIRMWARE_DIR}/src/gfx/fonts.c"
+    "${FIRMWARE_DIR}/src/gfx/gfx.c"
+    "${FIRMWARE_DIR}/src/lcd/lcd_fb.c")
+add_library(gfx_group STATIC ${GFX_SOURCES})
+target_include_directories(gfx_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/gfx")
+
+# The firmware build gets these values from CMake; host tests use the default target configuration.
+set(TARGET_DEFINITIONS MCU_CLOCK_HZ=24000000UL FLASH_CODE_SIZE=61440UL)
+
+set(EEPROM_TEST_PATTERN "^test_(qa_)?eeprom")
+set(EEPROM_SOURCES "${FIRMWARE_DIR}/src/eeprom/eeprom.c" fakes/fake_iap.c)
+add_library(eeprom_group STATIC ${EEPROM_SOURCES})
+target_include_directories(eeprom_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(eeprom_group PUBLIC ${TARGET_DEFINITIONS})
+
+set(SETTINGS_TEST_PATTERN "^test_(qa_)?settings")
+add_library(settings_group STATIC "${FIRMWARE_DIR}/src/settings/settings.c" ${EEPROM_SOURCES})
+target_include_directories(settings_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
+target_compile_definitions(settings_group PUBLIC ${TARGET_DEFINITIONS})
+
+# fake_delay.c records the LCD pin event count, so it needs fake_lcd_pins.c.
+set(BUTTONS_TEST_PATTERN "^test_(qa_)?buttons")
+add_library(buttons_group STATIC
+    "${FIRMWARE_DIR}/src/buttons/buttons.c"
+    fakes/fake_tick.c
+    fakes/fake_delay.c
+    fakes/fake_lcd_pins.c
+    fakes/fake_button_pins.c)
+target_include_directories(buttons_group PUBLIC ${HOST_INCLUDE_DIRS})
+
+set(BACKLIGHT_TEST_PATTERN "^test_(qa_)?backlight")
+add_library(backlight_group STATIC "${FIRMWARE_DIR}/src/backlight/backlight.c" fakes/fake_backlight_pwm.c)
+target_include_directories(backlight_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(backlight_group PUBLIC ${TARGET_DEFINITIONS})
+
+# The menu group also links the buttons, so the start-up tests run the real recovery window.
+set(MENU_TEST_PATTERN "^test_(qa_)?menu")
+file(GLOB MENU_SOURCES CONFIGURE_DEPENDS "${FIRMWARE_DIR}/src/menu/menu*.c")
+add_library(menu_group STATIC
+    ${MENU_SOURCES}
+    ${GFX_SOURCES}
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    ${EEPROM_SOURCES}
+    fakes/fake_lcd_contrast.c
+    fakes/fake_backlight.c
+    fakes/fake_stats.c
+    "${FIRMWARE_DIR}/src/buttons/buttons.c"
+    fakes/fake_tick.c
+    fakes/fake_delay.c
+    fakes/fake_lcd_pins.c
+    fakes/fake_button_pins.c)
+target_include_directories(menu_group PUBLIC
+    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/menu" "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings")
+target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS})
+
+set(MODULE_TEST_PATTERNS
+    GFX_TEST_PATTERN EEPROM_TEST_PATTERN SETTINGS_TEST_PATTERN BUTTONS_TEST_PATTERN BACKLIGHT_TEST_PATTERN
+    MENU_TEST_PATTERN)
+set(MENU_TEST_PATTERN_LIBRARIES menu_group)
+set(BACKLIGHT_TEST_PATTERN_LIBRARIES backlight_group)
+set(BUTTONS_TEST_PATTERN_LIBRARIES buttons_group)
+set(SETTINGS_TEST_PATTERN_LIBRARIES settings_group)
+set(GFX_TEST_PATTERN_LIBRARIES gfx_group)
+set(EEPROM_TEST_PATTERN_LIBRARIES eeprom_group)
+
 foreach(test_source IN LISTS TEST_SOURCES)
   get_filename_component(test_name "${test_source}" NAME_WE)
-  if(test_name MATCHES "${TICK_TEST_PATTERN}")
+  set(module_libraries "")
+  foreach(pattern_name IN LISTS MODULE_TEST_PATTERNS)
+    if(test_name MATCHES "${${pattern_name}}")
+      set(module_libraries ${${pattern_name}_LIBRARIES})
+      break()
+    endif()
+  endforeach()
+  if(module_libraries)
+    add_executable(${test_name} "${test_source}")
+    target_link_libraries(${test_name} PRIVATE ${module_libraries})
+    add_test(NAME ${test_name} COMMAND ${test_name})
+  elseif(test_name MATCHES "${TICK_TEST_PATTERN}")
     add_executable(${test_name} "${test_source}")
     target_link_libraries(${test_name} PRIVATE tick_real)
     add_test(NAME ${test_name} COMMAND ${test_name})

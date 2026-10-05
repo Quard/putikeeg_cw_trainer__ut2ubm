@@ -4,6 +4,8 @@ Custom firmware and reverse-engineered hardware documentation for the
 Putikeeg CW Trainer. The firmware targets the STC8H3K64S2 with SDCC's MCS-51
 backend and drives the trainer's 128 × 64 LCD and four front-panel controls.
 
+The [user manual](docs/user_manual.md) describes the menu and the settings.
+
 ## Prerequisites
 
 - CMake 3.20 or newer
