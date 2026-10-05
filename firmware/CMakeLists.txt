@@ -19,3 +19,9 @@ target_link_options(putikeeg_cw_trainer PRIVATE
   --iram-size ${MCU_IRAM_SIZE}
   --xram-size ${MCU_XRAM_SIZE}
 )
+
+# The build fails when the generated assembly breaks the port and interrupt rules (see tools/check_asm.sh).
+add_custom_command(TARGET putikeeg_cw_trainer POST_BUILD
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_asm.sh"
+          "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/putikeeg_cw_trainer.dir/src"
+  VERBATIM)

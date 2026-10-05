@@ -27,6 +27,21 @@ These rules are mandatory for every firmware change.
 - `firmware/build.sh` builds the firmware. Use it for every build.
 - `firmware/flash.sh` downloads the firmware into the MCU.
 
+### Software SPI for the LCD
+
+The PCB connects the LCD to P2.0 to P2.4 (see `references/internal/components_and_wiring.md`). These pins do not
+match any hardware SPI pin set of the MCU. For example, the port 2 set uses P2.3 as MOSI and P2.5 as SCLK, but the
+LCD has SCLK on P2.3. The firmware must drive the LCD with a software (bit-banged) SPI driver.
+
+- Timer, keyer and sidetone interrupts have a higher priority than display updates. Do not disable interrupts
+  around LCD transfers.
+- An interrupt can stop the software SPI between any two pin changes. If an interrupt makes any clock phase
+  longer, the transfer must stay correct.
+- Interrupt handlers must not write the LCD pins. Main-loop code writes port 2 only with single-bit operations
+  (`SETB`/`CLR`), never with a full-port read-modify-write, because an interrupt can change other port 2 pins.
+- A full-screen transfer takes a long time in software. Measure the transfer time on the device. If a long
+  transfer delays the main loop too much, split it into smaller parts.
+
 ## Team
 
 Firmware work runs through a team of subagents. Each agent definition is in `.claude/agents/` (Claude Code) and in
