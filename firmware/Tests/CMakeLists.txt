@@ -96,6 +96,17 @@ add_library(backlight_group STATIC "${FIRMWARE_DIR}/src/backlight/backlight.c" f
 target_include_directories(backlight_group PUBLIC ${HOST_INCLUDE_DIRS})
 target_compile_definitions(backlight_group PUBLIC ${TARGET_DEFINITIONS})
 
+# The sidetone group links the settings module, so the tests can check the tone range against settings_min/max.
+set(SIDETONE_TEST_PATTERN "^test_(qa_)?sidetone")
+add_library(sidetone_group STATIC
+    "${FIRMWARE_DIR}/src/sidetone/sidetone.c"
+    fakes/fake_sidetone_pwm.c
+    fakes/fake_tick.c
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    ${EEPROM_SOURCES})
+target_include_directories(sidetone_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
+target_compile_definitions(sidetone_group PUBLIC ${TARGET_DEFINITIONS})
+
 # The menu group also links the buttons, so the start-up tests run the real recovery window.
 set(MENU_TEST_PATTERN "^test_(qa_)?menu")
 file(GLOB MENU_SOURCES CONFIGURE_DEPENDS "${FIRMWARE_DIR}/src/menu/menu*.c")
@@ -107,6 +118,7 @@ add_library(menu_group STATIC
     fakes/fake_lcd_contrast.c
     fakes/fake_backlight.c
     fakes/fake_stats.c
+    fakes/fake_sidetone.c
     "${FIRMWARE_DIR}/src/buttons/buttons.c"
     fakes/fake_tick.c
     fakes/fake_delay.c
@@ -118,7 +130,8 @@ target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS})
 
 set(MODULE_TEST_PATTERNS
     GFX_TEST_PATTERN EEPROM_TEST_PATTERN SETTINGS_TEST_PATTERN BUTTONS_TEST_PATTERN BACKLIGHT_TEST_PATTERN
-    MENU_TEST_PATTERN)
+    MENU_TEST_PATTERN SIDETONE_TEST_PATTERN)
+set(SIDETONE_TEST_PATTERN_LIBRARIES sidetone_group)
 set(MENU_TEST_PATTERN_LIBRARIES menu_group)
 set(BACKLIGHT_TEST_PATTERN_LIBRARIES backlight_group)
 set(BUTTONS_TEST_PATTERN_LIBRARIES buttons_group)

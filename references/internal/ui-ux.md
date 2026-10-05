@@ -16,8 +16,10 @@ Status of the content:
 
 - Product: Putikeeg CW Trainer, board CW_MINI_V2.0D, custom firmware.
 - UI scope in this version: the menu tree, the Settings editor, placeholder screens for the three modes, the
-  Reset Statistics dialog, button input, and the live effect of contrast and backlight.
-- Out of scope in this version: the Receiving, Sending and Free Input modes, sidetone and paddle keying, statistics.
+  Reset Statistics dialog, button input, the live effect of contrast and backlight, and the Tone preview
+  (section 6.5).
+- Out of scope in this version: the Receiving, Sending and Free Input modes, paddle keying, any sound other than the
+  Tone preview, statistics.
 - Users: amateur radio operators who learn or practise Morse code. They know the terms WPM, RX, TX, Iambic A/B and
   Farnsworth (effective) speed.
 - Environment: a handheld device or a device on a desk, indoor light, viewing distance about 30-60 cm
@@ -34,6 +36,7 @@ Status of the content:
 | `firmware/drivers/u8g2_font_render/u8g2_font_render.c` | How the driver places a glyph relative to the `y` argument. |
 | `firmware/inc/lcd/lcd_fb.h`, `firmware/inc/board/lcd_config.h` | 128 x 64 framebuffer, 8 pages of 8 rows, contrast range 0-63, default 0x20. |
 | `references/context/STC8H_datasheet.md` | EEPROM sector erase about 4-6 ms, byte program about 30-40 us. Avoid EEPROM writes at low voltage. |
+| `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
 
 `llm.md` is not present at the repository root (AGENTS.md asks agents to read it).
 
@@ -49,7 +52,7 @@ Status of the content:
 | C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | A paddle dit contact or a straight key also presses `enter`. Inserting a plug can short the tip for a short time (unverified). |
 | C-5 | Paddle ring | P5.5 | Dah contact. | Not used by the menu. The menu ignores it. |
 | C-6 | `on/off` button | none | Not read by the MCU (no pin in the wiring table). | Unverified: the effect of the button on the MCU power is not known. |
-| C-7 | Volume potentiometer | analog | Not used by the menu. | |
+| C-7 | Volume potentiometer | analog | Not read by the MCU. Sets the sidetone loudness in the analog path (`components_and_wiring.md`). | The firmware has no volume control. At the lowest setting the Tone preview can be silent. |
 
 Semantic assumption (unverified, D-8 in section 11): `prev` means up, left and decrease. `next` means down, right
 and increase. If the buttons on the case are in a different order, this file needs a review.
@@ -60,7 +63,7 @@ and increase. If the buttons on the case are in a different order, this file nee
 | --- | --- | --- | --- |
 | O-1 | LCD, 128 x 64, monochrome, probably ST7567 | 8 text rows x 25 columns with the 5 x 8 font | Contrast 0-63 (`lcd_set_contrast`), default 0x20 = 32. The full-screen transfer time is not measured yet. |
 | O-2 | LCD backlight, HX4004A on P0.3 | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
-| O-3 | Sidetone | not available in this version | No audible feedback in the menu. |
+| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Used only for the Tone preview (section 6.5). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
 
 ### 3.3 Font facts (decoded from `u8g2_fonts.h`)
 
@@ -295,7 +298,8 @@ save error, see question Q-4).
 Other rules:
 
 - "Applies at once": contrast goes to the LCD and the backlight level goes to the PWM at each step. The other
-  values change only in memory until the save. They have no audible or visible effect in this version.
+  values change only in memory until the save. They have no visible effect in this version. Tone is the only value
+  with an audible effect: the Tone preview (section 6.5).
 - Effective-speed rule (plan): an effective speed can never be higher than its base speed. Lowering a base speed
   below its effective speed lowers the effective speed in the same step. Raising a base speed never changes the
   effective speed.
@@ -303,7 +307,8 @@ Other rules:
   the parent on the item that was opened.
 - After power-on the main menu shows with the cursor on `Receiving`. A display recovery start shows the
   `Display Defaults` message first (section 8.1).
-- There is no inactivity timeout anywhere in this version. There is no long-press function.
+- There is no inactivity timeout anywhere in this version. There is no long-press function. The Tone preview
+  timeout (section 6.5) is not a menu timeout: it ends the sound and changes no screen.
 
 ### 6.2 Button timing (decision UX-12)
 
@@ -324,7 +329,8 @@ Other rules:
 - The list cursor wraps on a press event, so the last item is one press away from the first.
 - The list cursor does not wrap on a repeat event. Holding a button stops at the end of the list and does not spin.
 - Values and choices never wrap. At a limit, a press or repeat changes nothing. The missing `<` or `>` marker
-  shows the limit (section 5.4). No message, no sound.
+  shows the limit (section 5.4). No message. A step at a limit does not start or restart the Tone preview
+  (section 6.5, H3).
 
 ### 6.4 Shared enter and paddle
 
@@ -334,6 +340,100 @@ Other rules:
 - If inserting a plug causes a short tip contact longer than 20 ms, it gives one `enter` (unverified, D-5). The
   dialog focus starts on `No`, so such an event never resets statistics. In a list it can open an item or enter
   edit mode. `menu/back` undoes that without a change.
+
+### 6.5 Tone preview (decision UX-20, user Q-3)
+
+User decision (Q-3): a Tone edit plays the tone. This is the only sound in this version. There is no keyer.
+
+Facts that the design uses (`sidetone_spec.md` sections 3.9, 6.3, 10.3):
+
+- A start rises in 8 ms. A stop falls in 8 ms. The envelope prevents clicks (unverified, DC-6).
+- A tone change while the tone sounds goes through silence: fall 8 ms, wait for the carrier update (one carrier
+  period, 1 ms at 1000 Hz to 2.5 ms at 400 Hz, at most 3 ms), rise 8 ms at the new tone. The dip is about
+  17-19 ms.
+- A request for the tone that the sidetone already has does nothing.
+- The buttons give press and repeat events only. There is no release event.
+
+#### Preview state
+
+The preview is `running` or `stopped`. It is `stopped` after power-on and after a display recovery start. Only the
+Tone EDIT screen can start it. While it is `running`, the menu keeps one start time.
+
+`MENU_TONE_PREVIEW_MS` = **300** (decision UX-21).
+
+#### Hook behaviour
+
+`tone(hz)` = `sidetone_set_tone_hz(hz)`. `on(x)` = `sidetone_set_on(x)`. `now` = `tick_now()`.
+
+| Hook | Event | Sidetone calls, in this order | Preview state after the hook |
+| --- | --- | --- | --- |
+| H1 | `enter` opens the EDIT screen on the Tone item. | `tone(current value)`, `on(true)` | `running`, start = now |
+| H2 | A `prev` or `next` press or repeat in Tone edit changes the value. | `tone(new value)`, `on(true)` | `running`, start = now. This is a restart. A `stopped` preview starts again. |
+| H3 | A `prev` or `next` press or repeat in Tone edit changes nothing (limit). | none | unchanged: a `running` preview keeps its start time, a `stopped` preview stays `stopped` |
+| H4 | `menu_poll()` while `running`, and `(uint16_t)(now - start) >= MENU_TONE_PREVIEW_MS`. | `on(false)`, once | `stopped` |
+| H5 | The Tone EDIT screen ends by any path: `enter`, `menu/back`, or a message screen shown over it (`menu_show_message`). | `on(false)`, exactly once. A `stopped` preview gets this call too. | `stopped` |
+| H6 | Every other screen, item, edit and event. This includes the Tone row in browse mode. | none | `stopped` |
+
+Rules:
+
+- A hook that starts the tone always calls `tone()` first and `on(true)` second.
+- `menu_poll()` while `stopped` calls nothing and reads no tick.
+- H4 uses `>=`. At exactly 300 ms after the start, the stop call comes.
+- The timer works across the 16-bit tick wrap.
+- `menu_poll()` runs once per main-loop pass. A slow redraw delays the stop by up to one pass (unverified, D-13).
+- When one main-loop pass handles several events, each event is its own hook. The newest tone wins, and the start
+  time is the time of the last change.
+- No hook depends on the sound. The display shows the value at all times. With the volume at its minimum, the edit
+  works the same.
+
+#### What the user hears (illustrative, from the sidetone timing)
+
+Single press (`enter` to edit, then one `next`):
+
+| Time (ms) | Event | Sound |
+| --- | --- | --- |
+| 0 | `enter` (H1) | Rise to 600 Hz |
+| 8-300 | | 600 Hz at full level |
+| 300-308 | timeout (H4) | Fall, then silence |
+| 1000 | `next` (H2) | Rise to 610 Hz |
+| 1008-1300 | | 610 Hz at full level |
+| 1300-1308 | timeout (H4) | Fall, then silence |
+
+Held `next` (press at 0, repeats at 400, 480, 560, ...):
+
+```text
+0-300     610 Hz, one beep of about 300 ms
+300-400   fall, then about 92 ms silence (the repeat delay)
+400-...   one step every 80 ms: a 17-19 ms dip to the next pitch, then about 61-63 ms at full level
+release   the last pitch plays 300 ms after the last change, then falls
+limit     the last change reaches the limit. 300 ms later the tone ends, while the button is still held
+```
+
+The silence at the limit and the missing `<` or `>` marker both show that the value cannot move further.
+
+#### Held repeat and the retune dip (decision UX-22)
+
+A repeat event follows the same rule as a press (H2). The retune dip during a held repeat is accepted. Reasons:
+
+- The user hears the pitch move while holding and can release near the wanted pitch by ear. Audio feedback is
+  faster than the display during a repeat (UX-16 allows the display to skip a value).
+- The dip is a shaped fall and rise, not a click. It makes each 10 Hz step audible as one short tone.
+- The user decision already accepts the 80 ms repeat. The preview does not change that rhythm.
+
+The preview needs no change of the sidetone interface for this. If the device check D-12 finds the chain
+unpleasant, the options are in section 10 (UX-22, rejected alternatives). Each of them needs an `architector`
+decision first.
+
+#### Interruptions and recovery
+
+| Situation | Behaviour |
+| --- | --- |
+| Paddle dit or straight key on the shared `enter` pin in Tone edit | It is an `enter` event: the edit ends, the tone stops (H5). The user presses `enter` again to edit. |
+| Plug insert or remove while the preview sounds | The tone continues on the old route. The next start uses the new route. During a held repeat each step passes through silence, so the route changes at the next step. |
+| Leaving Settings (save) | No sound. The edit already ended with H5. |
+| Power loss | No preview state survives. The start-up is silent. |
+| Display recovery start | Silent. The `Display Defaults` message screen makes no sound. |
+| Volume at its minimum | No sound. The edit works as before. |
 
 ## 7. Feedback
 
@@ -345,6 +445,7 @@ Other rules:
 | Effective speed at its base speed | `>` disappears on the effective-speed row, the same as a hard maximum. The base value is in the row above on the same screen. | UX-14 |
 | Base speed lowered below the effective speed | The effective-speed row changes in the same redraw as the base row. Both rows are on the CW screen. | UX-14 |
 | Contrast or backlight edit | The LCD contrast or backlight changes at each step. | plan |
+| Tone edit | The user hears the tone for 300 ms at the edit start and after each change. Leaving the edit stops it at once (8 ms fall). At a limit, nothing new sounds. | UX-20, UX-21, UX-22 |
 | Save on leaving Settings | Nothing extra. The main menu appears with the cursor on `Settings`. The erase and write take about 5-7 ms (datasheet: erase 4-6 ms, 15 bytes x 40 us), which the user does not notice. | UX-15 |
 | Save not needed | Same screen, no EEPROM access. A save needs two conditions: at least one edit step changed a value during this Settings visit, and the current values differ from the stored record. A value changed and changed back does not cause a write. A visit without an edit step does not cause a write, also after a display recovery start. | UX-15 |
 | Reset Statistics `Yes` | The message screen `Statistics reset` / `OK`. | UX-8 |
@@ -361,7 +462,7 @@ Other rules:
 | F-5 | Contrast set to a value that makes the screen unreadable | Blank or black screen. | The value applies at once. If the user leaves Settings, it is saved. | During the edit: press the opposite button. After a save: the display recovery start (section 8.1). |
 | F-6 | Backlight `Off` in the dark | No light. | Level 0 is a valid setting. | Same as F-5. |
 | F-8 | `menu/back` held at start-up | The message screen `Display Defaults`, then the main menu. | Section 8.1. | - |
-| F-7 | EEPROM write fails | Not detectable with the planned API. | - | See question Q-4. |
+| F-7 | EEPROM write fails (read-back mismatch, CMD_FAIL or low supply) | The message screen: title `Settings`, text `Not saved`, `OK`. `enter` or `menu/back` closes it to the main menu with the cursor on `Settings`. | `eeprom_write` reads back each byte. The save stops with `SETTINGS_SAVE_FAILED`. The values stay active. The magic is written last, so a stopped save leaves no valid record (`menu_subsystem_spec.md` sections 3.5 and 3.6). | The next exit from Settings tries the save again. If the user switches off first, the next power-on uses the defaults (F-2). |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
@@ -465,6 +566,40 @@ debounced press and release.
 | V-39 | P3.2 (enter) low at start-up for 60 ms, P0.2 high. | Normal start, stored contrast and backlight, no message screen. |
 | V-32 | Render every screen in this file. | No string reaches past column 24. Every value-row label satisfies `len(label) <= 20 - fw`. Only ASCII 0x20-0x7E is used. |
 
+### 9.1 Tone preview tests (section 6.5)
+
+These tests use `fake_sidetone.c` (`sidetone_spec.md` section 12.2) and `fake_tick.c` with an advance of 0 per
+read. They check the calls of the menu only. `sidetone_init()` from `main.c` is not part of these tests.
+
+Probes and steps:
+
+- `SLOG`: the ordered call log of `fake_sidetone.c` for `sidetone_set_tone_hz` and `sidetone_set_on`. An entry is
+  `tone(hz)`, `on(true)` or `on(false)`.
+- `ADD[...]`: since the previous check, exactly these entries came into `SLOG`, in this order. `ADD[]`: no entry.
+- `AT t: X`: set the fake tick to `t` (`fake_tick_set_now`), send event `X` with `menu_handle()`, then call
+  `menu_poll()` once. `AT t: poll` sends no event.
+- `POLL t..u`: for each `t` to `u` in steps of 1 ms, set the fake tick and call `menu_poll()` once.
+- `CWTONE(hz)`: power-on with Tone = `hz` (empty EEPROM for 600, else a valid record), open Settings > CW with the
+  cursor on `Tone` in browse mode, then reset the fake sidetone log.
+- Global rule for V-40 to V-53: each `on(true)` in `SLOG` comes directly after a `tone()` entry from the same event.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-40 | `CWTONE(600)`. `AT 10000: enter`. | `ADD[tone(600), on(true)]`. Screen EDIT on Tone. |
+| V-41 | Continue V-40. `POLL 10001..10299`. `AT 10300: poll`. `POLL 10301..11000`. | `ADD[]` up to 10299. `ADD[on(false)]` at 10300. `ADD[]` after it. From 10301 to 11000 `fake_tick_read_count()` does not change. Screen still EDIT, value `600 Hz`. |
+| V-42 | `CWTONE(600)`. `AT 10000: enter`. `AT 10200: next`. `POLL 10201..10499`. `AT 10500: poll`. `AT 11000: prev`. `AT 11300: poll`. | `ADD[tone(610), on(true)]` at 10200. No stop at 10300. `ADD[]` up to 10499. `ADD[on(false)]` at 10500. `ADD[tone(600), on(true)]` at 11000. `ADD[on(false)]` at 11300. |
+| V-43 | `CWTONE(1000)`. `AT 10000: enter`. `AT 10100: next`. `POLL 10101..10299`. `AT 10300: poll`. `AT 10500: next`. `POLL 10501..11000`. Repeat with `CWTONE(400)` and `prev`. | `ADD[tone(1000), on(true)]` at 10000. `ADD[]` at 10100 and up to 10299: the limit press does not restart the timer. `ADD[on(false)]` at 10300. `ADD[]` from 10500 to 11000: a limit press after the stop gives no sound. Same with 400 Hz and `prev`. |
+| V-44 | `CWTONE(600)`. `AT 10000: enter`. `AT 10300: poll`. `AT 11000: next`. `POLL 11001..11399`. Repeat events `REPEAT(next)` at 11400 + 80k, k = 0..7, with `POLL` on every ms between them. `POLL 11961..12259`. `AT 12260: poll`. | `ADD[on(false)]` at 10300. `ADD[tone(610), on(true)]` at 11000. `ADD[on(false)]` at 11300 (the repeat delay is longer than the preview). Each repeat k: `ADD[tone(620 + 10k), on(true)]`. No `on(false)` from 11400 to 12259. `ADD[on(false)]` at 12260 (300 ms after the last repeat at 11960, value 690 Hz). |
+| V-45 | `CWTONE(980)`. `AT 10000: enter`. `AT 10100: next`. Repeat events `REPEAT(next)` at 10500, 10580, 10660, 10740, 10820, 10900, with `POLL` on every ms between them. | `ADD[tone(990), on(true)]` at 10100. `ADD[tone(1000), on(true)]` at 10500. `ADD[]` for the repeats at 10580 to 10900. `ADD[on(false)]` at 10800 exactly, while the repeats still come. |
+| V-46 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: enter`. `POLL 10101..10600`. | `ADD[on(false)]` at 10100. Screen LIST, `SEL(1)` on `Tone`. `ADD[]` from 10101 to 10600. |
+| V-47 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: menu`. `POLL 10101..10600`. `AT 11000: enter`. `AT 11300: poll`. `AT 11500: menu`. | `ADD[on(false)]` at 10100. Still on `Settings > CW`. `ADD[]` up to 10600. `ADD[tone(600), on(true)]` at 11000. `ADD[on(false)]` at 11300. `ADD[on(false)]` at 11500: one call on leaving, also after the timeout. |
+| V-48 | `CWTONE(600)`. `AT 10000: enter`. At 10100 call `menu_show_message(MENU_MESSAGE_NOT_SAVED)`, then `menu_poll()`. `POLL 10101..10600`. Close the message with `enter`. | `ADD[on(false)]` at 10100. `ADD[]` up to 10600 and after the close. |
+| V-49 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: next`. `AT 10200: enter`. `AT 11000: enter`. | `ADD[tone(610), on(true)]` at 10100. `ADD[on(false)]` at 10200. `ADD[tone(610), on(true)]` at 11000: a new edit plays the stored current value. |
+| V-50 | `CWTONE(600)`. `AT 65400: enter`. `POLL 65401..65535`, then `POLL 0..163`. `AT 164: poll`. | `ADD[tone(600), on(true)]` at 65400. `ADD[]` up to 163. `ADD[on(false)]` at 164. |
+| V-51 | `CWTONE(600)`. `AT 10000: enter`. At 10100: `menu_handle(next)`, `menu_handle(REPEAT(next))`, then one `menu_poll()`. `POLL 10101..10399`. `AT 10400: poll`. | `ADD[tone(610), on(true), tone(620), on(true)]` at 10100. `ADD[]` up to 10399. `ADD[on(false)]` at 10400. |
+| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open each placeholder and press all four buttons there. 3. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 4. Edit each value and choice item except Tone up to both limits, with presses and repeats. 5. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 6. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. |
+| V-53 | Recovery start as V-33, then reset the fake sidetone log. Release P0.2, close the message with `menu/back`. `POLL` for 1000 ms. | `SLOG` is empty. |
+
 ## 10. Durable decisions
 
 | ID | Decision | Reason | Rejected alternatives |
@@ -488,6 +623,9 @@ debounced press and release.
 | UX-17 | Silent defaults on an empty or corrupted record. | See section 8. | One-time message. |
 | UX-18 | No driver change for the font y offset. `gfx` draws at the row top minus the font y offset. ASCII only. | User decision. Keeps `firmware/drivers/` unchanged. | Driver arithmetic fix. |
 | UX-19 | Display recovery start: `menu/back` held for 50 ms from the first sample at start-up gives default contrast and backlight for the session, with a message screen. | User decision (Q-1). Without it, a bad contrast or backlight save locks the user out. | No recovery. Limiting the contrast range (the plan fixes 0-63). Recovery without a message (the user cannot tell the gesture worked). |
+| UX-20 | Tone preview (section 6.5): the tone plays at the start of a Tone edit and after each change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. No other sound in the menu. | User decision (Q-3). The user hears the value that the display shows. The stop on leave ties the sound to the edit: `enter` means "done". Silence at a limit keeps UX-13. | A sound for the Tone row in browse mode (noise during a cursor move). Tone continues after leaving until the timeout (sound without a visible owner). A beep at a limit (a second limit signal next to the marker, and noise during a held repeat). A beep on save or on other items (no user request). |
+| UX-21 | `MENU_TONE_PREVIEW_MS` = 300 ms, counted from the hook that starts or restarts the tone. | 300 ms is one dah at 12 WPM, a familiar length for the user. It is long enough to judge the pitch after the 8 ms rise. Single presses about 0.5 s apart give one separate beep each. It is shorter than the 400 ms repeat delay, so a hold gives one beep, a short silence and then the chain. | 150 ms (short for a low tone, and the rise and fall take 16 ms of it). 1000 ms or continuous while in edit (tiring in long sessions, and the user cannot stop it without leaving the edit). |
+| UX-22 | A repeat event uses the same rule as a press. The retune dip (about 17-19 ms each 80 ms) during a held repeat is accepted. | The user hears the pitch move and can release by ear. The dip is shaped, not a click. No interface change. | Silence during repeats and one tone after the release. There is no release event. It needs a buttons change, or a new hook where `menu_poll()` starts the tone after a pause in the repeats. Sound on press events only (the user cannot hear the final value of a hold without one more step). Sound on every n-th repeat only (the sound lags the display). Glide without silence (needs an ARR change during a ramp, a sidetone interface change). Each alternative needs an `architector` decision. |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -502,13 +640,19 @@ debounced press and release.
 | D-7 | Save on leaving Settings. | No visible glitch. A button pressed during the save is not lost. |
 | D-8 | Physical order of prev and next on the case. | prev is up/left. Otherwise review sections 5.4, 5.7 and 6.1. |
 | D-9 | Display recovery start: set contrast 0 and backlight 0, save, switch off. Hold `menu/back` and switch on. | The `Display Defaults` message is readable. The `on/off` button powers the MCU up from off. |
+| D-10 | Tone preview at the edit start. Speaker and headphones. Tone 400, 600 and 1000 Hz. Volume at its middle. | The tone starts with no audible delay after `enter`. It lasts about 0.3 s. No click at the start or at the end. The user can judge the pitch. |
+| D-11 | Single presses about 0.5 s apart from 600 Hz up and down. | Each press gives one clear beep at the new pitch. |
+| D-12 | Hold `next` from 400 Hz to 1000 Hz, then hold `prev` back. | The chain sounds as a series of pitch steps, not as clicks or a buzz. The user can release near a target pitch. The tone ends about 0.3 s after the release, and at the limit also while the button is held. If the chain is unpleasant, record it for `architector` (UX-22 alternatives). |
+| D-13 | Stop timing on a logic analyzer (P1.1 or P1.2) while the screen redraws. Leave with `enter` and with `menu/back`. Let a preview time out. | After a leave, the output is quiet within about 10 ms of the event. A timeout ends 300 ms after the hook, plus at most one main-loop pass, plus the 8 ms fall. |
+| D-14 | Insert and remove the headphone plug during a single preview and during a held repeat. | The route changes at the next silence. No click on either output. A spurious `enter` from the socket (D-5) ends the edit and stops the tone. |
 
 ## 12. Open questions
 
-Resolved by the user: Q-1 (UX-19), Q-2 (UX-3), Q-6 (UX-18), the `Statistics reset` screen (UX-8).
+Resolved by the user: Q-1 (UX-19), Q-2 (UX-3), Q-3 (a Tone edit plays the tone, see UX-20 to UX-22 and section 6.5),
+Q-6 (UX-18), the `Statistics reset` screen (UX-8).
+Resolved by `architector`: Q-4 (`eeprom_write` reads back each byte, and a failed save shows `Not saved` / `OK`, see
+F-7 and `menu_subsystem_spec.md` sections 3.5 and 3.6).
 
 | ID | Question | Impact | Owner |
 | --- | --- | --- | --- |
-| Q-3 | Tone preview: when the sidetone exists, does a Tone edit play the tone? | Later feature. | user |
-| Q-4 | Save failure: the planned EEPROM API does not read back a write. If `architector` adds a read-back test, the failure uses the message screen (title `Settings`, text `Not saved`, `OK`). | Without a check, a failed write is silent until the next power-on. | `architector` |
 | Q-5 | The datasheet advises against EEPROM writes at low supply voltage. The board has no documented battery-voltage input. | A save at a low battery can corrupt the record (then F-2 applies). | `architector` |

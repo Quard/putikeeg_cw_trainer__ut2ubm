@@ -20,6 +20,102 @@ The initial design uses:
 These values are starting points. Final tone range and envelope duration must
 be selected from measurements on the actual speaker and headphone paths.
 
+## Implemented design (2026-10-05)
+
+The firmware implements this guide with the changes below. The contract is
+[sidetone_spec.md](sidetone_spec.md). Where this guide and the contract differ,
+the contract wins. Host tests, QA and `architector` approved the design. Device
+behavior stays unverified until the checks in
+[sidetone_validation.md](sidetone_validation.md) pass.
+
+Tone and timing:
+
+- Tone range 400 to 1000 Hz, equal to the `Tone` setting range. The module
+  clamps other values. `PWMA_PSCR` = 1 gives a 12 MHz counter at the 24 MHz
+  system clock (`firmware/inc/board/sidetone_config.h`).
+- The build sets `MCU_CLOCK_HZ=24000000UL` (`firmware/CMakeLists.txt`).
+  `firmware/flash.sh` passes this value to `stcgal -t`, which trims the
+  internal oscillator. The measured clock is unverified (DC-4).
+- Timer 0 gives the 4 kHz service: mode 0 (16-bit auto-reload), SYSclk / 12,
+  reload 0xFE0C, 500 counts = 250 µs. Timer 0 keeps priority level 0, the
+  level of the Timer 3 tick, so the two interrupts never nest. The timer runs
+  all the time, also in silence.
+
+Register access:
+
+- `P_SW2.EAXFR` stays set after init. No code clears it. The interrupt never
+  reads, saves or restores `P_SW2`. This replaces steps 1 and 8 of
+  [Step 2](#step-2-configure-pwma-safely).
+- Register access is a set of macros in `firmware/inc/board/sidetone_pwm.h`,
+  not a platform `.c` file. No macro calls a function, so
+  `sidetone_service()` stays a leaf function.
+- Software update (UG) and ARR writes happen only at a start from silence,
+  never in a ramp. The PWMA counter runs all the time.
+
+Envelope:
+
+- Each service call in RISING, STEADY and FALLING moves the index one step
+  toward the target. A full rise and a full fall each take exactly 32 calls
+  (8.0 ms). A reversal never resets the index. This replaces "enter FALLING
+  without changing the index first" in
+  [Step 3](#step-3-implement-the-envelope).
+- A fifth state, ZERO_WAIT, follows the fall. At index 0 the interrupt writes
+  compare 0 first, then clears the PWMA update flag. ZERO_WAIT waits for the
+  next update event, so that compare 0 is in the shadow register, then
+  disables the output. ZERO_WAIT also ends after `SIDETONE_ZERO_WAIT_LIMIT`
+  (12) calls without the flag, so a stopped PWMA cannot block the tone. The
+  index byte counts these calls.
+- A pending tone change acts as an off request. The new tone starts at the next
+  start from silence.
+
+Tone mailbox:
+
+- Two compare tables, A and B, each with its own ARR value, in xdata
+  (2 x 66 B + 2 x 2 B). One bit selects the active table. The main loop fills
+  only the inactive table, then sets the pending bit. The interrupt flips the
+  selector only at a start from silence. No interrupt is disabled. This
+  replaces the interrupt exclusion or sequence-numbered mailbox of Step 3.
+- The tables and ARR values are `volatile`, so the compiler keeps their stores
+  before the pending bit store.
+
+Route:
+
+- P1.1 (`PWM1N`): `CC1NE` = 1 with `CC1NP` = 1, `CC1E` = 0. P1.2 (`PWM2P`):
+  `CC2E` = 1 with `CC2P` = 1. Both pins are push-pull, quiet HIGH, and LOW
+  while the counter is below the compare value. The polarity is unverified
+  (DC-2).
+- P1.0 is an input with the internal pull-up. `sidetone_poll()` in the main
+  loop debounces it for 50 ms. The interrupt latches the route only at a start
+  from silence. See [components_and_wiring.md](components_and_wiring.md).
+
+Files and build:
+
+| File | Content |
+| --- | --- |
+| `firmware/inc/sidetone/sidetone.h` | Public API. |
+| `firmware/src/sidetone/sidetone.c` | Tone math, mailbox, envelope `sidetone_service()`, plug debounce, and the Timer 0 interrupt `sidetone_timer0_isr()` at the end of the file. |
+| `firmware/inc/board/sidetone_config.h` | Rates, tone range, ramp length, debounce, compile-time checks. |
+| `firmware/inc/board/sidetone_pwm.h` | PWMA, port 1 and Timer 0 macros (target only). |
+| `firmware/Tests/fakes/board/sidetone_pwm.h`, `fake_sidetone_pwm.c` | Host replacement of the register macros. |
+| `firmware/Tests/fakes/fake_sidetone.c` | Sidetone API fake for the menu tests. |
+| `firmware/Tests/test_sidetone.c`, `test_qa_sidetone.c` | Host tests. |
+
+- The firmware compiles with `--norestartseqatomics`. With SDCC 4.6.0, an
+  interrupt that calls a function of another file still gets the
+  `sdcc_atomic_maybe_rollback` epilogue, and the link fails. So the interrupt
+  is in `sidetone.c`, and it calls only `sidetone_service()`. Rule: an
+  interrupt calls only functions of its own file.
+- `sidetone_service()` uses `#pragma nooverlay`, calls no function and uses no
+  library arithmetic helper.
+- The final build: flash 15 913 B, xdata 1346 B, stack start 0x30 with 208 B
+  free (`firmware/build/putikeeg_cw_trainer.mem`).
+
+The keyer integration of [Step 4](#step-4-integrate-with-cw-timing) is not
+implemented. The only trigger is the Tone preview in the menu. The call order
+`paddle_tick()`, `keyer_tick()`, `sidetone_tick()` from one interrupt conflicts
+with the interrupt file rule. `architector` decides that layout in the keyer
+change (`sidetone_spec.md` section 21).
+
 ## Hardware facts and required checks
 
 The following connections are recorded for board revision `CW_MINI_V2.0D`:
@@ -39,8 +135,9 @@ Measurements recorded on 2026-10-02 established:
 
 The initial speaker capture exposed an inverted PWM1N active duty: P1.1 was
 LOW for approximately 95% of the cycle in the nominal 5% diagnostic profile.
-The polarity selection was corrected, but a confirming speaker capture is
-still required before enabling the validated profile. Detailed evidence and
+The polarity selection was corrected. The normal firmware build uses both
+routes, one at a time, with the corrected polarity, and a new speaker capture must check it
+(DC-2). Detailed evidence and
 remaining checks are in [sidetone_validation.md](sidetone_validation.md).
 
 The hardware validation procedure is:
@@ -59,6 +156,9 @@ to leave its amplifier input quiet. In particular, do not assume that the
 negative `PWM1N` output has the same idle polarity as a positive output.
 
 ## Firmware layout
+
+The implemented layout is different. See
+[Implemented design](#implemented-design-2026-10-05).
 
 Keep register access separate from envelope policy. A suitable layout is:
 
@@ -137,6 +237,9 @@ on integer wrap.
 
 ## Step 2: configure PWMA safely
 
+The implementation differs from this step. See
+[Implemented design](#implemented-design-2026-10-05).
+
 Consult the STC8H family reference manual sections 3.1.2, 20.3, 20.5, and
 20.7 while implementing the platform layer.
 
@@ -159,6 +262,9 @@ counter and can turn the 4 kHz control tick into unwanted modulation. Write the
 preloaded compare and let the normal carrier update transfer it.
 
 ## Step 3: implement the envelope
+
+The implementation differs from this step. See
+[Implemented design](#implemented-design-2026-10-05).
 
 Use 33 duty values for 32 intervals. The initial table, in permille of the PWM
 period, is:

@@ -8,6 +8,7 @@
 #include "lcd/lcd.h"
 #include "menu/menu.h"
 #include "settings/settings.h"
+#include "sidetone/sidetone.h"
 #include "tick/tick.h"
 
 /* Repeats that came due during a slow redraw take effect before the next redraw; the limit keeps a pass short. */
@@ -27,6 +28,7 @@ void main(void) {
   if (buttons_is_recovery_start()) {
     settings_use_display_defaults();
   }
+  sidetone_init(settings_get(SETTINGS_ID_TONE_HZ));
   lcd_init();
   lcd_set_contrast((uint8_t)settings_get(SETTINGS_ID_CONTRAST));
   backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
@@ -44,6 +46,8 @@ void main(void) {
       }
       menu_handle(event);
     }
+    menu_poll();
+    sidetone_poll();
     if (menu_needs_redraw()) {
       menu_render();
     }

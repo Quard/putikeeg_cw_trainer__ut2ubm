@@ -66,6 +66,55 @@ __sfr __at(0xEF) AUXINTIF;
 #define PWMB_CCER2_CC8P 0x20U
 #define PWMB_BKR_MOE 0x80U
 
+/* Port 1 modes, datasheet section 9.1.2: M1 = 0, M0 = 1 is push-pull; M1 = 1, M0 = 0 is high-impedance input. */
+__sfr __at(0x91) P1M1;
+__sfr __at(0x92) P1M0;
+#define P1PU (*(volatile __xdata uint8_t*)0xFE11U)
+
+/* Datasheet sections 7.2.4 and 13.2.12: bit 7 T0x12 selects SYSclk / 1 for Timer 0; bit 1 EXTRAM must stay 0. */
+__sfr __at(0x8E) AUXR;
+#define AUXR_T0X12 0x80U
+#define TMOD_T0_MASK 0x0FU /* Timer 0 GATE, C/T, M1, M0; the high nibble is Timer 1 */
+
+/* Vector address = 8 * number + 3 = 0x000B. */
+#define TIMER0_INTERRUPT 1
+
+/* PWMA (advanced PWM, channels 1-4) XFRs, datasheet sections 3.1.5 and 20.7. */
+#define PWMA_ENO (*(volatile __xdata uint8_t*)0xFEB1U)
+#define PWMA_PS (*(volatile __xdata uint8_t*)0xFEB2U)
+#define PWMA_IOAUX (*(volatile __xdata uint8_t*)0xFEB3U)
+#define PWMA_CR1 (*(volatile __xdata uint8_t*)0xFEC0U)
+#define PWMA_CR2 (*(volatile __xdata uint8_t*)0xFEC1U)
+#define PWMA_IER (*(volatile __xdata uint8_t*)0xFEC4U)
+#define PWMA_SR1 (*(volatile __xdata uint8_t*)0xFEC5U)
+#define PWMA_EGR (*(volatile __xdata uint8_t*)0xFEC7U)
+#define PWMA_CCMR1 (*(volatile __xdata uint8_t*)0xFEC8U)
+#define PWMA_CCMR2 (*(volatile __xdata uint8_t*)0xFEC9U)
+#define PWMA_CCER1 (*(volatile __xdata uint8_t*)0xFECCU)
+#define PWMA_PSCRH (*(volatile __xdata uint8_t*)0xFED0U)
+#define PWMA_PSCRL (*(volatile __xdata uint8_t*)0xFED1U)
+#define PWMA_ARRH (*(volatile __xdata uint8_t*)0xFED2U)
+#define PWMA_ARRL (*(volatile __xdata uint8_t*)0xFED3U)
+#define PWMA_CCR1H (*(volatile __xdata uint8_t*)0xFED5U)
+#define PWMA_CCR1L (*(volatile __xdata uint8_t*)0xFED6U)
+#define PWMA_CCR2H (*(volatile __xdata uint8_t*)0xFED7U)
+#define PWMA_CCR2L (*(volatile __xdata uint8_t*)0xFED8U)
+#define PWMA_BKR (*(volatile __xdata uint8_t*)0xFEDDU)
+
+#define PWMA_ENO_ENO1N 0x02U
+#define PWMA_ENO_ENO2P 0x04U
+#define PWMA_PS_P1 0x00U /* C1PS-C4PS = 00: PWM1N on P1.1, PWM2P on P1.2 */
+#define PWMA_CR1_CEN 0x01U
+#define PWMA_CR1_ARPE 0x80U
+#define PWMA_EGR_UG 0x01U
+#define PWMA_SR1_UIF 0x01U
+#define PWMA_CCMR_PWM1_PRELOAD 0x68U /* OCiM = 110 (PWM mode 1), OCiPE = 1, CCiS = 00 (output) */
+#define PWMA_CCER1_CC1NE 0x04U
+#define PWMA_CCER1_CC1NP 0x08U
+#define PWMA_CCER1_CC2E 0x10U
+#define PWMA_CCER1_CC2P 0x20U
+#define PWMA_BKR_MOE 0x80U
+
 /* IAP/EEPROM, datasheet section 16.2. IAP_TPS is a normal SFR, not an XFR. */
 __sfr __at(0xC2) IAP_DATA;
 __sfr __at(0xC3) IAP_ADDRH;

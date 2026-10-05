@@ -83,9 +83,37 @@ sidetone route and P1.2 as the headphone sidetone route. The captures also
 show that only the selected route was active. The initial speaker capture
 found the PWM1N polarity inverted: despite a HIGH quiet state, P1.1 was LOW
 for approximately 95% of each carrier cycle. The firmware polarity selection
-was corrected after this capture, so the speaker route requires a new capture
-before the validated profile is approved. See
+was corrected after this capture. The normal firmware build uses both
+routes, one at a time, with the corrected polarity, and a new speaker capture must check it
+(DC-2). See
 [sidetone_validation.md](sidetone_validation.md#measurement-results-2026-10-02).
+
+### Firmware use of the audio pins
+
+The sidetone firmware sets up the audio pins as follows. Sources:
+[sidetone_spec.md](sidetone_spec.md) sections 4 and 7, `firmware/inc/board/sidetone_pwm.h`. The device
+behavior is unverified until the checks in [sidetone_validation.md](sidetone_validation.md) pass.
+
+| Pin | Firmware setup | Device status |
+| --- | --- | --- |
+| P1.1 | Push-pull output, latch HIGH, so the quiet level stays HIGH. PWMA channel 1 drives it as `PWM1N` with `CC1NE` = 1 and `CC1NP` = 1. `CC1E` stays 0: with `CC1E` = 1, the N output is the inverted signal (datasheet section 20.7.15). The pin is LOW while the counter is below the compare value, at most 50 % of the period. | Polarity unverified (DC-2). |
+| P1.2 | Push-pull output, latch HIGH. PWMA channel 2 drives it as `PWM2P` with `CC2E` = 1 and `CC2P` = 1. LOW-active, at most 50 % of the period. | Polarity unverified (DC-2). |
+| P1.0 | High-impedance input with the internal pull-up (`P1PU` bit 0, about 4.1 kΩ). A LOW level selects the headphones. `sidetone_poll()` debounces it for 50 ms (`SIDETONE_PLUG_DEBOUNCE_MS`). | The need for the pull-up and the 50 ms value are unverified (DC-7). |
+
+Rules that keep the other pins safe:
+
+- Only one route plays at a time. `PWMA_ENO` takes only the values 0x00 (off), 0x02 (`ENO1N`, speaker) and 0x04
+  (`ENO2P`, headphones).
+- `ENO1P` stays 0. P1.0 is also `PWM1P`. An enabled `PWM1P` drives the plug-detect line.
+- `PWMA_PS` stays 0x00. The value 01 moves PWMA to P2.0 to P2.3, the LCD pins.
+- P5.4, the other pin choice for `PWM2P`, is not connected on the board (U1 pin 9, from the netlist of
+  `hardware/putikeeg_cw_trainer.kicad_sch`).
+- The route changes only in silence. A plug change while a tone plays takes effect at the next tone start.
+
+Netlist observation (from `sidetone_spec.md` section 4): the MCU `Vcc` pin (pin 10) is on net `VCC` with the
+emitter of the headphone PNP transistor Q4. A push-pull HIGH is then equal to the emitter rail, and the PNP stage
+is off. This explains the 4 V quiet level. The schematic export reports annotation errors, so this is not proven.
+The quiet current check DC-10 tests it.
 
 ## Memory
 

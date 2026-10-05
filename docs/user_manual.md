@@ -13,7 +13,10 @@ This manual tells you how to use the menu and the settings of the custom firmwar
 This version has the menu, the settings and the display controls. The training modes are not available yet:
 
 - `Receiving`, `Sending` and `Free Input` show the message `Not ready`.
-- The device makes no sound in the menu.
+- The only sound is the Tone preview. When you edit `Tone` in `Settings > CW`, the device plays the edited tone
+  for about 0.3 s. Each change of the value plays the new tone again. At a limit, a press plays nothing new. When
+  you leave the edit, the tone stops at once. The volume knob sets the loudness. With headphones plugged in, the
+  headphones play instead of the speaker.
 - The device collects no statistics.
 - Only `Backlight` and `Contrast` have a visible effect now. The firmware saves the other settings for the
   training modes of a later version.

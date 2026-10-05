@@ -4,7 +4,9 @@
 #include "lcd/lcd.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "sidetone/sidetone.h"
 #include "stats/stats.h"
+#include "tick/tick.h"
 
 MEM_XDATA uint8_t menu_stack_nodes[MENU_STACK_DEPTH];
 MEM_XDATA uint8_t menu_stack_cursors[MENU_STACK_DEPTH];
@@ -19,6 +21,10 @@ static MEM_XDATA uint8_t handle_code;
 static MEM_XDATA bool handle_is_repeat;
 static MEM_XDATA uint16_t edit_value;
 
+/* Tone preview, references/internal/ui-ux.md section 6.5. */
+static MEM_XDATA bool menu_is_preview_running;
+static MEM_XDATA uint16_t menu_preview_start;
+
 #define MENU_TOP ((uint8_t)(menu_depth - 1U))
 
 static const menu_node_t MEM_CODE* menu_top_node(void) { return &menu_nodes[menu_stack_nodes[MENU_TOP]]; }
@@ -28,6 +34,30 @@ const menu_item_t MEM_CODE* menu_current_item(void) { return &menu_top_node()->i
 static void menu_show_screen(uint8_t screen) {
   menu_current_screen = screen;
   menu_is_redraw_pending = true;
+}
+
+/* EDIT opens only on value and choice items, so the settings id alone identifies the Tone edit. */
+static bool menu_is_tone_edit(void) {
+  if (menu_current_screen != MENU_SCREEN_EDIT) {
+    return false;
+  }
+  return menu_current_item()->target == SETTINGS_ID_TONE_HZ;
+}
+
+/* H1, H2: the tone first, so the rise already uses it. */
+static void menu_preview_play(void) {
+  sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
+  sidetone_set_on(true);
+  menu_preview_start = tick_now();
+  menu_is_preview_running = true;
+}
+
+/* H5: every exit from the Tone edit stops the tone, also after the timeout. */
+static void menu_leave_tone_edit(void) {
+  if (menu_is_tone_edit()) {
+    sidetone_set_on(false);
+    menu_is_preview_running = false;
+  }
 }
 
 /* Moves the list cursor. A press wraps at the ends; a repeat stops there. */
@@ -72,6 +102,9 @@ static void menu_enter_item(void) {
     menu_show_screen(MENU_SCREEN_DIALOG);
   } else {
     menu_show_screen(MENU_SCREEN_EDIT);
+    if (item->target == SETTINGS_ID_TONE_HZ) {
+      menu_preview_play();
+    }
   }
 }
 
@@ -108,6 +141,7 @@ static void menu_handle_edit(void) {
   const uint16_t step = settings_step(id);
 
   if ((handle_code == BUTTON_EVENT_ENTER) || (handle_code == BUTTON_EVENT_MENU)) {
+    menu_leave_tone_edit();
     menu_show_screen(MENU_SCREEN_LIST);
     return;
   }
@@ -127,6 +161,8 @@ static void menu_handle_edit(void) {
     lcd_set_contrast((uint8_t)settings_get(id));
   } else if (id == SETTINGS_ID_BACKLIGHT) {
     backlight_set_level((uint8_t)settings_get(id));
+  } else if (id == SETTINGS_ID_TONE_HZ) {
+    menu_preview_play();
   }
   menu_is_redraw_pending = true;
 }
@@ -156,6 +192,7 @@ void menu_init(void) {
   menu_depth = 1U;
   menu_current_choice = MENU_DIALOG_NO;
   menu_current_message = MENU_MESSAGE_STATS_RESET;
+  menu_is_preview_running = false;
   menu_show_screen(MENU_SCREEN_LIST);
 }
 
@@ -179,6 +216,16 @@ void menu_handle(button_event_t event) {
   }
 }
 
+void menu_poll(void) {
+  if (!menu_is_preview_running) {
+    return;
+  }
+  if ((uint16_t)(tick_now() - menu_preview_start) >= MENU_TONE_PREVIEW_MS) {
+    sidetone_set_on(false);
+    menu_is_preview_running = false;
+  }
+}
+
 bool menu_needs_redraw(void) { return menu_is_redraw_pending; }
 
 uint8_t menu_screen(void) { return menu_current_screen; }
@@ -195,6 +242,7 @@ void menu_show_message(uint8_t message_id) {
   if (message_id >= MENU_MESSAGE_COUNT) {
     return;
   }
+  menu_leave_tone_edit();
   menu_current_message = message_id;
   menu_show_screen(MENU_SCREEN_MESSAGE);
 }

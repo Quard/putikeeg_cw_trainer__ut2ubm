@@ -38,36 +38,21 @@ Run the host tests with:
 
 ## Sidetone hardware bring-up
 
-The normal build configures headphone detection but keeps both audio PWM
-outputs disabled. Measurements on board revision `CW_MINI_V2.0D` found HIGH
-quiet levels on P1.1 and P1.2, with P1.1 routed to the speaker and P1.2 routed
-to headphones. The corrected P1.1 PWM1N polarity still requires a confirming
-capture, so the validated profile remains gated.
+The firmware plays a CW sidetone on board revision `CW_MINI_V2.0D`. In this
+version, the only sound is the Tone preview in `Settings > CW > Tone` (see the
+[user manual](docs/user_manual.md)). The normal build has no special sidetone
+configuration.
 
-After measuring the quiet level, configure one diagnostic route at a time.
-The diagnostic profile limits the peak duty cycle to 5% and cannot enable the
-other route. For example, if P1.1 was measured quiet at a high level:
+The route is automatic. P1.0 detects the headphone plug. With the plug in
+(P1.0 LOW), the headphone route P1.2 plays. Without the plug, the speaker route
+P1.1 plays. A plug change takes effect at the next tone start. Both routes are
+quiet at a HIGH level. The PWM pulses are LOW-active, with at most 50 % duty.
 
-```sh
-cmake \
-  -S firmware \
-  -B firmware/build/diagnostic-speaker \
-  -DCMAKE_TOOLCHAIN_FILE="$PWD/firmware/cmake/sdcc-toolchain.cmake" \
-  -DSIDETONE_BOARD_PROFILE=diagnostic-speaker \
-  -DSIDETONE_SPEAKER_IDLE_LEVEL=HIGH
-cmake --build firmware/build/diagnostic-speaker --parallel
-```
-
-Use `diagnostic-headphones` and `SIDETONE_HEADPHONES_IDLE_LEVEL` to test P1.2.
-Accepted idle levels are `HIGH` and `LOW`. Keep the volume at minimum for the
-first powered test and verify the PWM pin and amplified output with an
-oscilloscope before increasing volume or duty cycle.
-
-The `validated` profile restores the 50% maximum duty and automatic P1.0 jack
-routing. It requires both measured idle levels and the explicit
-`-DSIDETONE_BOARD_VALIDATED=ON` acknowledgement. Complete and record the
-remaining checks in `references/internal/sidetone_validation.md` before using
-that profile.
+The sidetone is not tested on the device yet. Run the device checks in
+[references/internal/sidetone_validation.md](references/internal/sidetone_validation.md)
+and record the results there. For the first powered test, set the volume to
+minimum. Check the PWM pin and the amplified output with a logic analyzer or an
+oscilloscope before you increase the volume.
 
 ## Download firmware
 

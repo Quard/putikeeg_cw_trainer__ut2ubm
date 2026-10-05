@@ -12,7 +12,8 @@ file(GLOB_RECURSE FIRMWARE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR
 add_executable(putikeeg_cw_trainer ${FIRMWARE_SOURCES})
 target_include_directories(putikeeg_cw_trainer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc")
 target_compile_definitions(putikeeg_cw_trainer PRIVATE MCU_CLOCK_HZ=${MCU_CLOCK_HZ}UL FLASH_CODE_SIZE=${FLASH_CODE_SIZE}UL)
-target_compile_options(putikeeg_cw_trainer PRIVATE --std=sdcc11 --opt-code-size)
+# No source uses C11 atomics. An ISR calls only functions of its own file, so it ends with a plain reti.
+target_compile_options(putikeeg_cw_trainer PRIVATE --std=sdcc11 --opt-code-size --norestartseqatomics)
 # The linker fails when the image or the RAM use exceeds these limits.
 target_link_options(putikeeg_cw_trainer PRIVATE
   --code-size ${FLASH_CODE_SIZE}
