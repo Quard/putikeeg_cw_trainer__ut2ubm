@@ -54,9 +54,9 @@ Project documents in `references/internal/`:
 | --- | --- |
 | `components_and_wiring.md` | Board revision, components, pins, audio routes, measurements. |
 | `menu_subsystem_spec.md` | Menu, settings, EEPROM and button contract. |
-| `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view, `Paddle` setting, device checks. |
+| `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view, `Paddle` setting, `Prosigns` setting (section 5.10, UX-38), device checks. |
 | `sidetone_spec.md` | Sidetone contract: API, envelope, registers, memory, decisions. |
-| `keyer_spec.md` | Keyer, Free Input and long-press contract: ISR layout (D-K1), keyer behavior and timing, Morse table, P3.2 and P5.5 use, `Paddle` setting, memory, device checks DC-K1 to DC-K7. |
+| `keyer_spec.md` | Keyer, Free Input and long-press contract: ISR layout (D-K1), keyer behavior and timing, Morse table, P3.2 and P5.5 use, `Paddle` setting, memory, device checks DC-K1 to DC-K7. Prosign display setting (section 17): prosign codes, `morse_format()`, settings layout version 2, device checks DC-P1 to DC-P3. |
 | `sidetone_pwm_envelope_research.md` | Sidetone research and the implemented design. |
 | `sidetone_validation.md` | Sidetone device checks and measurement results. |
 | `paddle_keyer_research.md` | Paddle input and iambic keyer guide. |

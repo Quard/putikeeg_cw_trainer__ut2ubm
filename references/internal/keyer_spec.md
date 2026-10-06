@@ -1,6 +1,7 @@
 # Paddle keyer, Free Input and long presses: implementation specification
 
-Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-developer`, `qa-embedded`,
+Owner: `architector`. Status: approved for implementation. Section 17 (prosign display setting): D2 review and final
+review approved on 2026-10-06 (section 17.12). Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
@@ -8,7 +9,7 @@ Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-
 | Source | Role |
 | --- | --- |
 | This document | Interfaces, memory placement, keyer behavior, timing, event protocol, task split and acceptance criteria. It refines the approved plan. It does not change a user decision. |
-| `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`, final for this change) | All that the user sees, hears or presses: sections 5.6, 5.9, 6.1, 6.2, 6.4, 6.6, 6.7, decisions UX-23 to UX-37, tests V-54 to V-79, device checks D-15 to D-24. |
+| `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`, final for this change) | All that the user sees, hears or presses: sections 5.6, 5.9, 6.1, 6.2, 6.4, 6.6, 6.7, decisions UX-23 to UX-37, tests V-54 to V-79, device checks D-15 to D-24. For section 17: sections 5.9 and 5.10, decision UX-38 (it refines UX-28), F-14, F-15, tests V-80 to V-89, device check D-25. |
 | `references/internal/paddle_keyer_research.md` | Filter, entry mask, keyer phases, A/B rules, host-test list. This document wins where the two differ (section 3). |
 | `references/internal/paddle_keyer_howtoimplement_research.md` | Background on iambic A and B. This document wins. |
 | `references/internal/sidetone_spec.md` | Sidetone contract. Section 21 holds decision D-R2-1. Section 3.1 of this document revises it. |
@@ -35,7 +36,8 @@ User decisions (fixed):
 - A pattern that is not in the Morse table shows one unknown glyph, `*` (UX-27). The 8-dit error sign is one of
   these patterns.
 - Tip/ring swap is a setting: `Paddle` with the values `Normal` and `Reversed` (UX-32).
-- AR shows as `+`, BT as `=`, SK as the four characters `<SK>` (UX-28).
+- SK shows as the four characters `<SK>` (UX-28). AR, BT, KN and AS show as the `Prosigns` setting selects
+  (section 17). The default is `Both`, for example `<AR/+>`.
 - No exit hint on the mode screens (UX-36). No stuck-key timeout (UX-37).
 - "Done" means: host tests pass, the build checks pass, QA approves, `architector` approves. Device behavior stays
   unverified (section 14). The user runs device tests on demand.
@@ -122,7 +124,7 @@ None of these changes a user decision.
 | R-7 | `BUTTON_EVENT_LONG_FLAG 0x40U` | `BUTTON_EVENT_CODE()` masks with `0x3FU`. | The macro must remove both flags. |
 | R-8 | One long timer | Each of `menu/back`, `prev` and `next` has its own long timer. | `ui-ux.md` 6.6: `prev` and `next` held together give two long events, each at its own 800 ms moment. |
 | R-9 | Placeholders: long press for prev and next only | Placeholders also close only with a long `menu/back` (UX-31). | User decision. Existing tests that close a placeholder with a short `menu/back` change to a long press. |
-| R-10 | `morse_decode` returns a char | It returns `MORSE_CHAR_SK` for `...-.-` and `MORSE_CHAR_UNKNOWN` (0) for an unknown pattern. Free Input draws `<SK>` and `*`. | UX-27, UX-28. The decoder holds no UI glyph. |
+| R-10 | `morse_decode` returns a char | It returns `MORSE_CHAR_SK` for `...-.-`, one of `MORSE_CHAR_AR`, `MORSE_CHAR_BT`, `MORSE_CHAR_KN` and `MORSE_CHAR_AS` for the four prosigns with a mark (section 17), and `MORSE_CHAR_UNKNOWN` (0) for an unknown pattern. `morse_format()` turns the decoded value into the display text. | UX-27, UX-28. The decoder table holds no UI glyph. |
 | R-11 | (not stated) | `check_asm.sh` R5 covers `P5` 0xC8, `P5M1` 0xC9 and `P5M0` 0xCA. | Same rule as the other port mode registers. |
 
 ### 3.3 Decisions of the final review
@@ -351,18 +353,21 @@ The logical mark is this macro. Tests and any later key output use it, never the
 #define MORSE_MAX_ELEMENTS 6U
 #define MORSE_CHAR_UNKNOWN '\0'      /* Free Input shows '*' */
 #define MORSE_CHAR_SK '\x01'         /* prosign SK; Free Input shows "<SK>" */
+/* MORSE_CHAR_AR to MORSE_CHAR_AS, MORSE_STYLE_*, MORSE_TEXT_*: section 17.3.1 */
 
 uint8_t morse_add_element(uint8_t pattern, bool is_dah);
 char morse_decode(uint8_t pattern);
+uint8_t morse_format(char decoded, uint8_t style, char MEM_XDATA* text);  /* section 17.4.1 */
 ```
 
 | Function | Behavior |
 | --- | --- |
 | `morse_add_element(pattern, is_dah)` | `MORSE_PATTERN_INVALID` stays invalid. A pattern of 64 or more gives `MORSE_PATTERN_INVALID`: it already has 6 elements, or it is not a pattern. Any other pattern gives `(pattern << 1) \| (is_dah ? 1 : 0)`. |
 | `morse_decode(pattern)` | A pattern of 128 or more gives `MORSE_CHAR_UNKNOWN`. Any other pattern gives `morse_table[pattern]`. Entries 0 and 1 hold `MORSE_CHAR_UNKNOWN`, and so does each slot that section 6.10 does not list. |
+| `morse_format(decoded, style, text)` | Section 17.4.1. |
 
 The table is `static const MEM_CODE char morse_table[128]`. Main loop only. The later Sending and Receiving modes can
-use it. The two special values keep UI glyphs out of the decoder: the caller chooses how to show them.
+use it. The special values keep UI glyphs out of the decoder table. `morse_format()` gives the display text.
 
 ### 5.8 `inc/modes/free_input.h`
 
@@ -402,7 +407,7 @@ behavior.
 #define SETTINGS_ID_COUNT 11U
 ```
 
-Section 6.13 gives the behavior.
+Section 6.13 gives the behavior. Section 17.3.2 adds `SETTINGS_ID_PROSIGN_STYLE` and makes `SETTINGS_ID_COUNT` 12.
 
 ### 5.11 `inc/menu/menu.h` changes
 
@@ -670,16 +675,16 @@ The table holds exactly these 54 entries. All other entries are `MORSE_CHAR_UNKN
 | Letters 1 | 2:E 3:T 4:I 5:A 6:N 7:M 8:S 9:U 10:R 11:W 12:D 13:K 14:G |
 | Letters 2 | 15:O 16:H 17:V 18:F 20:L 22:P 23:J 24:B 25:X 26:C 27:Y 28:Z 29:Q |
 | Digits | 32:5 33:4 35:3 39:2 47:1 48:6 56:7 60:8 62:9 63:0 |
-| Signs 1 | `40:&` `42:+` `49:=` `50:/` `54:(` `69:SK` `76:?` `77:_` `82:"` |
+| Signs 1 | `40:AS` `42:AR` `49:BT` `50:/` `54:KN` `69:SK` `76:?` `77:_` `82:"` |
 | Signs 2 | `85:.` `90:@` `94:'` `97:-` `106:;` `107:!` `109:)` `115:,` `120::` |
 
 | Char | Code | Prosign |
 | --- | --- | --- |
-| `&` | `.-...` | AS |
-| `+` | `.-.-.` | AR |
-| `=` | `-...-` | BT |
-| `(` | `-.--.` | KN |
-| SK (index 69) | `...-.-` | SK, the entry holds `MORSE_CHAR_SK` |
+| AS (index 40) | `.-...` | AS, the entry holds `MORSE_CHAR_AS`. Mark `&`. |
+| AR (index 42) | `.-.-.` | AR, the entry holds `MORSE_CHAR_AR`. Mark `+`. |
+| BT (index 49) | `-...-` | BT, the entry holds `MORSE_CHAR_BT`. Mark `=`. |
+| KN (index 54) | `-.--.` | KN, the entry holds `MORSE_CHAR_KN`. Mark `(`. |
+| SK (index 69) | `...-.-` | SK, the entry holds `MORSE_CHAR_SK`. No mark. |
 | `/` | `-..-.` | - |
 | `?` | `..--..` | - |
 | `_` | `..--.-` | - |
@@ -694,8 +699,9 @@ The table holds exactly these 54 entries. All other entries are `MORSE_CHAR_UNKN
 | `,` | `--..--` | - |
 | `:` | `---...` | - |
 
-The table has no lowercase letter, no space, no `*`, no `<` and no `>` (`ui-ux.md` 5.9). The 8-dit error sign has
-more than 6 elements, so it is unknown.
+The table has no lowercase letter, no space, no `*`, no `<` and no `>` (`ui-ux.md` 5.9). The only values below 0x20
+in the table are `MORSE_CHAR_UNKNOWN` and the five prosign codes 0x01 to 0x05. The marks `&`, `+`, `=` and `(` come
+only from `morse_format()` (section 17.4.1). The 8-dit error sign has more than 6 elements, so it is unknown.
 
 ### 6.11 Free Input mode
 
@@ -704,19 +710,22 @@ UI rules: `ui-ux.md` sections 5.9 and 6.7. Current values:
 - Font `FONTS_ID_5X8`, the UI font, already selected.
 - Title bar `Free Input` in row 0. Text rows 1-7, 25 columns.
 - Cell `(r, c)` at `x = 2 + 5c`, `y = 8r`.
-- Unknown glyph `*`. SK as `<SK>`, four cells.
+- Unknown glyph `*`. SK as `<SK>`, four cells. AR, BT, KN and AS as the `Prosigns` setting selects, one to six
+  cells (section 17.4.4).
 - Delimiter at `y = 8r + 3`, `x` 2-126.
 
-State in xdata: cursor row (1..7), cursor column (0..25), current pattern, a 2-byte text buffer for one glyph. Column
-25 means "line full". There is no text buffer: the framebuffer is the only store.
+State in xdata: cursor row (1..7), cursor column (0..25), current pattern, a 2-byte text buffer for one glyph, the
+prosign style, and a `MORSE_TEXT_SIZE` buffer for the text of one character. Column 25 means "line full". There is no
+text store: the framebuffer is the only store.
 
 `free_input_enter()`:
 
 1. `buttons_set_enter_enabled(false)`.
 2. `sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ))`.
 3. `keyer_start()` with the key type, `paddle swap != 0`, TX WPM and TX Eff. WPM from `settings_get()`.
-4. Cursor row 1, column 0. Pattern `MORSE_PATTERN_EMPTY`.
-5. It draws nothing. `menu_render()` draws the frame (R-6).
+4. The prosign style = `settings_get(SETTINGS_ID_PROSIGN_STYLE)`, kept in xdata until the mode ends (section 17.4.4).
+5. Cursor row 1, column 0. Pattern `MORSE_PATTERN_EMPTY`.
+6. It draws nothing. `menu_render()` draws the frame (R-6).
 
 `free_input_poll()`: read events with `keyer_read_event()` up to `KEYER_EVENT_NONE`. At most `KEYER_QUEUE_SIZE + 1`
 events per call. Handle each event as below.
@@ -731,8 +740,9 @@ events per call. Handle each event as below.
 Emit the pattern:
 
 - Pattern `MORSE_PATTERN_EMPTY`: nothing.
-- Else decode it. `MORSE_CHAR_UNKNOWN` draws `*`. `MORSE_CHAR_SK` draws `<`, `S`, `K` and `>`, one glyph at a time.
-  Any other value draws that character.
+- Else decode it, and format the result with `morse_format(decoded, prosign style, text buffer)`. Draw each
+  character of the text, one glyph at a time. So `MORSE_CHAR_UNKNOWN` draws `*`, `MORSE_CHAR_SK` draws `<`, `S`, `K`
+  and `>`, a prosign with a mark draws the text of section 17.4.1, and any other value draws that character.
 - Then the pattern is `MORSE_PATTERN_EMPTY`.
 - `MORSE_PATTERN_INVALID` decodes as unknown, so it draws `*`.
 
@@ -744,7 +754,8 @@ Draw one glyph:
 2. Draw the glyph with `gfx_draw_text()` at the cell, in `GFX_TEXT_NORMAL`.
 3. Column + 1.
 
-Each of the four glyphs of `<SK>` follows this rule, so `<SK>` can split across two lines (`ui-ux.md` 5.9).
+Each glyph of a text of more than one character (`<SK>`, `<AR>`, `<AR/+>`) follows this rule, so the text can split
+across two lines (`ui-ux.md` 5.9).
 
 New line: a row below 7 gets + 1. Row 7 scrolls instead. Then the column is 0.
 
@@ -831,8 +842,10 @@ while ENTER is disabled, and the keyer masks the contact that is closed at its s
   ignored on load.
 - No layout change, no version change. A record of the earlier firmware has bit 1 = 0. So it reads as `Normal`, and
   its CRC stays valid.
-- Test vectors. Default record: `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54` (no change). Default record with
-  `Reversed`: `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78`.
+- Test vectors (layout version 1). Default record: `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54` (no change).
+  Default record with `Reversed`: `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78`.
+- Section 17 adds bits 2-3 and layout version 2. Both vectors above stay valid as version 1 input records
+  (section 17.4.2). Section 17.4.2 gives the version 2 vectors.
 
 ### 6.14 Menu
 
@@ -907,9 +920,10 @@ the Tone edit, and the keyer only in Free Input. `keyer_stop()` clears `keyer_is
 | The four tick values | `volatile MEM_XDATA uint16_t`, `keyer.c` | main, only while disabled | ISR |
 | ISR-private state of section 5.6 | `static MEM_DATA` and `static MEM_BIT`, `keyer_service.h` | ISR only | ISR (tests read them) |
 | Work values of the timing math | `static MEM_XDATA`, `keyer.c` | main | main |
-| Free Input cursor, pattern, glyph buffer | `static MEM_XDATA` | main | main |
+| Free Input cursor, pattern, glyph buffer, prosign style, text buffer (section 17.5) | `static MEM_XDATA` | main | main |
 | Buttons: enter flag, long-pending mask, press times | `static MEM_XDATA` | main | main |
 | `morse_table` | `static const MEM_CODE char[128]` | - | main |
+| Prosign names and marks (section 17.4.1) | `static const MEM_CODE` | - | main |
 
 Rules:
 
@@ -1049,9 +1063,9 @@ Decoder, Free Input, buttons, settings, menu:
 
 | ID | Criterion |
 | --- | --- |
-| AC-K40 | Morse table. The 54 entries of section 6.10 decode. Every other index 0..127 gives `MORSE_CHAR_UNKNOWN`. Index 128..255 gives unknown. The table has no lowercase letter, no space, no `*`, no `<` and no `>`. |
+| AC-K40 | Morse table. The 54 entries of section 6.10 decode. Every other index 0..127 gives `MORSE_CHAR_UNKNOWN`. Index 128..255 gives unknown. The table has no lowercase letter, no space, no `*`, no `<` and no `>`. Section 17 changes entries 40, 42, 49 and 54 (AC-P1). |
 | AC-K41 | Pattern builder. `morse_add_element` builds the index. A 7th element gives `MORSE_PATTERN_INVALID`, and invalid stays invalid. The 8-dit pattern is unknown. |
-| AC-K42 | Free Input text. Unit tests in `test_free_input*.c` cover the cursor rules, the lazy per-character wrap and the word-space rules. `*` shows for unknown, invalid and overflow. `<SK>` takes four cells and can split across a line end. An empty CHAR_GAP draws nothing. |
+| AC-K42 | Free Input text. Unit tests in `test_free_input*.c` cover the cursor rules, the lazy per-character wrap and the word-space rules. `*` shows for unknown, invalid and overflow. `<SK>` takes four cells and can split across a line end. An empty CHAR_GAP draws nothing. Prosigns with a mark: AC-P17 to AC-P20. |
 | AC-K43 | Free Input scroll, clear and delimiter. A scroll copies pages 1-6 and clears page 7. Page 0 is never written or dirty. Clear and delimiter follow section 6.11. |
 | AC-K44 | Free Input calls. `free_input_enter` call order and arguments. `free_input_leave` call order. At most `KEYER_QUEUE_SIZE + 1` events per poll. |
 | AC-K45 | Long press. One long event per press, at exactly `BUTTONS_LONG_PRESS_MS` after the press event. The hold counts on the debounced state (D-K4, section 6.12): a pin that opens `BUTTONS_LONG_PRESS_MS - BUTTONS_DEBOUNCE_MS` ms after the press event gives none, and a pin that opens 1 ms later gives one. ENTER gives none. A button held at start-up gives none. |
@@ -1225,3 +1239,517 @@ The user resolved Q-7 (UX-36), Q-8 (UX-37) and Q-9 (UX-28).
 | --- | --- | --- | --- |
 | Q-K1 | Iambic A overlap tap (section 6.5). The other lever closes while the current lever is held, and both open before the gap end. Then A adds no element. This follows the research rule. Some commercial keyers act differently. | user (for information) | None. A different rule needs a new decision. |
 | F-1 | `FONTS_ID_8X16` is linked but no screen uses it. It costs about 3.3 KB of flash. | `architector`, separate change | None. Not part of this change. |
+
+## 17. Prosign display setting
+
+This section is the binding contract of the change (2026-10-06). Where it differs from sections 1 to 16, this section wins. The precedence rules of section 1
+apply: `ui-ux.md` wins for labels, strings, layout and mockups. This section wins for codes, interfaces, record
+format, behavior and memory.
+
+### 17.1 Scope and user decisions
+
+User decisions (fixed):
+
+- Four prosigns have the same code as a punctuation mark. All four follow the new setting.
+
+| Prosign | Code | Mark |
+| --- | --- | --- |
+| AR | `.-.-.` | `+` |
+| BT | `-...-` | `=` |
+| KN | `-.--.` | `(` |
+| AS | `.-...` | `&` |
+
+- SK has no mark. It shows as `<SK>` for every value of the setting.
+- The values, with AR as the example:
+
+| Value | AR shows as |
+| --- | --- |
+| `Punctuation` | `+` |
+| `Prosign` | `<AR>` |
+| `Both` | `<AR/+>` |
+
+- The default is `Both`. A device with an old settings record (layout version 1) also gets `Both`. The other
+  settings of the old record stay as they are.
+- The menu item goes in the `Settings` list (5 items now, 7 visible rows). The CW list is full.
+
+In scope:
+
+- Decoder codes for AR, BT, KN and AS, and a formatter that turns a decoded value into display text.
+- The setting, flags bits 2-3, layout version 2 and the load of a version 1 record.
+- The menu item and the size of the menu value text buffer.
+- Free Input text.
+- Host tests, the memory report.
+
+Out of scope:
+
+- Receiving and Sending modes. They can use `morse_format()` later.
+- Any change to an ISR, to the keyer, to `sidetone.c` or to `firmware/drivers/`.
+- `Show CW Code` behavior. Menu scrolling.
+
+### 17.2 Decisions
+
+| ID | Decision | Reason | Rejected alternatives |
+| --- | --- | --- | --- |
+| D-P1 | Table entries 40, 42, 49 and 54 hold the codes `MORSE_CHAR_AS`, `MORSE_CHAR_AR`, `MORSE_CHAR_BT` and `MORSE_CHAR_KN` (0x02 to 0x05). | The decoder tells a prosign from a mark it never gives. The table still holds no UI glyph (R-10). | Keep the marks in the table and map them back in the UI (then a later table entry for a real `+` is not possible). |
+| D-P2 | The formatter `morse_format()` is in `morse.h` and `morse.c`. The style codes `MORSE_STYLE_*` are in `morse.h`. `cw/` does not include `settings.h`. `free_input.c` checks at compile time that `MORSE_STYLE_*` equal `SETTINGS_PROSIGN_*`, with the `#if` / `#error` pattern of `keyer.c`. | The later Receiving and Sending modes use the same text. The morse test group links only `morse.c`. The `KEYER_KEY_*` constants use the same pattern. | A new `cw/morse_text.c` module (one more file for about 100 bytes). Pass the settings id into `cw/` (a `cw` to `settings` dependency). |
+| D-P3 | `morse_format()` gives the text for every decoded value: `*` for `MORSE_CHAR_UNKNOWN` and for any value that is not printable, `<SK>` for SK. | Free Input gets one draw path. Later modes show the same text with no copy of the rules. | The caller handles unknown and SK (two more branches in each mode). |
+| D-P4 | A style value above `MORSE_STYLE_BOTH` acts as `MORSE_STYLE_BOTH`. | Defined result for every input. `Both` is the default. | Treat it as `Punctuation` (not the default). Undefined output. |
+| D-P5 | The setting is in bits 2-3 of the flags byte (record byte 10). The record size stays 15 bytes. `settings.c` gets a `MEM_CODE` shift table next to the mask table. `settings_store()` stays a leaf. | No new record byte. A table keeps the flag code generic and leaf. | A new record byte (changes the size and every offset after it). An `if` on the id in `settings_store()` (less generic). |
+| D-P6 | `SETTINGS_LAYOUT_VERSION` becomes 2. `settings_load()` also accepts a version 1 record with a valid CRC. It loads its values, ignores flags bits 2-7 and sets `Prosigns` to its default. The status is `SETTINGS_LOAD_OK`. The baseline is the result of this load. No EEPROM write happens at load. | User decision: an old record gives `Both` and keeps the other settings. A version 1 record has bits 2-3 = 0, which would read as `Punctuation`. | Keep version 1 and store `value XOR 2` in bits 2-3, so that 0 reads as `Both` (a hidden encoding: the record value differs from the setting value, and every later field needs the same trick). A new status `SETTINGS_LOAD_MIGRATED` (`main.c` ignores the status, and a caller that checks for `SETTINGS_LOAD_OK` would treat a good record as bad). A write at load (an EEPROM erase at each start-up of an updated device, against UX-15). |
+| D-P7 | `VALUE_TEXT_SIZE` in `menu_render.c` becomes 12. | `Punctuation` has 11 characters. With 10 bytes, `append_text()` cuts it to `Punctuat` with no error. | A shorter value text (needs a user decision, D2 item 2). |
+| D-P8 | The item is a `MENU_KIND_CHOICE` item at index 2 of the Settings list, after `Show CW Code`. Field width 11. Label `Prosigns` (`ui-ux.md` UX-38). | Approved plan. `Show CW Code` and this item both change how characters show. The Settings list gets 6 items, below `MENU_VISIBLE_ROWS`. | The CW list (full). The Display list (it holds screen hardware settings). |
+| D-P9 | `free_input_enter()` reads the style once and keeps it in xdata. A change applies at the next Free Input start. | Same rule as `Paddle` (UX-32). The settings cannot change while Free Input is open. One `settings_get()` call per mode start. | A `settings_get()` call for each character (more calls, no gain). |
+| D-P10 | Existing tests can change for these causes only: the Morse table holds the prosign codes in entries 40, 42, 49 and 54 in place of the marks (D-P1); `SETTINGS_ID_COUNT` is 12; the layout version is 2, so a saved record has version 2 and a new CRC; a version 1 record now loads; the Settings list has 6 items, and the items from index 2 on move down by one row; the default style `Both` changes the text of AR, BT, KN and AS in Free Input. A test of the old text either sets `Prosigns` = `Punctuation` in its setup or expects the new text. | The change moves these values. | - |
+
+| D-P11 | Accepted after P5 (2026-10-06). (a) clang-tidy `bugprone-easily-swappable-parameters` on `morse_format(char decoded, uint8_t style, ...)` stays, with no suppression and no signature change. (b) The prosign data is one flat 15-byte `MEM_CODE` table (3 bytes per code). (c) Table slots 40, 42, 49 and 54 use the literals `'\x05'`, `'\x02'`, `'\x03'` and `'\x04'` with a comment, and the default of id 11 is the literal `2U`, because clang-format breaks the table layout with the names. Host tests check each literal against `MORSE_CHAR_*` and `SETTINGS_PROSIGN_BOTH`. | (a) The same finding is accepted for the coordinate and color parameters (`menu_subsystem_spec.md` section 15). The two types differ, and AC-P2 to AC-P4 test every style and value, so a swap fails the tests. (b) It meets 17.4.1 and saves 10 B. (c) The tests catch a wrong literal. | (a) A struct parameter or a separate function per style (more flash, no gain). A `NOLINT` (adds a suppression). (b) An array of structs (10 B more). |
+
+No change in this section changes a user decision.
+
+### 17.3 Interface contract
+
+Section 5 rules apply. The C types, names, values and the parameter order below are binding. Private names marked
+"recommended" can change. Their values and behavior are binding.
+
+#### 17.3.1 `inc/cw/morse.h`
+
+The existing declarations do not change. Add the include and these items:
+
+```c
+#include "mcu/compiler.h"
+
+#define MORSE_CHAR_AR '\x02'  /* .-.-.  mark '+' */
+#define MORSE_CHAR_BT '\x03'  /* -...-  mark '=' */
+#define MORSE_CHAR_KN '\x04'  /* -.--.  mark '(' */
+#define MORSE_CHAR_AS '\x05'  /* .-...  mark '&' */
+
+#define MORSE_STYLE_PUNCTUATION 0U  /* equal to SETTINGS_PROSIGN_PUNCTUATION */
+#define MORSE_STYLE_NAME 1U         /* equal to SETTINGS_PROSIGN_NAME */
+#define MORSE_STYLE_BOTH 2U         /* equal to SETTINGS_PROSIGN_BOTH */
+
+#define MORSE_TEXT_UNKNOWN '*'
+#define MORSE_TEXT_MAX_LENGTH 6U    /* "<AR/+>" */
+#define MORSE_TEXT_SIZE 7U          /* MORSE_TEXT_MAX_LENGTH and NUL */
+
+/**
+ * Writes the display text of @p decoded, a morse_decode() result, in @p style to @p text and returns its length,
+ * 1 to MORSE_TEXT_MAX_LENGTH. @p text holds MORSE_TEXT_SIZE bytes.
+ */
+uint8_t morse_format(char decoded, uint8_t style, char MEM_XDATA* text);
+```
+
+- `MORSE_CHAR_UNKNOWN` (0x00) and `MORSE_CHAR_SK` (0x01) do not change.
+- `char MEM_XDATA* text` is a pointer to xdata. On the host, `MEM_XDATA` is empty.
+- Section 17.4.1 gives the behavior.
+
+#### 17.3.2 `inc/settings/settings.h`
+
+```c
+#define SETTINGS_ID_PADDLE_SWAP 10U    /* 0 Normal, 1 Reversed */
+#define SETTINGS_ID_PROSIGN_STYLE 11U  /* SETTINGS_PROSIGN_*: 0 Punctuation, 1 Prosign, 2 Both */
+#define SETTINGS_ID_COUNT 12U
+
+#define SETTINGS_PROSIGN_PUNCTUATION 0U
+#define SETTINGS_PROSIGN_NAME 1U
+#define SETTINGS_PROSIGN_BOTH 2U
+
+#define SETTINGS_LAYOUT_VERSION 2U
+```
+
+All other declarations, the statuses and the function signatures do not change. `SETTINGS_RECORD_SIZE` stays 15.
+The doc comment of `settings_load()` changes: it accepts layout version 1 and version 2 (section 17.4.2).
+
+#### 17.3.3 `src/settings/settings.c` (private)
+
+| Item | Value | Name |
+| --- | --- | --- |
+| Flags mask of `SETTINGS_ID_PROSIGN_STYLE` | `0x0CU` | `RECORD_FLAG_PROSIGN_STYLE` (recommended) |
+| Shift table | `static const MEM_CODE uint8_t[SETTINGS_ID_COUNT]`: the bit number of the lowest bit of the mask of the id. 0 for `SETTINGS_ID_SHOW_CW_CODE` (mask `0x01`), 1 for `SETTINGS_ID_PADDLE_SWAP` (mask `0x02`), 2 for `SETTINGS_ID_PROSIGN_STYLE` (mask `0x0C`), 0 for every id with a byte of its own (mask 0) | `settings_flag_shifts` (recommended) |
+| Offset table entry of id 11 | `RECORD_FLAGS` | - |
+| Min, max, step, default of id 11 | 0, 2, 1, `SETTINGS_PROSIGN_BOTH` | - |
+| Flags bits kept on a version 2 load | `0x0FU` (bits 0-3) | recommended: `RECORD_FLAGS_USED` |
+| Flags bits kept on a version 1 load | `0x03U` (bits 0-1) | recommended: `RECORD_FLAGS_USED_V1` |
+| Oldest accepted layout version | 1 | recommended: `RECORD_LAYOUT_VERSION_1` |
+
+#### 17.3.4 `src/menu/menu_render.c`
+
+```c
+#define VALUE_TEXT_SIZE 12U /* "Punctuation" and NUL */
+```
+
+If D2 changes a value text, the size is the longest value or choice text of the tree plus 1.
+
+#### 17.3.5 `src/menu/menu_tree.c`
+
+```c
+static const menu_text_t MEM_CODE menu_prosign_texts[3] = {"Punctuation", "Prosign", "Both"};
+```
+
+New item at index 2 of `menu_settings_items`, after `Show CW Code`:
+`{"Prosigns", NULL, menu_prosign_texts, MENU_KIND_CHOICE, SETTINGS_ID_PROSIGN_STYLE, 11U}`. The text order is
+the value order: index = `SETTINGS_PROSIGN_*`. The `_Static_assert` on `MENU_VISIBLE_ROWS` stays and holds (6 <= 7).
+
+#### 17.3.6 `src/modes/free_input.c`
+
+- No change of `inc/modes/free_input.h`.
+- New `static MEM_XDATA` state: the prosign style (`uint8_t`) and a text buffer of `MORSE_TEXT_SIZE` chars.
+- A compile-time check: `MORSE_STYLE_PUNCTUATION`, `MORSE_STYLE_NAME` and `MORSE_STYLE_BOTH` equal
+  `SETTINGS_PROSIGN_PUNCTUATION`, `SETTINGS_PROSIGN_NAME` and `SETTINGS_PROSIGN_BOTH`. A difference stops the build
+  with `#error`.
+
+### 17.4 Behavior
+
+#### 17.4.1 `morse_format(decoded, style, text)`
+
+Let `c` = `(uint8_t)decoded`. Compare as `uint8_t`, never as `char`: `char` is signed on the host and unsigned on
+SDCC.
+
+| `c` | `MORSE_STYLE_PUNCTUATION` (0) | `MORSE_STYLE_NAME` (1) | `MORSE_STYLE_BOTH` (2), and any style above 2 |
+| --- | --- | --- | --- |
+| 0x01 `MORSE_CHAR_SK` | `<SK>` | `<SK>` | `<SK>` |
+| 0x02 `MORSE_CHAR_AR` | `+` | `<AR>` | `<AR/+>` |
+| 0x03 `MORSE_CHAR_BT` | `=` | `<BT>` | `<BT/=>` |
+| 0x04 `MORSE_CHAR_KN` | `(` | `<KN>` | `<KN/(>` |
+| 0x05 `MORSE_CHAR_AS` | `&` | `<AS>` | `<AS/&>` |
+| 0x20 to 0x7E | that character | that character | that character |
+| 0x00 `MORSE_CHAR_UNKNOWN`, 0x06 to 0x1F, 0x7F to 0xFF | `*` | `*` | `*` |
+
+Rules:
+
+- It writes the text to `text[0]` .. `text[length - 1]` and a NUL to `text[length]`. It writes no byte after
+  `text[length]`. It returns `length`, 1 to 6.
+- The prosign data is one small `static const MEM_CODE` table, indexed by `c - 1`: the two letters of the name and
+  the mark (none for SK). Write the names as character pairs, not as string literals in `char[2]`: GCC 15 and later
+  report an unterminated string initializer under `-Wextra`, and `-Werror` stops the host build.
+- It is a leaf: no call and no library helper. It reads no setting. Main loop only.
+
+#### 17.4.2 Setting and record
+
+Parameters: min 0, max 2, step 1, default 2 (`Both`). Choice texts in value order: `Punctuation`, `Prosign`, `Both`
+(final strings from `ui-ux.md`).
+
+Flag fields (all ids with a non-zero mask):
+
+- `settings_get(id)` returns `(flags & mask) >> shift`. For bits 0 and 1 this gives 0 or 1, as before.
+- `settings_store(id, value)` sets `flags = (flags & ~mask) | ((value << shift) & mask)`. The value is already
+  clamped. Only the bits of the id change.
+- `settings_store()` stays a leaf: its `.asm` has no `lcall` and no library helper.
+- `settings_set_defaults()` keeps its rule (clear the flags byte, then store each default). The default flags byte is
+  0x09: Show CW Code 1, Paddle 0, Prosigns 2.
+
+`settings_load()` checks in this order: read status, magic, version, CRC.
+
+1. Version 1 and version 2 pass the version check. Every other version gives `SETTINGS_LOAD_BAD_VERSION` and the
+   defaults.
+2. The CRC rule is the same for both versions: CRC-8 over bytes 0..13.
+3. Version 2: keep flags bits 0-3, clear bits 4-7.
+4. Version 1: keep flags bits 0-1, clear bits 2-7, then store the default of `SETTINGS_ID_PROSIGN_STYLE`.
+5. Both versions: clamp every id as today. Bits 2-3 = 3 give 2.
+6. The record in RAM gets version 2. The baseline takes the resulting values. The edited flag is clear. The status
+   is `SETTINGS_LOAD_OK`. No EEPROM access other than the read.
+
+Results:
+
+- After a version 1 load, `settings_has_unsaved_changes()` is false. A Settings exit with no edit step saves nothing
+  (UX-15). Each start-up loads the version 1 record again, with the same result.
+- The first save after an edit step writes a version 2 record with all current values.
+- Every save writes version 2. The layout, the size and the order of operations of the save do not change.
+- Downgrade: earlier firmware reads a version 2 record as `SETTINGS_LOAD_BAD_VERSION` and uses its defaults. This is
+  accepted (plan). No code handles it.
+
+Test vectors (CRC-8 of section 5.1 of `menu_subsystem_spec.md`, computed 2026-10-06):
+
+| Record | Bytes 0..14 |
+| --- | --- |
+| Version 2, defaults (`Both`) | `43 57 02 58 02 20 20 14 14 02 09 05 08 20 03` |
+| Version 2, `Punctuation` | `43 57 02 58 02 20 20 14 14 02 01 05 08 20 B3` |
+| Version 2, `Prosign` | `43 57 02 58 02 20 20 14 14 02 05 05 08 20 EB` |
+| Version 2, `Both`, `Paddle` = `Reversed` | `43 57 02 58 02 20 20 14 14 02 0B 05 08 20 2F` |
+| Version 2, bits 2-3 = 3 (loads as `Both`) | `43 57 02 58 02 20 20 14 14 02 0D 05 08 20 5B` |
+| Version 1, defaults (loads as `Both`) | `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54` |
+| Version 1, `Reversed` (loads as `Reversed`, `Both`) | `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` |
+| Version 1, bits 2-3 = 3 (loads as `Both`) | `43 57 01 58 02 20 20 14 14 02 0D 05 08 20 BC` |
+| Version 3, valid CRC (`SETTINGS_LOAD_BAD_VERSION`) | `43 57 03 58 02 20 20 14 14 02 09 05 08 20 5E` |
+
+#### 17.4.3 Menu
+
+Settings list (title `Settings`, save on exit):
+
+| Index | Item | Kind | Target |
+| --- | --- | --- | --- |
+| 0 | `CW` | submenu | `MENU_NODE_CW` |
+| 1 | `Show CW Code` | choice | `SETTINGS_ID_SHOW_CW_CODE` |
+| 2 | `Prosigns` | choice | `SETTINGS_ID_PROSIGN_STYLE` (`Punctuation`, `Prosign`, `Both`), field width 11 |
+| 3 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN` |
+| 4 | `Display` | submenu | `MENU_NODE_DISPLAY` |
+| 5 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` |
+
+- The rules of `menu_subsystem_spec.md` section 6.3 apply with no change: edit with `prev` and `next`, no wrap, the
+  `<` and `>` markers, the save on the Settings exit.
+- Field width 11: the value is in columns 12-22, `<` in column 10, the edit band from x 51. Fit rule of `ui-ux.md`
+  5.3: the label has at most 9 characters (`20 - 11`).
+- The change applies at the next Free Input start (D-P9).
+
+#### 17.4.4 Free Input
+
+`free_input_enter()`: section 6.11 step 4 reads `settings_get(SETTINGS_ID_PROSIGN_STYLE)` into the xdata style byte.
+The other steps and their order do not change.
+
+Emit the pattern (replaces the SK branch of section 6.11):
+
+1. Pattern `MORSE_PATTERN_EMPTY`: nothing.
+2. Else `length = morse_format(morse_decode(pattern), style, text buffer)`. The pattern becomes `MORSE_PATTERN_EMPTY`.
+3. Draw `text[0]` .. `text[length - 1]`, each with the "draw one glyph" rule of section 6.11.
+
+The per-character wrap applies to each glyph, so a text of up to 6 cells can split across two lines. A split at row 7
+scrolls in the middle of the text. Examples for `Both` (`ui-ux.md` gives the binding mockups):
+
+| Cursor before AR | Result |
+| --- | --- |
+| Row 1, column 19 | `<AR/+>` in columns 19-24. The column becomes 25. |
+| Row 1, column 22 | `<AR` in columns 22-24. `/+>` in row 2, columns 0-2. |
+| Row 1, column 23 | `<A` in columns 23-24. `R/+>` in row 2, columns 0-3. |
+| Row 1, column 25 (full line) | `<AR/+>` in row 2, columns 0-5. |
+
+The word-space rule does not change: after a text, a word gap adds one blank cell.
+
+### 17.5 Memory placement and budget
+
+| Item | Qualifier | Writer | Readers |
+| --- | --- | --- | --- |
+| Free Input prosign style (`uint8_t`) | `static MEM_XDATA` | main | main |
+| Free Input text buffer (`char[MORSE_TEXT_SIZE]`) | `static MEM_XDATA` | main | main |
+| Prosign names and marks | `static const MEM_CODE`, `morse.c` | - | main |
+| `settings_flag_shifts` | `static const MEM_CODE`, `settings.c` | - | main |
+| `menu_prosign_texts`, the new item, its strings | `MEM_CODE`, `menu_tree.c` | - | main |
+| `value_text` (2 bytes more) | `static MEM_XDATA`, `menu_render.c` | main | main |
+
+Reference before the change (`build/putikeeg_cw_trainer.mem` of 2026-10-05, older than HEAD `ee4eedd`): flash
+18 737 / 61 440 B, xdata 1390 / 3072 B, stack start 0x3D with 195 B free. P0 measures HEAD again.
+
+| Resource | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- |
+| Flash added by the whole change | at most 400 B | 640 B |
+| xdata added | at most 16 B | 24 B |
+| New static internal RAM: DSEG + overlay + bit bytes | 0 B | 4 B |
+| Stack margin: free stack minus (deepest main-loop use + largest ISR frame) | | at least 64 B |
+| Timer 0 ISR | no change (AC-P21) | - |
+
+Report the table of section 12 before and after each step. Also report:
+
+- Flash of `morse.c`, `settings.c`, `free_input.c`, `menu_tree.c` and `menu_render.c`, before and after.
+- Newly linked library helpers (expected: none).
+- The deepest main-loop chain. Show that `free_input_poll` -> `free_input_emit` -> `morse_format` is not deeper than
+  the draw chain of section 12, candidate 1.
+
+### 17.6 Host tests
+
+- Developer files: `test_morse_prosign.c`, `test_settings_prosign.c`, `test_menu_prosign.c`,
+  `test_free_input_prosign.c`, and the changed existing tests (D-P10). QA files: `test_qa_<group>*.c`.
+- The names match the existing CMake patterns, so no `Tests/CMakeLists.txt` change is expected. If a group needs one
+  more source, report it in the step report.
+- All host flags stay. No warning suppression.
+
+### 17.7 Acceptance criteria
+
+Decoder and formatter (`test_morse*.c`):
+
+| ID | Criterion |
+| --- | --- |
+| AC-P1 | Morse table. Index 40 gives `MORSE_CHAR_AS`, 42 `MORSE_CHAR_AR`, 49 `MORSE_CHAR_BT`, 54 `MORSE_CHAR_KN`, 69 `MORSE_CHAR_SK`. The other 49 entries of section 6.10 give the same characters as before. Every other index 0..255 gives `MORSE_CHAR_UNKNOWN`. The five codes are 0x01 to 0x05 and all differ. No table value is in 0x06..0x1F. The table has no `+`, `=`, `(`, `&`, `<`, `>`, `*`, space or lowercase letter. |
+| AC-P2 | Formatter, prosigns. Each of the 15 cells of the table in section 17.4.1 for styles 0, 1 and 2 gives the exact text, the exact length and a NUL at `text[length]`. Styles 3 and 255 give the `Both` text for AR, BT, KN and AS, and `<SK>` for SK. |
+| AC-P3 | Formatter, other values. Each value 0x20..0x7E gives that character with length 1, for styles 0, 1, 2, 3 and 255. 0x00, 0x06..0x1F and 0x7F..0xFF give `*` with length 1. |
+| AC-P4 | Formatter bounds. For all 256 values and the styles 0, 1, 2, 3 and 255, in a buffer with a guard pattern after `text[length]`: no guard byte changes, and the length is at most `MORSE_TEXT_MAX_LENGTH`. A buffer of exactly `MORSE_TEXT_SIZE` bytes passes under ASan. `MORSE_TEXT_MAX_LENGTH` is 6 and `MORSE_TEXT_SIZE` is 7. |
+| AC-P5 | Style codes. `MORSE_STYLE_*` equal `SETTINGS_PROSIGN_*` (0, 1, 2). The `#error` check is in `free_input.c` (review). |
+
+Settings (`test_settings*.c`):
+
+| ID | Criterion |
+| --- | --- |
+| AC-P6 | Values. `SETTINGS_ID_COUNT` is 12. Id 11: min 0, max 2, step 1, default 2. A set of 0, 1 and 2 stores the value. A set of 3 and 255 gives 2. A set to the current value returns false and does not set the edited flag. Id 12 gives 0 from get, min, max and step, and false from set. |
+| AC-P7 | Flag bits. For all 12 combinations of Show CW Code (0, 1), Paddle (0, 1) and Prosigns (0, 1, 2), set in two different orders: each get gives its own value, and a set of one id never changes the other two. The saved flags byte is `show + 2 * paddle + 4 * prosigns`. Bits 4-7 are 0. |
+| AC-P8 | Version 2 record. The version 2 vectors of section 17.4.2 load with `SETTINGS_LOAD_OK` and give their values. Each of the 12 combinations of AC-P7 survives a save and a load. A saved record has version 2 and a correct CRC. From the defaults, a save after a Tone edit writes the version 2 default vector, except the tone bytes and the CRC. |
+| AC-P9 | Version 1 record. The three version 1 vectors of section 17.4.2 load with `SETTINGS_LOAD_OK`, with their stored values and `Prosigns` = `Both`. A version 1 record with each flags value 0..255 and a valid CRC loads Show CW Code from bit 0, Paddle from bit 1 and `Both`. After the load: no EEPROM erase or program, `settings_has_unsaved_changes()` is false, and `settings_save_if_changed()` gives `SETTINGS_SAVE_NOT_NEEDED` with no EEPROM access. A version 1 record with out-of-range fields loads clamped, as a version 2 record does. A version 1 record with a bad CRC gives `SETTINGS_LOAD_BAD_CRC` and the defaults. |
+| AC-P10 | Save after a version 1 load. After a Tone edit and a save, the record has version 2, flags bits 2-3 = 2, the other stored values and the new tone. After a load of the version 1 default vector, `Prosigns` = `Punctuation` and a save give flags bits 2-3 = 0. The next load gives `Punctuation`. |
+| AC-P11 | Other versions. Versions 0 and 3..255 with a valid CRC give `SETTINGS_LOAD_BAD_VERSION`, the defaults (`Both`) and no EEPROM write. |
+| AC-P12 | Power loss. The power-loss sweep of `menu_subsystem_spec.md` T4, for a save that starts from a loaded version 1 record: every next load gives the old values (the version 1 values with `Both`), the new values or the defaults, never a mix. |
+| AC-P13 | Leaf. In the generated `settings.asm`, `_settings_store` has no `lcall` and no library helper (review). |
+
+Menu (`test_menu*.c`):
+
+| ID | Criterion |
+| --- | --- |
+| AC-P14 | Settings list. With an empty fake EEPROM: 6 rows in the order of section 17.4.3. Row 3 shows `Prosigns` in column 0 and `Both` in columns 19-22. `Display` is on row 5 and `Reset Statistics` on row 6. A press of `next` on the last item goes to item 0, and a press of `prev` on item 0 goes to item 5. |
+| AC-P15 | Edit. `enter` on the item gives `EDIT(3,11)`. At `Both`: only `<`. `prev`: `Prosign` in columns 16-22, inverted, both markers. `prev`: all 11 characters of `Punctuation` in columns 12-22, inverted, only `>`. One more `prev` changes nothing. `next` goes back. Leave Settings: one save. A re-init from the fake EEPROM gives the edited value. In browse mode each of the three values shows in full. |
+| AC-P16 | Value text size. `VALUE_TEXT_SIZE` is at least the longest value or choice text of the tree plus 1 (review). |
+
+Free Input (`test_free_input*.c`, `test_menu_free_input*.c`):
+
+| ID | Criterion |
+| --- | --- |
+| AC-P17 | Style read. `free_input_enter()` uses the style that `settings_get(SETTINGS_ID_PROSIGN_STYLE)` gives at the call. A `settings_set()` of the style after the call (test only) does not change the text of the open mode. The next `free_input_enter()` uses the new value. |
+| AC-P18 | Text per style. `KEYP` of AR, BT, KN, AS and SK, with no word gap, gives: `Punctuation`: `TEXT(1,0,"+=(&<SK>")`. `Prosign`: `TEXT(1,0,"<AR><BT><KN><AS><SK>")`. `Both`: `TEXT(1,0,"<AR/+><BT/=><KN/(><AS/&><")` and `TEXT(2,0,"SK>")`. Every other cell of rows 1-7 is blank. |
+| AC-P19 | Wrap and scroll. `Both`: the four rows of the table in section 17.4.4 give the shown cells. `Both`, `KEY(E23)`, KN: `<K` in (1,23) and (1,24), `TEXT(2,0,"N/(>")`. `Prosign`, `KEY(E23)`, BT: `<B` in (1,23) and (1,24), `TEXT(2,0,"T>")`. `Both`, rows 1-6 `L25(A)` to `L25(F)`, 22 letters `G` in row 7, then AR: rows 1-5 show `B` to `F`, row 6 shows 22 letters `G` and `<AR`, `TEXT(7,0,"/+>")`, page 0 is never written or dirty. |
+| AC-P20 | Unchanged paths. In all three styles: letters, digits, the other punctuation, `*` for unknown, invalid and overflow, `<SK>`, an empty CHAR_GAP and the word-space rules give the results of AC-K42 and of V-54 to V-61 and V-63 to V-73 (V-89). V-62 sets `Punctuation` in its setup. A word gap after a prosign text adds one blank cell (V-85). |
+
+Build and review:
+
+| ID | Criterion |
+| --- | --- |
+| AC-P21 | No ISR change. The change does not touch `sidetone.c`, `keyer_service.h`, `keyer.c`, `keyer.h` or `keyer_shared.h`. AC-K60 and AC-K61 hold on the new build. |
+| AC-P22 | Memory within section 17.5, with the full report. |
+| AC-P23 | `firmware/test.sh` passes, with ASan, UBSan and the `check_asm.sh` self-test. `firmware/build.sh` passes, and `check_asm.sh` reports no violation. |
+| AC-P24 | Existing tests change only for the causes of D-P10. No change removes a check or loosens an expected value. The step report lists each changed test with its cause. |
+
+### 17.8 Tasks
+
+`c-embedded-developer` owns P0-P5. Each step ends with: `firmware/build.sh` passes with `check_asm.sh`,
+`firmware/test.sh` passes (see P1 for the one allowed exception), the memory table, the assumptions and the open
+device checks.
+
+#### D2 UI specification (`ui-ux-embedded-designer`)
+
+- Inputs: sections 17.1, 17.4 and 17.9.
+- Output: `ui-ux.md` updated for every item of section 17.9.
+- `architector` reviews it against section 17.4 before P4 starts. A label, a value text or a position that differs
+  from section 17 goes to `architector` first.
+- D2 can run at the same time as P0 to P3.
+
+#### P0 Baseline
+
+- Rebuild HEAD and run the tests. Record the table of section 12 and the stack estimate.
+
+#### P1 Contract and stubs
+
+- Outputs: the header changes of sections 17.3.1 and 17.3.2. A stub `morse_format()` that writes `*` and a NUL and
+  returns 1. The settings tables with 12 entries and the values of section 17.3.3. The developer-owned existing tests
+  updated for `SETTINGS_ID_COUNT` = 12 (D-P10).
+- Acceptance: `build.sh` passes. `test.sh` passes, except for these checks. List them in the report.
+  - `test_qa_*` checks that depend on the id count or the version. QA updates them (Q3).
+  - Tests that load a version 1 record. P1 raises the version to 2, and the version 1 load comes only in P3. These
+    tests pass again after P3.
+
+#### P2 Decoder and formatter
+
+- Outputs: the table and `morse_format()` in `morse.c`, `test_morse_prosign.c`, changed morse tests.
+- Acceptance: AC-P1 to AC-P4. Free Input tests that key AR, BT, KN or AS can fail until P4, because Free Input
+  draws the codes 0x02 to 0x05 as raw glyphs until then. Do not flash an image built between P2 and P4.
+
+#### P3 Settings
+
+- Outputs: the flag shift, the load rules and the version 2 save in `settings.c`, `test_settings_prosign.c`, changed
+  settings tests.
+- Acceptance: AC-P6 to AC-P13.
+
+#### P4 Menu and Free Input
+
+- Inputs: the D2 review, sections 17.3.4 to 17.3.6, 17.4.3 and 17.4.4.
+- Outputs: `menu_tree.c`, `menu_render.c`, `free_input.c`, `test_menu_prosign.c`, `test_free_input_prosign.c`,
+  changed menu and Free Input tests.
+- Acceptance: AC-P5, AC-P14 to AC-P20, V-80 to V-89, and the changed V-02, V-20, V-21, V-62 and V-78 of
+  `ui-ux.md` section 9.
+
+P2 and P3 can run in any order after P1. P4 needs P2, P3 and the D2 review.
+
+#### P5 Developer close-out
+
+- Final report: memory tables, stack analysis, the asm review of AC-P13 and AC-P21, the test lists, the changed
+  existing tests with their causes, the assumptions and the open device checks.
+- Acceptance: AC-P21 to AC-P24.
+
+#### Q3 QA (`qa-embedded`)
+
+- After P1: update the QA-owned existing tests for D-P10 (for example the loop over other layout versions, which
+  now skips versions 1 and 2), and start the new QA tests.
+- An independent reference model of the table in section 17.4.1, checked against `morse_format()` for all 256
+  values and the styles 0..255.
+- Fault injection: version 1 records with every flags value and out-of-range fields; power loss at each operation of
+  the first save after a version 1 load; records of every other version.
+- Review of every AC-P criterion, the `.asm` of `settings_store` and `morse_format`, the stack count and the memory
+  report.
+- Verdict: `approved`, `changes_requested` or `blocked`.
+
+#### A2 Final review (`architector`)
+
+- After the QA verdict. The work is done only after `approved`.
+
+#### W2 Documentation (`technical-writer`, after the final `approved`)
+
+- User manual and release notes: the `Prosigns` setting (final label from D2), its three values, the default `Both`,
+  SK as `<SK>`. After the update, the earlier settings stay. A return to older firmware resets all settings to their
+  defaults.
+- `llm.md`: in the documents table, the `keyer_spec.md` row also names the prosign display setting (section 17),
+  and the `ui-ux.md` row names the `Prosigns` setting (section 5.10, UX-38).
+
+### 17.9 Open items for `ui-ux-embedded-designer` (D2)
+
+Status: done. `architector` approved D2 on 2026-10-06. Label `Prosigns`. The values, their order, fw 11 and index 2
+are confirmed with no change. The record is in `ui-ux.md` sections 5.3, 5.4, 5.5, 5.9, 5.10, 6.7, 7, 8 (F-2, F-14,
+F-15), 9 (V-80 to V-89), 10 (UX-38) and 11 (D-25).
+
+`ui-ux.md` had to decide and record these items:
+
+1. Label of the item. Fit rule `len(label) <= 20 - fw`: with fw 11, at most 9 characters. Title Case (UX-10).
+   Working label `Prosigns` (8 characters).
+2. Value texts and order. The user named `Punctuation`, `Prosign` and `Both`. Confirm them and fw 11. A different
+   text needs a user decision and changes `VALUE_TEXT_SIZE` (D-P7) and AC-P15.
+3. Position in the Settings list: index 2, after `Show CW Code` (D-P8). Confirm it, or report another position to
+   `architector` before P4.
+4. Section 5.3: the new row, the fit-check line, and section 5.5: the Settings list has 6 items.
+5. Section 5.9 character table: the AR, BT, KN and AS rows for each value. The SK row does not change. The rule
+   "`<` and `>` appear only in `<SK>`" changes to cover the prosign texts. In `Both`, `/` appears inside the
+   brackets, and `/` is also a keyed character (`-..-.`). The 5.9 mockup (row 4 shows `+` = AR) follows the default.
+6. A new UX decision (next free id, UX-38) that refines UX-28: three values, default `Both`, an old record gives
+   `Both`, SK unchanged, per-character wrap of texts up to 6 cells, the change applies at the next Free Input start.
+   UX-28 gets only a reference to it.
+7. Mockups: the Settings list in browse mode (6 rows), edit mode at each value with its markers (`Punctuation`: only
+   `>`, `Prosign`: both, `Both`: only `<`), a Free Input row for each value, and a 6-cell text split at a line end.
+8. V-tests: state the style of V-62 (keep its intent with `Punctuation`, or change its expected text). New V-tests
+   (V-80 on) for the list, the edit, the save, an old record, Free Input text per value and the split. They must
+   agree with AC-P14 to AC-P20, or report the difference to `architector`.
+9. A device check (D-25) for the legibility of `<AR/+>`, `<KN/(>` and `<AS/&>` on the glass, and for confusion of
+   `(` with `<` and of the inner `/` with a keyed `/`.
+10. Section 8: an old record after the update gives `Both` and keeps the other settings, with no message (UX-17).
+
+### 17.10 Device checks (unverified until the user tests on the device)
+
+| ID | Check |
+| --- | --- |
+| DC-P1 | In Free Input, key AR, BT, KN, AS and SK for each value of the setting. The text is as section 17.4.1 shows and is readable (with D-25 of `ui-ux.md`). |
+| DC-P2 | Update from the earlier firmware with saved non-default settings (for example Tone 700 Hz, `Paddle` = `Reversed`). After the update, the settings stay and the new item shows `Both`. An edit and a Settings exit save. A power cycle keeps all values. |
+| DC-P3 | A power cycle keeps each of the three values. |
+
+### 17.11 Risks
+
+| Risk | Handling |
+| --- | --- |
+| A return to older firmware resets all settings. | Accepted in the plan. W2 tells the user. |
+| `VALUE_TEXT_SIZE` too small cuts a value text with no error. | D-P7, AC-P15, AC-P16. |
+| SDCC calls a library helper for the variable shift in `settings_store()`. | AC-P13. If it does, stop and report to `architector`. |
+| The formatter parameters grow the overlay segment. | AC-P22, the internal RAM limit of section 17.5. |
+| A 6-cell text wraps more often, and one character can take two rows. | Per-character wrap is the accepted rule (UX-28). D2 mockups. |
+| `<KN/(>` and the inner `/` are hard to read. | D2 item 9, DC-P1. |
+
+### 17.12 Final review (2026-10-06)
+
+Verdict: `approved`. QA verdict Q3: `approved`.
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 55 of 55 tests pass with ASan and UBSan. `check_asm.sh` self-test: 153 of 153. |
+| `build.sh` | Passes. `check_asm.sh` reports no violation. |
+| Memory | Flash 18 737 -> 19 055 B (+318, target 400). xdata 1390 -> 1400 B (+10, target 16). Stack start 0x3D with 195 B free, no change. New static internal RAM 0 B. |
+| Stack | The Free Input chain `menu_poll` -> `free_input_poll` -> `free_input_emit` -> `free_input_draw` -> `free_input_draw_glyph` -> `gfx_draw_text` -> ... is 2 B deeper (SDCC saves two registers around each draw in `free_input_emit`). Upper bound from the `.asm` with all pushes summed: 34 B from `menu_poll`. The deepest main-loop chain stays the `menu_render` text path (upper bound 65 B), which this change does not touch. The margin of 112 B (at least 64 B) holds. |
+| ISR | `sidetone_timer0_isr` has exactly `lcall _keyer_service` and `lcall _sidetone_service`. No `sdcc_atomic` symbol. No ISR or keyer file changed (AC-P21). |
+| Leaves | `_settings_store` and `_morse_format` have no `lcall` and no push (AC-P13). |
+| Format | `clang-format --dry-run --Werror` gives no finding on the changed production files and the new test files. |
+
+Accepted findings, no change required:
+
+- `firmware/Tests/test_settings_prosign.c` lines 383-386: the power-loss check compares only the tone and the flag
+  values. Lines 189-226: AC-P7 starts only from the defaults. QA tests `test_qa_settings_prosign.c` and
+  `test_qa_settings.c` cover both gaps.
+- `firmware/src/settings/settings.c` line 22 (`RECORD_FLAGS_USED_V1`): the mutant `0x0F` survives, because the
+  default store overwrites bits 2-3 next. The constant stays, because section 17.4.2 states the version 1 rule
+  explicitly.
+
+Open: device checks DC-P1 to DC-P3 and D-25 of `ui-ux.md`. They stay unverified until the user tests on the device.

@@ -3,8 +3,9 @@
  * AC-K40 to AC-K43). A random sequence of keyer events, clears and delimiters runs against an independent model:
  * a 7 x 25 character grid with delimiter rows and its own Morse table built from the spec code strings. After
  * every step the framebuffer must equal the model rendered with the golden font, page 0 must stay untouched, and
- * the margin pixels must stay off. Sequences are biased to <SK> and long characters at the line end of row 7, so
- * the split of <SK> across a scroll is covered many times.
+ * the margin pixels must stay off. Sequences are biased to prosigns and long characters at the line end of row 7,
+ * so the split of a prosign text across a scroll is covered many times. The walks run in each prosign style, with
+ * the texts of keyer_spec.md section 17.4.1 built by the model from the prosign name and mark.
  */
 
 #include <string.h>
@@ -26,24 +27,47 @@
 #include "support/free_input_screen.h"
 #include "support/test_assert.h"
 
-/* keyer_spec.md section 6.10, as code strings. "SK" stands for the prosign. */
+/* keyer_spec.md sections 6.10 and 17.1, as code strings. Two-letter texts stand for the prosigns. */
 typedef struct {
   const char* code;
   const char* text;
 } spec_entry_t;
 
 static const spec_entry_t spec_table[] = {
-    {".", "E"},       {"-", "T"},       {"..", "I"},      {".-", "A"},      {"-.", "N"},      {"--", "M"},
-    {"...", "S"},     {"..-", "U"},     {".-.", "R"},     {".--", "W"},     {"-..", "D"},     {"-.-", "K"},
-    {"--.", "G"},     {"---", "O"},     {"....", "H"},    {"...-", "V"},    {"..-.", "F"},    {".-..", "L"},
-    {".--.", "P"},    {".---", "J"},    {"-...", "B"},    {"-..-", "X"},    {"-.-.", "C"},    {"-.--", "Y"},
-    {"--..", "Z"},    {"--.-", "Q"},    {".....", "5"},   {"....-", "4"},   {"...--", "3"},   {"..---", "2"},
-    {".----", "1"},   {"-....", "6"},   {"--...", "7"},   {"---..", "8"},   {"----.", "9"},   {"-----", "0"},
-    {".-...", "&"},   {".-.-.", "+"},   {"-...-", "="},   {"-..-.", "/"},   {"-.--.", "("},   {"...-.-", "SK"},
-    {"..--..", "?"},  {"..--.-", "_"},  {".-..-.", "\""}, {".-.-.-", "."},  {".--.-.", "@"},  {".----.", "'"},
-    {"-....-", "-"},  {"-.-.-.", ";"},  {"-.-.--", "!"},  {"-.--.-", ")"},  {"--..--", ","},  {"---...", ":"},
+    {".", "E"},      {"-", "T"},      {"..", "I"},      {".-", "A"},     {"-.", "N"},     {"--", "M"},
+    {"...", "S"},    {"..-", "U"},    {".-.", "R"},     {".--", "W"},    {"-..", "D"},    {"-.-", "K"},
+    {"--.", "G"},    {"---", "O"},    {"....", "H"},    {"...-", "V"},   {"..-.", "F"},   {".-..", "L"},
+    {".--.", "P"},   {".---", "J"},   {"-...", "B"},    {"-..-", "X"},   {"-.-.", "C"},   {"-.--", "Y"},
+    {"--..", "Z"},   {"--.-", "Q"},   {".....", "5"},   {"....-", "4"},  {"...--", "3"},  {"..---", "2"},
+    {".----", "1"},  {"-....", "6"},  {"--...", "7"},   {"---..", "8"},  {"----.", "9"},  {"-----", "0"},
+    {".-...", "AS"}, {".-.-.", "AR"}, {"-...-", "BT"},  {"-..-.", "/"},  {"-.--.", "KN"}, {"...-.-", "SK"},
+    {"..--..", "?"}, {"..--.-", "_"}, {".-..-.", "\""}, {".-.-.-", "."}, {".--.-.", "@"}, {".----.", "'"},
+    {"-....-", "-"}, {"-.-.-.", ";"}, {"-.-.--", "!"},  {"-.--.-", ")"}, {"--..--", ","}, {"---...", ":"},
 };
 #define SPEC_COUNT (sizeof(spec_table) / sizeof(spec_table[0]))
+
+/* keyer_spec.md section 17.1: name, decoder code and punctuation mark ('\0': none) of each prosign. */
+typedef struct {
+  const char* name;
+  char code;
+  char mark;
+} spec_prosign_t;
+
+static const spec_prosign_t spec_prosigns[] = {
+    {"SK", MORSE_CHAR_SK, '\0'}, {"AR", MORSE_CHAR_AR, '+'}, {"BT", MORSE_CHAR_BT, '='},
+    {"KN", MORSE_CHAR_KN, '('},  {"AS", MORSE_CHAR_AS, '&'},
+};
+#define SPEC_PROSIGN_COUNT (sizeof(spec_prosigns) / sizeof(spec_prosigns[0]))
+
+static const spec_prosign_t* prosign_of(const char* text) {
+  unsigned i;
+  for (i = 0U; i < SPEC_PROSIGN_COUNT; ++i) {
+    if (strcmp(spec_prosigns[i].name, text) == 0) {
+      return &spec_prosigns[i];
+    }
+  }
+  return NULL;
+}
 
 static uint8_t pattern_of(const char* code) {
   uint8_t pattern = 1U;
@@ -61,7 +85,8 @@ static void test_table_against_spec(void) {
   TEST_ASSERT_EQUAL(54U, SPEC_COUNT);
   for (i = 0U; i < SPEC_COUNT; ++i) {
     const uint8_t pattern = pattern_of(spec_table[i].code);
-    const char expected = (strcmp(spec_table[i].text, "SK") == 0) ? MORSE_CHAR_SK : spec_table[i].text[0];
+    const spec_prosign_t* prosign = prosign_of(spec_table[i].text);
+    const char expected = (prosign != NULL) ? prosign->code : spec_table[i].text[0];
     TEST_ASSERT(!is_listed[pattern]);
     is_listed[pattern] = true;
     TEST_ASSERT_EQUAL((unsigned char)expected, (unsigned char)morse_decode(pattern));
@@ -97,6 +122,9 @@ static int cursor_column;
 static int model_pattern; /* -1 = invalid, 1 = empty, else the index */
 static unsigned long scrolls;
 static unsigned long sk_splits;
+static unsigned long prosign_splits;
+static uint8_t model_style; /* SETTINGS_PROSIGN_* of the open mode */
+static char model_text[8];
 
 static void model_reset(void) {
   int r;
@@ -134,6 +162,19 @@ static void model_glyph(char glyph) {
   ++cursor_column;
 }
 
+/* The display text of a prosign in model_style (ui-ux.md section 5.9, UX-38). */
+static const char* model_prosign_text(const spec_prosign_t* prosign) {
+  if ((prosign->mark != '\0') && (model_style == SETTINGS_PROSIGN_PUNCTUATION)) {
+    model_text[0] = prosign->mark;
+    model_text[1] = '\0';
+  } else if ((prosign->mark == '\0') || (model_style == SETTINGS_PROSIGN_NAME)) {
+    (void)snprintf(model_text, sizeof(model_text), "<%s>", prosign->name);
+  } else {
+    (void)snprintf(model_text, sizeof(model_text), "<%s/%c>", prosign->name, prosign->mark);
+  }
+  return model_text;
+}
+
 static const char* model_text_of(int pattern) {
   unsigned i;
   if (pattern < 0) {
@@ -141,7 +182,8 @@ static const char* model_text_of(int pattern) {
   }
   for (i = 0U; i < SPEC_COUNT; ++i) {
     if ((int)pattern_of(spec_table[i].code) == pattern) {
-      return (strcmp(spec_table[i].text, "SK") == 0) ? "<SK>" : spec_table[i].text;
+      const spec_prosign_t* prosign = prosign_of(spec_table[i].text);
+      return (prosign != NULL) ? model_prosign_text(prosign) : spec_table[i].text;
     }
   }
   return "*";
@@ -153,8 +195,11 @@ static void model_emit(void) {
     return;
   }
   text = model_text_of(model_pattern);
-  if ((strlen(text) == 4U) && (cursor_column > COLUMNS - 4) && (cursor_column < COLUMNS)) {
-    ++sk_splits;
+  if ((strlen(text) > 1U) && (cursor_column > COLUMNS - (int)strlen(text)) && (cursor_column < COLUMNS)) {
+    ++prosign_splits;
+    if (strcmp(text, "<SK>") == 0) {
+      ++sk_splits;
+    }
   }
   for (; *text != '\0'; ++text) {
     model_glyph(*text);
@@ -199,9 +244,12 @@ static void model_delimiter(void) {
 
 /* ---- Harness ---- */
 
-static void start(void) {
+static void start_in_style(uint8_t style) {
   fake_iap_reset();
   (void)settings_load();
+  (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, style);
+  TEST_ASSERT_EQUAL(style, settings_get(SETTINGS_ID_PROSIGN_STYLE));
+  model_style = style;
   fake_tick_reset(1000U);
   fake_tick_set_advance_per_read(1U);
   fake_button_pins_reset();
@@ -217,6 +265,8 @@ static void start(void) {
   lcd_fb_clear_dirty(0U);
   model_reset();
 }
+
+static void start(void) { start_in_style(SETTINGS_PROSIGN_BOTH); }
 
 static bool screen_matches_model(void) {
   int r;
@@ -262,9 +312,10 @@ static void drain(void) {
 }
 
 /*
- * Random walk: characters of the spec table (SK weighted), unknown and too-long patterns, overflow in a
+ * Random walk: characters of the spec table (prosigns weighted), unknown and too-long patterns, overflow in a
  * character, empty character gaps, word gaps, clears and delimiters. Events go into the fake FIFO in random batch
- * sizes before a drain, so one poll handles mixed events (at most KEYER_QUEUE_SIZE + 1 per poll).
+ * sizes before a drain, so one poll handles mixed events (at most KEYER_QUEUE_SIZE + 1 per poll). Each walk uses
+ * the prosign style walk % 3.
  */
 static void test_random_against_grid_model(void) {
   unsigned walk;
@@ -273,16 +324,21 @@ static void test_random_against_grid_model(void) {
   rng_state = 0x5EEDU;
   scrolls = 0U;
   sk_splits = 0U;
+  prosign_splits = 0U;
   for (walk = 0U; walk < 200U; ++walk) {
     unsigned step;
-    start();
+    start_in_style((uint8_t)(walk % 3U));
     for (step = 0U; step < 600U; ++step) {
       const uint32_t kind = rng_next() % 100U;
       if (kind < 50U) {
         push_code(spec_table[rng_next() % SPEC_COUNT].code);
         push_and_model(KEYER_EVENT_CHAR_GAP);
-      } else if (kind < 62U) {
+      } else if (kind < 56U) {
         push_code("...-.-");
+        push_and_model(KEYER_EVENT_CHAR_GAP);
+      } else if (kind < 62U) {
+        static const char* const prosign_codes[4] = {".-.-.", "-...-", "-.--.", ".-..."};
+        push_code(prosign_codes[rng_next() % 4U]);
         push_and_model(KEYER_EVENT_CHAR_GAP);
       } else if (kind < 66U) {
         /* 7..9 elements: unknown. */
@@ -332,7 +388,8 @@ static void test_random_against_grid_model(void) {
         ++steps;
         if (!TEST_ASSERT(screen_matches_model())) {
           ++failures;
-          fprintf(stderr, "walk %u step %u: cursor (%d, %d)\n", walk, step, cursor_row + 1, cursor_column);
+          fprintf(stderr, "walk %u (style %u) step %u: cursor (%d, %d)\n", walk, (unsigned)model_style, step,
+                  cursor_row + 1, cursor_column);
           if (failures > 3U) {
             return;
           }
@@ -342,10 +399,12 @@ static void test_random_against_grid_model(void) {
     drain();
     TEST_ASSERT(screen_matches_model());
   }
-  printf("grid model: %lu checks, %lu scrolls, %lu <SK> splits at a line end\n", steps, scrolls, sk_splits);
+  printf("grid model: %lu checks, %lu scrolls, %lu <SK> splits, %lu prosign splits at a line end\n", steps, scrolls,
+         sk_splits, prosign_splits);
   TEST_ASSERT(!fake_keyer_is_overflowed());
   TEST_ASSERT(scrolls >= 1000U);
   TEST_ASSERT(sk_splits >= 100U);
+  TEST_ASSERT(prosign_splits >= 300U);
 }
 
 /* <SK> at each start column 21..25 on row 7: the split across a scroll keeps every glyph in order. */
@@ -371,6 +430,87 @@ static void test_sk_at_line_end_of_row_7(void) {
     push_and_model(KEYER_EVENT_CHAR_GAP);
     drain();
     TEST_ASSERT(screen_matches_model());
+  }
+}
+
+/*
+ * Each prosign in each style at each start column of row 1 and of row 7 (where a split scrolls), followed by
+ * a word gap and a letter: every glyph wraps on its own (keyer_spec.md 17.4.4, AC-P19, AC-P20).
+ */
+static void test_prosign_texts_at_every_column(void) {
+  static const char* const prosign_codes[5] = {"...-.-", ".-.-.", "-...-", "-.--.", ".-..."};
+  unsigned style;
+  unsigned long cases = 0U;
+  for (style = 0U; style < 3U; ++style) {
+    size_t prosign;
+    for (prosign = 0U; prosign < 5U; ++prosign) {
+      int row;
+      for (row = 0; row < 2; ++row) {
+        int column;
+        /* Row 7 column 0 does not exist: the lazy wrap keeps the cursor at row 6, column 25 (the row 1 case). */
+        for (column = row; column <= COLUMNS; ++column) {
+          int i;
+          start_in_style((uint8_t)style);
+          for (i = 0; i < ((row == 0) ? 0 : 6 * COLUMNS) + column; ++i) {
+            push_code(".");
+            push_and_model(KEYER_EVENT_CHAR_GAP);
+            if (fake_keyer_pending_count() > 200U) {
+              drain();
+            }
+          }
+          drain();
+          TEST_ASSERT_EQUAL((row == 0) ? 0 : ROWS - 1, cursor_row);
+          push_code(prosign_codes[prosign]);
+          push_and_model(KEYER_EVENT_CHAR_GAP);
+          drain();
+          if (!TEST_ASSERT(screen_matches_model())) {
+            fprintf(stderr, "style %u prosign %zu row %d column %d\n", style, prosign, row, column);
+          }
+          push_and_model(KEYER_EVENT_WORD_GAP);
+          push_code("-");
+          push_and_model(KEYER_EVENT_CHAR_GAP);
+          drain();
+          TEST_ASSERT(screen_matches_model());
+          ++cases;
+        }
+      }
+    }
+  }
+  TEST_ASSERT_EQUAL(3U * 5U * (26U + 25U), cases);
+}
+
+/* AC-P17: free_input_enter() takes the style at the call; a later settings_set() acts at the next start only. */
+static void test_style_read_at_enter(void) {
+  unsigned first;
+  for (first = 0U; first < 3U; ++first) {
+    unsigned second;
+    for (second = 0U; second < 3U; ++second) {
+      static const char* const ar_texts[3] = {"+", "<AR>", "<AR/+>"};
+      char expected[16];
+      start_in_style((uint8_t)first);
+      (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, (uint16_t)second);
+      push_code(".-.-.");
+      push_and_model(KEYER_EVENT_CHAR_GAP);
+      drain();
+      TEST_ASSERT(row_is(1, ar_texts[first]));
+      free_input_leave();
+      /* The menu clears the screen before a new start; free_input_enter() draws nothing. */
+      lcd_fb_clear();
+      free_input_enter();
+      fake_keyer_push_event(KEYER_EVENT_DIT);
+      fake_keyer_push_event(KEYER_EVENT_DAH);
+      fake_keyer_push_event(KEYER_EVENT_DIT);
+      fake_keyer_push_event(KEYER_EVENT_DAH);
+      fake_keyer_push_event(KEYER_EVENT_DIT);
+      fake_keyer_push_event(KEYER_EVENT_CHAR_GAP);
+      while (fake_keyer_pending_count() != 0U) {
+        free_input_poll();
+      }
+      (void)snprintf(expected, sizeof(expected), "%s", ar_texts[second]);
+      if (!TEST_ASSERT(row_is(1, expected))) {
+        fprintf(stderr, "first style %u, second style %u\n", first, second);
+      }
+    }
   }
 }
 
@@ -424,6 +564,8 @@ int main(void) {
   TEST_RUN(test_table_against_spec);
   TEST_RUN(test_random_against_grid_model);
   TEST_RUN(test_sk_at_line_end_of_row_7);
+  TEST_RUN(test_prosign_texts_at_every_column);
+  TEST_RUN(test_style_read_at_enter);
   TEST_RUN(test_delimiter_and_clear_on_row_7);
   TEST_RUN(test_clear_drops_invalid_pattern);
   return TEST_FINISH();

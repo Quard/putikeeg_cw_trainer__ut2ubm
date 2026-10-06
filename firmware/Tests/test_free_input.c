@@ -23,10 +23,13 @@
 #include "support/test_assert.h"
 
 static uint16_t now;
+/* The text tests run once for each prosign style (keyer_spec.md AC-P20). */
+static uint8_t prosign_style = SETTINGS_PROSIGN_BOTH;
 
 static void start(void) {
   fake_iap_reset();
   (void)settings_load();
+  (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, prosign_style);
   fake_tick_reset(1000U);
   fake_tick_set_advance_per_read(1U);
   fake_button_pins_reset();
@@ -163,13 +166,15 @@ static void test_unknown_glyph(void) {
 
 /* AC-K42: <SK> takes four cells and can split across a line end. */
 static void test_sk_token(void) {
+  /* AR and BT before <SK>, by prosign style (keyer_spec.md section 17.4.1). */
+  static const char* const ar_bt_sk[3] = {"+=<SK>", "<AR><BT><SK>", "<AR/+><BT/=><SK>"};
   char line[26];
 
   start();
   keyp(".-.-.");
   keyp("-...-");
   keyp("...-.-");
-  TEST_ASSERT(row_is(1, "+=<SK>"));
+  TEST_ASSERT(row_is(1, ar_bt_sk[prosign_style]));
 
   start();
   key_times('E', 23U);
@@ -424,12 +429,16 @@ static void test_events_per_poll(void) {
 }
 
 int main(void) {
-  TEST_RUN(test_text_and_word_spaces);
-  TEST_RUN(test_unknown_glyph);
-  TEST_RUN(test_sk_token);
-  TEST_RUN(test_scroll);
-  TEST_RUN(test_clear);
-  TEST_RUN(test_delimiter);
+  for (prosign_style = SETTINGS_PROSIGN_PUNCTUATION; prosign_style <= SETTINGS_PROSIGN_BOTH; ++prosign_style) {
+    printf("prosign style %u\n", prosign_style);
+    TEST_RUN(test_text_and_word_spaces);
+    TEST_RUN(test_unknown_glyph);
+    TEST_RUN(test_sk_token);
+    TEST_RUN(test_scroll);
+    TEST_RUN(test_clear);
+    TEST_RUN(test_delimiter);
+  }
+  prosign_style = SETTINGS_PROSIGN_BOTH;
   TEST_RUN(test_enter_and_leave_calls);
   TEST_RUN(test_events_per_poll);
   return TEST_FINISH();

@@ -22,7 +22,8 @@ This version has the menu, the settings, the display controls and the [Free Inpu
   sets the loudness. With headphones plugged in, the headphones play instead of the speaker.
 - The device collects no statistics.
 - `Backlight` and `Contrast` change the display. `Tone`, `TX Speed`, `TX Eff. Speed`, `Key Type` and `Paddle` set
-  the keyer in Free Input. The firmware saves the other settings for the training modes of a later version.
+  the keyer in Free Input. `Prosigns` sets how Free Input shows the prosigns AR, BT, KN and AS. The firmware saves
+  the other settings for the training modes of a later version.
 
 ## Buttons
 
@@ -81,6 +82,7 @@ CW Trainer
     │   ├── Key Type
     │   └── Paddle
     ├── Show CW Code
+    ├── Prosigns
     ├── Max Word Length
     ├── Display
     │   ├── Backlight
@@ -137,6 +139,9 @@ Use it to practise your sending.
    - `TX Speed` and `TX Eff. Speed`: the speeds that the keyer and the decoder use (see
      [Speeds and pauses](#speeds-and-pauses)).
    - `Tone`: the pitch of the sidetone.
+
+   Free Input also reads `Settings > Prosigns` each time it opens. It sets how the screen shows AR, BT, KN and AS
+   (see [Prosigns setting](#prosigns-setting)).
 2. Press `menu/back` until the main menu shows. When you leave `Settings`, the device saves the changed settings.
 3. Insert the plug of the key or paddle into the key/paddle socket.
 
@@ -171,7 +176,8 @@ The top row shows the title `Free Input`. Below it, the text area has 7 lines of
 - Letters show as capitals.
 - The screen does not show a cursor, and it does not show the dits and dahs of the character in progress. You hear
   them.
-- When a line is full, the next character starts a new line. A word can break across two lines.
+- When a line is full, the next character starts a new line. A word can break across two lines. A prosign text,
+  for example `<AR/+>`, can also break across two lines.
 - When all 7 lines are full, the text moves up by one line. The top line of text goes away. The title stays.
 - A line never starts with a space.
 
@@ -179,16 +185,30 @@ The decoder knows these characters:
 
 - The letters `A` to `Z` and the digits `0` to `9`.
 - The signs `.` `,` `?` `/` `=` `+` `-` `(` `)` `&` `_` `"` `@` `'` `;` `!` `:`.
+- The prosigns AR, BT, KN, AS and SK.
 
-Prosigns:
+The signs `+`, `=`, `(` and `&` have the same code as the prosigns AR, BT, KN and AS. The
+[Prosigns setting](#prosigns-setting) sets how these four codes show:
 
-| Prosign | Code | Shows as |
-| --- | --- | --- |
-| AR | `.-.-.` | `+` |
-| BT | `-...-` | `=` |
-| SK | `...-.-` | `<SK>` (four characters, can break across two lines) |
-| KN | `-.--.` | `(` |
-| AS | `.-...` | `&` |
+| Prosign | Code | `Punctuation` | `Prosign` | `Both` (default) |
+| --- | --- | --- | --- | --- |
+| AR | `.-.-.` | `+` | `<AR>` | `<AR/+>` |
+| BT | `-...-` | `=` | `<BT>` | `<BT/=>` |
+| KN | `-.--.` | `(` | `<KN>` | `<KN/(>` |
+| AS | `.-...` | `&` | `<AS>` | `<AS/&>` |
+| SK | `...-.-` | `<SK>` | `<SK>` | `<SK>` |
+
+SK has no punctuation mark. It always shows as `<SK>`.
+
+How to read a prosign text:
+
+- `<` opens a prosign text and `>` closes it. In Free Input, `<` and `>` appear only in prosign texts. All
+  characters between them are one prosign.
+- With `Both`, the `/` inside the brackets separates the name and the mark. A keyed `/` (`-..-.`) shows outside the
+  brackets. For example, AR and then a keyed `/` with no pause give `<AR/+>/`.
+- A prosign text has up to 6 characters. Each character of the text goes to the next free place, as all other
+  text does. So at the end of a line, the text can split: for example `<AR` at the end of one line and `/+>` at the
+  start of the next line. The `>` shows where the text ends.
 
 **`*` means "unknown".** The screen shows `*` for these cases:
 
@@ -238,6 +258,22 @@ The default key type is `Iambic B`.
 | `Reversed` | dah | dit |
 
 With `Key Type` = `Straight`, both contacts key, so `Paddle` has no effect.
+
+### Prosigns setting
+
+`Settings > Prosigns` sets how Free Input shows the prosigns AR, BT, KN and AS. It is the third item of
+`Settings`, after `Show CW Code`.
+
+| `Prosigns` | AR shows as | What shows |
+| --- | --- | --- |
+| `Punctuation` | `+` | The punctuation mark only. |
+| `Prosign` | `<AR>` | The name of the prosign in angle brackets. |
+| `Both` (default) | `<AR/+>` | The name and the mark in angle brackets, with `/` between them. |
+
+- SK always shows as `<SK>`.
+- The table in [What the screen shows](#what-the-screen-shows) gives the texts of all five prosigns.
+- A change applies the next time you open Free Input. The menu shows no preview of the text, and the device makes
+  no sound.
 
 ### The enter button in Free Input
 
@@ -312,6 +348,8 @@ These parts of Free Input passed host tests only. Nobody checked them on the dev
 - The legibility of the text, the time until a character shows, and the sidetone while the text moves up.
 - A mono plug inserted before and during Free Input.
 - The line from a long `next`. It must look different from the `-` and `_` characters.
+- The prosign texts of each `Prosigns` value. The user must read `<AR/+>`, `<KN/(>` and `<AS/&>` at a glance, tell
+  `(` from `<`, tell the `/` inside a text from a keyed `/`, and join a text that splits at a line end.
 
 ## Change a setting
 
@@ -342,6 +380,7 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 | Settings > CW | `Key Type` | `Straight`, `Iambic A`, `Iambic B` | - | - | `Iambic B` |
 | Settings > CW | `Paddle` | `Normal`, `Reversed` | - | - | `Normal` |
 | Settings | `Show CW Code` | `Off`, `On` | - | - | `On` |
+| Settings | `Prosigns` | `Punctuation`, `Prosign`, `Both` | - | - | `Both` |
 | Settings | `Max Word Length` | 4 to 8 | 1 | - | 5 |
 | Settings > Display | `Backlight` | `Off`, 1 to 10 | 1 | - | 8 |
 | Settings > Display | `Contrast` | 0 to 63 | 1 | - | 32 |
@@ -350,8 +389,8 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 (Farnsworth) speeds.
 
 `Backlight` and `Contrast` change the display at each step while you edit them. `Tone`, `TX Speed`,
-`TX Eff. Speed`, `Key Type` and `Paddle` take effect the next time you open Free Input. The other settings have no
-effect in this version.
+`TX Eff. Speed`, `Key Type`, `Paddle` and `Prosigns` take effect the next time you open Free Input. The other
+settings have no effect in this version.
 
 ### Effective-speed rule
 
@@ -403,7 +442,13 @@ The device uses the default values in these cases. It shows no message.
 - The saved settings are damaged, for example after a power failure during a save.
 
 A firmware download can keep or delete the saved settings. Nobody checked this on the device yet. If the device
-keeps the settings of the earlier firmware version, `Paddle` is `Normal`, and the other settings stay as they were.
+keeps the settings of an earlier firmware version, `Prosigns` is `Both`, and the other settings stay as they were.
+The device shows no message. If the earlier version had no `Paddle` setting, `Paddle` is `Normal`.
+
+This version saves the settings in a new format. It writes the new format at the first save, after you change a
+setting. An earlier firmware version cannot read the new format. If you download an earlier firmware version after
+this version saved the settings, the earlier version uses all default values. It shows no message. Set the values
+again.
 
 ## Reset Statistics
 

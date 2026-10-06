@@ -16,7 +16,7 @@
 #define MESSAGE_ROW 3U
 #define BUTTON_ROW 5U
 #define BAND_HEIGHT 7
-#define VALUE_TEXT_SIZE 10U /* "1000 Hz", "Iambic B" and NUL */
+#define VALUE_TEXT_SIZE 12U /* "Punctuation" and NUL */
 
 /* Dialog and message buttons: first highlight cell; the text starts one cell later (ui-ux.md 5.7, 5.8). */
 #define BUTTON_NO_FIRST_CELL 7U

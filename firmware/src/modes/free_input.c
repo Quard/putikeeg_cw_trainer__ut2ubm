@@ -18,12 +18,16 @@
 #define FREE_INPUT_LAST_ROW 7U
 #define FREE_INPUT_COLUMNS 25U /* a cursor in this column means "line full" */
 #define FREE_INPUT_GRID_X 2U
-#define FREE_INPUT_UNKNOWN_GLYPH '*'
 /* Delimiter: one line at y = 8r + 3 over the 25 cells, x 2-126. */
 #define FREE_INPUT_DELIMITER_Y_OFFSET 3U
 #define FREE_INPUT_DELIMITER_WIDTH (FREE_INPUT_COLUMNS * GFX_FONT_5X8_WIDTH)
 /* The queue holds KEYER_QUEUE_SIZE events, and an overflow adds one. */
 #define FREE_INPUT_EVENTS_PER_POLL (KEYER_QUEUE_SIZE + 1U)
+
+#if (MORSE_STYLE_PUNCTUATION != SETTINGS_PROSIGN_PUNCTUATION) || (MORSE_STYLE_NAME != SETTINGS_PROSIGN_NAME) || \
+    (MORSE_STYLE_BOTH != SETTINGS_PROSIGN_BOTH)
+#error "The morse text styles must equal the settings prosign styles"
+#endif
 
 /* The framebuffer is the only text store; every cell at the cursor and after it is blank. */
 static MEM_XDATA uint8_t free_input_row;
@@ -34,6 +38,9 @@ static MEM_XDATA char free_input_glyph[2];
 static MEM_XDATA uint8_t scroll_page;
 /* Held in xdata across the settings_get() calls of free_input_enter(). */
 static MEM_XDATA bool enter_is_swapped;
+/* Read once at the mode start, so a settings change applies at the next start (keyer_spec.md D-P9). */
+static MEM_XDATA uint8_t free_input_prosign_style;
+static MEM_XDATA char free_input_text[MORSE_TEXT_SIZE];
 
 static void free_input_reset_cursor(void) {
   free_input_row = FREE_INPUT_FIRST_ROW;
@@ -88,23 +95,19 @@ static void free_input_draw(char glyph) {
   free_input_draw_glyph();
 }
 
-/* Draws the character of the pattern in progress, if any, and starts a new pattern. */
+/* Draws the text of the pattern in progress, if any, and starts a new pattern. */
 static void free_input_emit(void) {
+  uint8_t length;
+  uint8_t index;
+
   if (free_input_pattern == MORSE_PATTERN_EMPTY) {
     return;
   }
-  free_input_glyph[0] = morse_decode(free_input_pattern);
+  length = morse_format(morse_decode(free_input_pattern), free_input_prosign_style, free_input_text);
   free_input_pattern = MORSE_PATTERN_EMPTY;
-  if (free_input_glyph[0] == MORSE_CHAR_UNKNOWN) {
-    free_input_draw(FREE_INPUT_UNKNOWN_GLYPH);
-  } else if (free_input_glyph[0] == MORSE_CHAR_SK) {
-    /* Each glyph of <SK> wraps on its own, so the token can split across two lines. */
-    free_input_draw('<');
-    free_input_draw('S');
-    free_input_draw('K');
-    free_input_draw('>');
-  } else {
-    free_input_draw_glyph();
+  /* Each glyph wraps on its own, so a text of several cells can split across two lines. */
+  for (index = 0U; index < length; ++index) {
+    free_input_draw(free_input_text[index]);
   }
 }
 
@@ -124,6 +127,7 @@ void free_input_enter(void) {
   }
   keyer_start((uint8_t)settings_get(SETTINGS_ID_KEY_TYPE), enter_is_swapped, (uint8_t)settings_get(SETTINGS_ID_TX_WPM),
               (uint8_t)settings_get(SETTINGS_ID_TX_EFF_WPM));
+  free_input_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
   free_input_reset_cursor();
 }
 

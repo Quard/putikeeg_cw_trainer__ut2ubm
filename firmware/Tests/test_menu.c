@@ -341,7 +341,7 @@ static void open_cw(void) {
 static void open_display(void) {
   send(PREV);
   send(ENTER);
-  send_times(NEXT, 3U);
+  send_times(NEXT, 4U);
   send(ENTER);
 }
 
@@ -374,11 +374,12 @@ static void test_v02_bad_crc_record(void) {
   TEST_ASSERT(title_is("Settings"));
   TEST_ASSERT(submenu_row_is(1, "CW", true));
   TEST_ASSERT(list_row_is(2, "Show CW Code", "On", false));
-  TEST_ASSERT(list_row_is(3, "Max Word Length", "5", false));
-  TEST_ASSERT(submenu_row_is(4, "Display", false));
-  TEST_ASSERT(list_row_is(5, "Reset Statistics", NULL, false));
-  TEST_ASSERT(row_is_blank(6));
-  send_times(NEXT, 3U);
+  TEST_ASSERT(list_row_is(3, "Prosigns", "Both", false));
+  TEST_ASSERT(list_row_is(4, "Max Word Length", "5", false));
+  TEST_ASSERT(submenu_row_is(5, "Display", false));
+  TEST_ASSERT(list_row_is(6, "Reset Statistics", NULL, false));
+  TEST_ASSERT(row_is_blank(7));
+  send_times(NEXT, 4U);
   send(ENTER);
   TEST_ASSERT(title_is("Settings > Display"));
   TEST_ASSERT(list_row_is(1, "Backlight", "8", true));
@@ -726,8 +727,8 @@ static void test_v20_dialog_no(void) {
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT(title_is("Settings"));
-  TEST_ASSERT(probe_sel(5));
-  TEST_ASSERT(list_row_is(5, "Reset Statistics", NULL, true));
+  TEST_ASSERT(probe_sel(6));
+  TEST_ASSERT(list_row_is(6, "Reset Statistics", NULL, true));
   TEST_ASSERT_EQUAL(0U, fake_stats_reset_count());
 }
 
@@ -759,7 +760,7 @@ static void test_v21_dialog_yes(void) {
   TEST_ASSERT(!menu_needs_redraw());
   send(ENTER);
   TEST_ASSERT(title_is("Settings"));
-  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT(probe_sel(6));
   TEST_ASSERT_EQUAL(1U, fake_stats_reset_count());
 }
 
@@ -769,7 +770,7 @@ static void test_v22_v23_dialog_menu_is_no(void) {
   send(NEXT);
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
-  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT(probe_sel(6));
   TEST_ASSERT_EQUAL(0U, fake_stats_reset_count());
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_DIALOG_NO, menu_dialog_choice());
@@ -872,7 +873,7 @@ static void test_edit_every_item_to_limits(void) {
       if (nodes[node] == MENU_NODE_CW) {
         send(ENTER);
       } else if (nodes[node] == MENU_NODE_DISPLAY) {
-        send_times(NEXT, 3U);
+        send_times(NEXT, 4U);
         send(ENTER);
       }
       send_times(NEXT, index);
@@ -897,10 +898,10 @@ static void test_full_navigation(void) {
   send(PREV);
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
-  send_times(NEXT, 5U);
+  send_times(NEXT, 6U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send_times(REPEAT(NEXT), 9U);
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
   send(PREV);
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_DISPLAY, menu_node());
@@ -909,7 +910,7 @@ static void test_full_navigation(void) {
   TEST_ASSERT_EQUAL(1U, menu_cursor());
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   send_times(REPEAT(PREV), 9U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send(ENTER);
@@ -1197,15 +1198,18 @@ static void test_v77_paddle_edit_and_save(void) {
   TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", false));
 }
 
-/* V-78: a record of the earlier firmware has flags bit 1 = 0. */
+/* V-78: a record of the earlier firmware (layout version 1) has flags bit 1 = 0 and no prosign style. */
 static void test_v78_earlier_record_reads_normal(void) {
   fake_iap_reset();
   put_record(32U, 8U);
   (void)power_on(0U);
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+  TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_BOTH, settings_get(SETTINGS_ID_PROSIGN_STYLE));
   open_cw();
   TEST_ASSERT(list_row_is(7, "Paddle", "Normal", false));
   TEST_ASSERT(list_row_is(6, "Key Type", "Iambic B", false));
+  send(MENU);
+  TEST_ASSERT(list_row_is(3, "Prosigns", "Both", false));
 }
 
 int main(void) {

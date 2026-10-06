@@ -1,7 +1,8 @@
 /*
  * QA tests for settings persistence: bit upsets of a stored record (the model of an interrupted erase or program),
  * records of other layout versions, every value of every field in a valid record, settings_set() against a clamp
- * oracle from menu_subsystem_spec.md sections 5.2 and 5.3, and CMD_FAIL at each read of a load.
+ * oracle from menu_subsystem_spec.md sections 5.2 and 5.3, and CMD_FAIL at each read of a load. Layout versions 1
+ * and 2 both load (keyer_spec.md section 17.4.2); version 1 gives the default prosign style.
  */
 #include <string.h>
 
@@ -14,15 +15,25 @@
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
 #define RECORD_BITS (SETTINGS_RECORD_SIZE * 8U)
+#define RECORD_VERSION_OFFSET 2U
+#define RECORD_FLAGS_OFFSET 10U
 
+/* Layout version 1: the default record of the earlier firmware. */
 static const uint8_t default_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
                                                              0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U};
+/* Layout version 2 default vector of keyer_spec.md section 17.4.2. */
+static const uint8_t default_record_v2[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                                0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U};
+static const uint8_t* const base_records[2] = {default_record, default_record_v2};
+static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U};
 
-/* Spec section 5.2, and keyer_spec.md section 6.13 for Paddle. Effective speeds use the current base speed as max. */
-static const uint16_t spec_min[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U};
-static const uint16_t spec_max[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U};
-static const uint16_t spec_step[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+/*
+ * Spec section 5.2, keyer_spec.md section 6.13 for Paddle and 17.4.2 for Prosigns. Effective speeds use the current
+ * base speed as max.
+ */
+static const uint16_t spec_min[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U};
+static const uint16_t spec_max[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U};
+static const uint16_t spec_step[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
 
 static uint16_t oracle_clamp(settings_id_t id, uint32_t value, uint16_t base_speed) {
   uint32_t max = spec_max[id];
@@ -69,6 +80,21 @@ static void values_of(const uint8_t* record, uint16_t* values) {
   values[SETTINGS_ID_BACKLIGHT] = oracle_clamp(SETTINGS_ID_BACKLIGHT, record[12], 0U);
   values[SETTINGS_ID_CONTRAST] = oracle_clamp(SETTINGS_ID_CONTRAST, record[13], 0U);
   values[SETTINGS_ID_PADDLE_SWAP] = (uint16_t)((record[10] >> 1) & 0x01U);
+  /* Version 1 has no prosign style and gets Both; version 2 keeps bits 2-3, and 3 clamps to 2. */
+  values[SETTINGS_ID_PROSIGN_STYLE] = (record[RECORD_VERSION_OFFSET] == 1U)
+                                          ? 2U
+                                          : oracle_clamp(SETTINGS_ID_PROSIGN_STYLE, (record[10] >> 2) & 0x03U, 0U);
+}
+
+/* The flags byte that a save writes after a load of @p record with @p flags. */
+static uint8_t saved_flags_of(const uint8_t* record, uint8_t flags) {
+  uint16_t values[SETTINGS_ID_COUNT];
+  uint8_t copy[SETTINGS_RECORD_SIZE];
+  memcpy(copy, record, sizeof(copy));
+  copy[RECORD_FLAGS_OFFSET] = flags;
+  values_of(copy, values);
+  return (uint8_t)(values[SETTINGS_ID_SHOW_CW_CODE] | (values[SETTINGS_ID_PADDLE_SWAP] << 1) |
+                   (values[SETTINGS_ID_PROSIGN_STYLE] << 2));
 }
 
 static bool are_values(const uint16_t* values) {
@@ -103,12 +129,14 @@ static void check_upset(const uint8_t* original, const uint8_t* upset, const uin
  * directions (an interrupted program clears bits).
  */
 static void test_bit_upsets_never_load_as_a_mix(void) {
-  static const uint8_t originals[2][SETTINGS_RECORD_SIZE] = {
+  static const uint8_t originals[4][SETTINGS_RECORD_SIZE] = {
       {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U},
       {0x43U, 0x57U, 0x01U, 0xE8U, 0x03U, 0x32U, 0x05U, 0x05U, 0x05U, 0x00U, 0x00U, 0x08U, 0x00U, 0x3FU, 0x00U},
+      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U},
+      {0x43U, 0x57U, 0x02U, 0xE8U, 0x03U, 0x32U, 0x05U, 0x05U, 0x05U, 0x00U, 0x06U, 0x08U, 0x00U, 0x3FU, 0x00U},
   };
   size_t which;
-  for (which = 0U; which < 2U; ++which) {
+  for (which = 0U; which < 4U; ++which) {
     uint8_t original[SETTINGS_RECORD_SIZE];
     uint8_t upset[SETTINGS_RECORD_SIZE];
     uint16_t values[SETTINGS_ID_COUNT];
@@ -155,13 +183,14 @@ static void test_bit_upsets_never_load_as_a_mix(void) {
   }
 }
 
-/* A record of any other layout version, with a valid CRC, gives the defaults and is never written. */
+/* A record of any layout version other than 1 and 2, with a valid CRC, gives the defaults and is never written. */
 static void test_other_versions_give_defaults(void) {
   unsigned version;
+  TEST_ASSERT_EQUAL(2U, SETTINGS_LAYOUT_VERSION);
   for (version = 0U; version <= 0xFFU; ++version) {
     uint8_t record[SETTINGS_RECORD_SIZE];
     settings_load_status_t status;
-    if (version == SETTINGS_LAYOUT_VERSION) {
+    if ((version == 1U) || (version == SETTINGS_LAYOUT_VERSION)) {
       continue;
     }
     memcpy(record, default_record, sizeof(record));
@@ -177,63 +206,76 @@ static void test_other_versions_give_defaults(void) {
   }
 }
 
-/* Every value of every one-byte field, and every tone value, in a record with a valid CRC loads clamped. */
+/*
+ * Every value of every one-byte field, and every tone value, in a record with a valid CRC loads clamped. Both
+ * layout versions.
+ */
 static void test_every_field_value_loads_clamped(void) {
   unsigned offset;
   uint32_t value;
-  for (offset = 5U; offset <= 13U; ++offset) {
-    for (value = 0U; value <= 0xFFU; ++value) {
+  size_t base;
+  for (base = 0U; base < 2U; ++base) {
+    for (offset = 5U; offset <= 13U; ++offset) {
+      for (value = 0U; value <= 0xFFU; ++value) {
+        uint8_t record[SETTINGS_RECORD_SIZE];
+        uint16_t values[SETTINGS_ID_COUNT];
+        settings_load_status_t status;
+        memcpy(record, base_records[base], sizeof(record));
+        record[offset] = (uint8_t)value;
+        record[14] = settings_crc8(record, 14U);
+        values_of(record, values);
+        load_record(record, &status);
+        TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
+        TEST_ASSERT(are_values(values));
+        TEST_ASSERT(settings_get(SETTINGS_ID_RX_EFF_WPM) <= settings_get(SETTINGS_ID_RX_WPM));
+        TEST_ASSERT(settings_get(SETTINGS_ID_TX_EFF_WPM) <= settings_get(SETTINGS_ID_TX_WPM));
+        TEST_ASSERT(!settings_has_unsaved_changes());
+        TEST_ASSERT(!settings_is_edited());
+        TEST_ASSERT_EQUAL(0U, write_operations());
+      }
+    }
+    for (value = 0U; value <= 0xFFFFU; value += 7U) {
       uint8_t record[SETTINGS_RECORD_SIZE];
-      uint16_t values[SETTINGS_ID_COUNT];
       settings_load_status_t status;
-      memcpy(record, default_record, sizeof(record));
-      record[offset] = (uint8_t)value;
+      memcpy(record, base_records[base], sizeof(record));
+      record[3] = (uint8_t)value;
+      record[4] = (uint8_t)(value >> 8);
       record[14] = settings_crc8(record, 14U);
-      values_of(record, values);
       load_record(record, &status);
       TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
-      TEST_ASSERT(are_values(values));
-      TEST_ASSERT(settings_get(SETTINGS_ID_RX_EFF_WPM) <= settings_get(SETTINGS_ID_RX_WPM));
-      TEST_ASSERT(settings_get(SETTINGS_ID_TX_EFF_WPM) <= settings_get(SETTINGS_ID_TX_WPM));
-      TEST_ASSERT(!settings_has_unsaved_changes());
-      TEST_ASSERT(!settings_is_edited());
-      TEST_ASSERT_EQUAL(0U, write_operations());
+      TEST_ASSERT_EQUAL(oracle_clamp(SETTINGS_ID_TONE_HZ, value, 0U), settings_get(SETTINGS_ID_TONE_HZ));
     }
-  }
-  for (value = 0U; value <= 0xFFFFU; value += 7U) {
-    uint8_t record[SETTINGS_RECORD_SIZE];
-    settings_load_status_t status;
-    memcpy(record, default_record, sizeof(record));
-    record[3] = (uint8_t)value;
-    record[4] = (uint8_t)(value >> 8);
-    record[14] = settings_crc8(record, 14U);
-    load_record(record, &status);
-    TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
-    TEST_ASSERT_EQUAL(oracle_clamp(SETTINGS_ID_TONE_HZ, value, 0U), settings_get(SETTINGS_ID_TONE_HZ));
   }
 }
 
 /*
- * Flags bits 2-7 are ignored on load and written as 0 by the next save; bit 1 is Paddle (keyer_spec.md 6.13).
- * Every flags byte value is checked.
+ * Unused flags bits are ignored on load and written as 0 by the next save; bit 1 is Paddle (keyer_spec.md 6.13),
+ * bits 2-3 the prosign style of a version 2 record (17.4.2). Every flags byte value of both layout versions.
  */
 static void test_flag_bits_written_as_zero(void) {
   unsigned flags;
-  for (flags = 0U; flags <= 0xFFU; ++flags) {
-    uint8_t record[SETTINGS_RECORD_SIZE];
-    settings_load_status_t status;
-    memcpy(record, default_record, sizeof(record));
-    record[10] = (uint8_t)flags;
-    record[14] = settings_crc8(record, 14U);
-    load_record(record, &status);
-    TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
-    TEST_ASSERT_EQUAL(flags & 0x01U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
-    TEST_ASSERT_EQUAL((flags >> 1) & 0x01U, settings_get(SETTINGS_ID_PADDLE_SWAP));
-    TEST_ASSERT(!settings_has_unsaved_changes());
-    TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
-    TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-    TEST_ASSERT_EQUAL(flags & 0x03U, fake_iap_memory()[10]);
-    TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+  size_t base;
+  for (base = 0U; base < 2U; ++base) {
+    for (flags = 0U; flags <= 0xFFU; ++flags) {
+      uint8_t record[SETTINGS_RECORD_SIZE];
+      settings_load_status_t status;
+      const unsigned style = (base == 0U) ? 2U : ((((flags >> 2) & 0x03U) == 3U) ? 2U : ((flags >> 2) & 0x03U));
+      memcpy(record, base_records[base], sizeof(record));
+      record[10] = (uint8_t)flags;
+      record[14] = settings_crc8(record, 14U);
+      load_record(record, &status);
+      TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
+      TEST_ASSERT_EQUAL(flags & 0x01U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+      TEST_ASSERT_EQUAL((flags >> 1) & 0x01U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+      TEST_ASSERT_EQUAL(style, settings_get(SETTINGS_ID_PROSIGN_STYLE));
+      TEST_ASSERT(!settings_has_unsaved_changes());
+      TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
+      TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
+      TEST_ASSERT_EQUAL((flags & 0x03U) | (style << 2), fake_iap_memory()[10]);
+      TEST_ASSERT_EQUAL(saved_flags_of(record, (uint8_t)flags), fake_iap_memory()[10]);
+      TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION_OFFSET]);
+      TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+    }
   }
 }
 
@@ -289,7 +331,9 @@ static void test_paddle_record_vectors(void) {
         TEST_ASSERT_EQUAL(0U, write_operations());
       } else {
         TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-        TEST_ASSERT_EQUAL((uint8_t)(show | (paddle << 1)), fake_iap_memory()[10]);
+        /* The save writes layout version 2 with the default prosign style Both in bits 2-3. */
+        TEST_ASSERT_EQUAL((uint8_t)(show | (paddle << 1) | (2U << 2)), fake_iap_memory()[10]);
+        TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION_OFFSET]);
         TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
       }
     }

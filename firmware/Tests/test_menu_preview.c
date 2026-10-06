@@ -517,16 +517,17 @@ static void test_v52_no_sound_outside_tone_edit(void) {
   step(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
   edit_to_both_limits(1U); /* Show CW Code */
-  edit_to_both_limits(2U); /* Max Word Length */
-  steps(NEXT, 3U);
+  edit_to_both_limits(2U); /* Prosigns */
+  edit_to_both_limits(3U); /* Max Word Length */
+  steps(NEXT, 4U);
   step(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_DISPLAY, menu_node());
   edit_to_both_limits(0U); /* Backlight */
   edit_to_both_limits(1U); /* Contrast */
   step(MENU);
-  steps(PREV, 3U);
+  steps(PREV, 4U);
   /* 5. The dialog: No, then Yes, then close the message. */
-  steps(NEXT, 4U);
+  steps(NEXT, 5U);
   step(ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_DIALOG, menu_screen());
   step(ENTER);
@@ -539,7 +540,7 @@ static void test_v52_no_sound_outside_tone_edit(void) {
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   poll_500();
   /* 6. Change a value and leave Settings with a save. */
-  steps(PREV, 3U);
+  steps(PREV, 4U);
   step(ENTER);
   step(PREV);
   step(ENTER);

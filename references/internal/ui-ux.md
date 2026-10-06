@@ -16,7 +16,7 @@ Status of the content:
 
 - Product: Putikeeg CW Trainer, board CW_MINI_V2.0D, custom firmware.
 - UI scope in this version:
-  - The menu tree, the Settings editor and the `Paddle` setting.
+  - The menu tree, the Settings editor, the `Paddle` setting and the `Prosigns` setting (section 5.10).
   - Placeholder screens for Receiving and Sending.
   - The Free Input mode (section 5.9) and the keyer for the three key types (section 6.7).
   - Long presses (section 6.6) and the other button input.
@@ -42,7 +42,7 @@ Status of the content:
 | `firmware/inc/lcd/lcd_fb.h`, `firmware/inc/board/lcd_config.h` | 128 x 64 framebuffer, 8 pages of 8 rows, contrast range 0-63, default 0x20. |
 | `references/context/STC8H_datasheet.md` | EEPROM sector erase about 4-6 ms, byte program about 30-40 us. Avoid EEPROM writes at low voltage. |
 | `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
-| `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. It refers to sections 5.9, 6.6 and 6.7 of this file. |
+| `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. Section 17: the prosign display setting (decoder codes, `morse_format()`, flags bits 2-3, record layout version 2). It refers to sections 5.9, 5.10, 6.6 and 6.7 of this file. |
 | `references/internal/paddle_keyer_research.md`, `paddle_keyer_howtoimplement_research.md` | Iambic A/B behaviour, squeeze release, entry mask, straight-key mode. |
 
 ## 3. Inventories
@@ -179,6 +179,7 @@ the value changes.
 | Main | `Settings` | submenu | - | - | - |
 | Settings | `CW` | submenu | - | - | - |
 | Settings | `Show CW Code` | choice | `Off`, `On` | 3 | `On` |
+| Settings | `Prosigns` | choice | `Punctuation`, `Prosign`, `Both` | 11 | `Both` (user) |
 | Settings | `Max Word Length` | value | `4` .. `8`, step 1 | 1 | `5` |
 | Settings | `Display` | submenu | - | - | - |
 | Settings | `Reset Statistics` | action | - | - | - |
@@ -196,8 +197,12 @@ Order of the items in each list is the order in this table. Choice order (prev =
 towards the last entry) is the order in the "Values shown" column.
 
 Fit rule: `len(label) <= 20 - fw`. This keeps one blank column between the label and the `<` edit marker. Every
-row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 of 14 allowed). `Paddle` uses 6 of
-12 allowed.
+row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 of 14 allowed) and `Prosigns`
+(8 of 9 allowed). `Paddle` uses 6 of 12 allowed.
+
+`Punctuation` (11 characters) is the longest value or choice text of the tree. The menu value text buffer holds it
+and the NUL (12 bytes, `keyer_spec.md` decision D-P7). A longer value text in a later change needs a larger buffer
+first.
 
 `RX` = receive, `TX` = send (decision UX-3, decided by the user). The full words do not fit with the edit markers.
 
@@ -221,7 +226,7 @@ row above passes. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 
 - Field layout: value in columns `23 - fw` to 22 (right-aligned inside the field), `<` in column `21 - fw`,
   column `22 - fw` blank, column 23 blank, `>` in column 24.
 - Highlight band: x from `106 - 5 * fw` to 127 (one pixel left of the `<` cell), y `8r + 1` to `8r + 7`.
-  Examples (fw -> x): 1 -> 101, 2 -> 96, 3 -> 91, 6 -> 76, 7 -> 71, 8 -> 66.
+  Examples (fw -> x): 1 -> 101, 2 -> 96, 3 -> 91, 6 -> 76, 7 -> 71, 8 -> 66, 11 -> 51.
 - Condition for `<`: prev can change the value (value > its minimum, or not the first choice).
   Condition for `>`: next can change the value (value < its current maximum, or not the last choice).
   At a limit the marker cell is blank but stays inside the highlight.
@@ -237,8 +242,9 @@ Examples at the limits:
 
 ### 5.5 Scrolling (decision UX-5)
 
-No list in this version has more than 7 items (main 4, Settings 5, CW 7, Display 2), so no list scrolls now. CW
-uses all 7 rows. An eighth CW item needs this scroll rule.
+No list in this version has more than 7 items (main 4, Settings 6, CW 7, Display 2), so no list scrolls now. CW
+uses all 7 rows. Settings uses 6 rows, and row 7 stays blank. An eighth CW item or an eighth Settings item needs
+this scroll rule.
 The rule applies to later lists:
 
 - The window shows 7 items. Minimum movement: the window moves only by the rows that keep the cursor inside it.
@@ -292,10 +298,13 @@ Message screen rules: body text in rows 2-3 (one line: row 3), each line centere
 `enter` or `menu/back` closes the screen. The same layout is used for any later one-button message (for example a
 save error, see question Q-4).
 
-### 5.9 Free Input screen (decision UX-25 to UX-30)
+### 5.9 Free Input screen (decision UX-25 to UX-30, UX-38)
 
 Purpose: the user keys with the paddle or a straight key, hears the sidetone and reads the decoded text. The screen
 shows only the text. It has no cursor, no status and no hint.
+
+Keyed text: `CQ CQ DE UT2UBM UT2UBM K`, a delimiter, then `UR 5NN BT NAME VADIM BT QTH KY*V AR 73 SK`. `Prosigns` =
+`Both` (the default):
 
 ```
     0         1         2
@@ -303,21 +312,34 @@ shows only the text. It has no cursor, no status and no hint.
 0  |Free Input               | title bar, inverted (section 5.1)
 1  |CQ CQ DE UT2UBM UT2UBM K | text, normal video
 2  |-------------------------| delimiter: one 1 px line, y = 8r + 3, x 2-126 (not '-' glyphs)
-3  |UR 5NN = NAME VADIM = QTH| a full line: the next character wraps
-4  |KY*V KYIV + 73 <SK>      | '*' = unknown pattern, '+' = AR, '<SK>' = prosign SK
-5  |                         |
+3  |UR 5NN <BT/=> NAME VADIM | '<BT/=>' = prosign BT (Both). The word space after VADIM leaves column 24 blank
+4  |<BT/=> QTH KY*V <AR/+> 73| '*' = unknown pattern, '<AR/+>' = AR. A full line: the next character wraps
+5  |<SK>                     | '<SK>' = prosign SK (the same text for every value)
 6  |                         |
 7  |                         |
 ```
 
-The mockup is illustrative. Legibility on the glass is device check D-21.
+The same keyed text with the two other values (rows 3-5 only):
+
+```
+    0123456789012345678901234
+3  |UR 5NN = NAME VADIM = QTH|   Punctuation
+4  |KY*V + 73 <SK>           |
+
+3  |UR 5NN <BT> NAME VADIM <B|   Prosign: the second <BT> splits at the line end
+4  |T> QTH KY*V <AR> 73 <SK> |
+```
+
+The mockups are illustrative. Legibility on the glass is device check D-21. Legibility of the prosign texts is
+device check D-25.
 
 #### Layout
 
 - Font: `FONTS_ID_5X8`, the UI font. The grid of section 4.1 applies: cell `(r, c)` is at `x = 2 + 5c`, `y = 8r`.
 - Row 0: the title bar with `Free Input` (section 5.1). It does not change while the mode is open.
 - Rows 1-7: the text area, 7 lines of 25 cells, normal video. No highlight, no cursor mark, no inverted cell.
-- Letters are capitals. The decoder gives only printable ASCII (UX-11).
+- Letters are capitals. The decoder gives printable ASCII or the code of a prosign. The screen shows printable ASCII
+  only (UX-11).
 - The firmware draws each character straight into the framebuffer. There is no text buffer. After the mode ends,
   the text is gone.
 
@@ -345,33 +367,141 @@ Results of these rules:
 - A line never starts with a space. A space at the end of a full line is dropped. The line break then acts as the
   word space.
 - Two word spaces in a row cannot occur: the keyer gives one word-gap event per pause (`keyer_spec.md`).
-- A token of more than one cell (`<SK>`) has no special rule. Each of its characters wraps like other text. Example:
-  with the cursor in column 23, `<S` goes to columns 23-24 and `K>` starts the next line.
-- The text area keeps the last 7 lines, at most 175 characters.
+- A text of more than one cell (`<SK>`, and the prosign texts of `Prosign` and `Both`, up to 6 cells) has no
+  special rule. Each of its cells wraps like other text. Example: with the cursor in column 23, `<S` goes to
+  columns 23-24 and `K>` starts the next line. A split in row 7 scrolls in the middle of the text. More examples:
+  "Prosign texts" below.
+- The text area keeps the last 7 lines, at most 175 cells.
 
 #### Characters
 
-When the character gap comes (section 6.7), the decoder turns the elements of one character into one glyph.
+When the character gap comes (section 6.7), the decoder turns the elements of one character into one text. Most
+texts are one glyph. A prosign text has 1 to 6 cells (`keyer_spec.md` section 17.4.1).
 
 | Pattern | Display | Decision |
 | --- | --- | --- |
 | A pattern in the Morse table | Its character: `A` to `Z`, `0` to `9` and the punctuation of the table. | plan |
-| AR `.-.-.` | `+` | plan, user |
-| BT `-...-` | `=` | plan, user |
-| SK `...-.-` | `<SK>`: four cells, the angle brackets included, no space inside. Each of the four characters follows the character rule, so `<SK>` can split across two lines like any word. | UX-28, user |
-| Other prosigns with the same code as a punctuation mark | If the table has that mark: the mark. Examples: KN `-.--.` gives `(`, AS `.-...` gives `&`. | UX-28 |
+| AR `.-.-.`, BT `-...-`, KN `-.--.`, AS `.-...` | The text that the `Prosigns` setting selects. See the next table. | UX-38, user |
+| SK `...-.-` | `<SK>` for every value of `Prosigns`: four cells, the angle brackets included, no space inside. Each of the four characters follows the character rule, so `<SK>` can split across two lines like any word. | UX-28, user |
 | A pattern that is not in the table, more than 6 elements, or a lost event | `*` (one cell) | UX-27, user |
 | The 8-dit error sign | `*` | user |
 | A character gap with no elements (for example after a clear) | Nothing. The cursor does not move. | UX-30 |
 
-Rules for the Morse table (`keyer_spec.md`, owner `architector`):
+Prosign texts per value of `Prosigns` (decision UX-38, user). The four prosigns have the code of a punctuation mark:
 
-- It contains at least `A` to `Z`, `0` to `9`, `.` `,` `?` `/` `=` `+` `-`. Other punctuation is the choice of
-  `architector`.
-- It contains no lowercase letter, no space, no `*`, no `<` and no `>`. The glyph `*` means "unknown" and nothing
-  else. In Free Input, `<` and `>` appear only in `<SK>`.
+| Prosign | Code | `Punctuation` | `Prosign` | `Both` (default) |
+| --- | --- | --- | --- | --- |
+| AR | `.-.-.` | `+` | `<AR>` | `<AR/+>` |
+| BT | `-...-` | `=` | `<BT>` | `<BT/=>` |
+| KN | `-.--.` | `(` | `<KN>` | `<KN/(>` |
+| AS | `.-...` | `&` | `<AS>` | `<AS/&>` |
+| SK | `...-.-` | `<SK>` | `<SK>` | `<SK>` |
+
+- `Punctuation`: one cell, the mark only.
+- `Prosign`: four cells, the name in angle brackets, as `<SK>`.
+- `Both`: six cells: `<`, the name, `/`, the mark, `>`. No space inside.
+- No other prosign has a text. A pattern that is not in the Morse table gives `*`.
+
+Rules for the Morse table and the text (`keyer_spec.md` sections 6.10 and 17, owner `architector`):
+
+- The decoder gives at least `A` to `Z`, `0` to `9` and `.` `,` `?` `/` `-`. It also gives the codes of AR and BT.
+  With `Punctuation` and `Both`, AR and BT show the marks `+` and `=`. With `Prosign`, `+`, `=`, `(` and `&` never
+  show, because no other code gives them. Other punctuation is the choice of `architector`.
+- The decoder never gives a lowercase letter, a space, `*`, `<` or `>`. The glyph `*` means "unknown" and nothing
+  else.
+- In Free Input, `<` and `>` appear only as the brackets of a prosign text: `<SK>` in every value, and the texts of
+  AR, BT, KN and AS in `Prosign` and `Both`. So a `<` always opens a prosign text and a `>` always closes it.
 - `*` has no Morse code in the ITU table, so it never looks like a correct character. `*` uses cell columns 0-3
   and cell rows 1-6 only (section 3.3), so it does not touch its neighbours.
+
+#### Prosign texts (decision UX-38)
+
+Free Input row 1 for each value. Keyed: AR, BT, KN, AS, SK with a word gap after each of the first four:
+
+```
+    0123456789012345678901234
+1  |+ = ( & <SK>             |   Punctuation
+1  |<AR> <BT> <KN> <AS> <SK> |   Prosign
+1  |<AR/+> <BT/=> <KN/(> <AS/|   Both: '<AS/&>' splits at the line end
+2  |&> <SK>                  |
+```
+
+The same five prosigns with no word gap (the host test V-84):
+
+```
+    0123456789012345678901234
+1  |+=(&<SK>                 |   Punctuation
+1  |<AR><BT><KN><AS><SK>     |   Prosign
+1  |<AR/+><BT/=><KN/(><AS/&><|   Both
+2  |SK>                      |
+```
+
+A 6-cell text at a line end (`Both`, AR). Each cell wraps on its own (UX-26). Row 1 holds `E` letters up to the
+cursor:
+
+```
+    0123456789012345678901234
+1  |EEEEEEEEEEEEEEEEEEE<AR/+>|   cursor in column 19: the text fits, the column becomes 25 (line full)
+1  |EEEEEEEEEEEEEEEEEEEEEE<AR|   cursor in column 22: '<AR' in columns 22-24
+2  |/+>                      |                        '/+>' in row 2, columns 0-2
+1  |EEEEEEEEEEEEEEEEEEEEEEE<A|   cursor in column 23: '<A' in columns 23-24
+2  |R/+>                     |                        'R/+>' in row 2, columns 0-3
+1  |EEEEEEEEEEEEEEEEEEEEEEEEE|   cursor in column 25 (line full): the whole text on row 2
+2  |<AR/+>                   |
+```
+
+A split in row 7 scrolls in the middle of the text. Rows 1-6 hold `A` to `F` (25 each), row 7 holds 22 letters
+`G`, then AR in `Both`:
+
+```
+    0123456789012345678901234
+1  |BBBBBBBBBBBBBBBBBBBBBBBBB|
+2  |CCCCCCCCCCCCCCCCCCCCCCCCC|
+3  |DDDDDDDDDDDDDDDDDDDDDDDDD|
+4  |EEEEEEEEEEEEEEEEEEEEEEEEE|
+5  |FFFFFFFFFFFFFFFFFFFFFFFFF|
+6  |GGGGGGGGGGGGGGGGGGGGGG<AR|   '<AR' is drawn in row 7, then the scroll moves it to row 6
+7  |/+>                      |
+```
+
+How the user reads a prosign text:
+
+- A `<` always opens a prosign text and the next `>` closes it. Everything between them is one prosign.
+- In `Both`, the `/` inside the brackets separates the name and the mark. A keyed `/` (`-..-.`) is a one-cell
+  character outside the brackets. Examples with no word gap: AR then a keyed `/` gives `<AR/+>/`. A keyed `/`
+  then AR gives `/<AR/+>`.
+- At a line end, a text can split. The part on the next line can then start with `/`, a letter, a mark or `>`.
+  Examples: `/+>`, `R/+>`, `&>`. The closing `>` shows that the part belongs to the text above. This is the accepted cost of the per-character
+  wrap (UX-26, UX-38).
+- `(` (KN with `Punctuation` and `Both`) and `<` are both left brackets of 3 px width. Glyph facts below. D-25
+  checks on the glass that the user tells them apart.
+
+Glyph facts, decoded from `u8g2_font_spleen5x8_mf` with the driver arithmetic (section 3.3). They are facts of
+the bitmap. Their look on the glass is unverified until D-25.
+
+| Glyph | Cell columns | Cell rows | Shape |
+| --- | --- | --- | --- |
+| `<`, `>` | 1-3 | 1-6 (capital height) | A point at rows 3-4. |
+| `(`, `)` | 1-3 | 0-7 (one row more above and below) | A straight vertical stroke at rows 2-5. |
+| `/` | 0-3 | 0-7 | Taller than the capitals beside it. |
+| `+` | 0-4 | 2-6 | The bar in row 4 uses column 4. |
+| `&` | 0-4 | 0-6 | Ink in column 4 at rows 4 and 6. |
+| `=` | 0-3 | 3 and 5 | Two bars. |
+
+`>` has no ink in cell column 0, so `+>` and `&>` keep a 1 px blank column between the glyphs. No glyph pair inside a
+prosign text touches. Pixel rendering of three `Both` texts (`#` = ink, 30 x 8 px, cell row 0 on top):
+
+```
+<AR/+>                           <KN/(>                           <AS/&>
+..................#...........   ..................#....#......   ..................#...#.......
+...#..##..###.....#.......#...   ...#.#..#.#..#....#...#...#...   ...#..##...###....#..#.#..#...
+..#..#..#.#..#...#....#....#..   ..#..#..#.##.#...#...#.....#..   ..#..#..#.#......#...#.#...#..
+.#...#..#.#..#...#....#.....#.   .#...###..##.#...#...#......#.   .#...#..#..##....#...##.....#.
+.#...####.###...#...#####...#.   .#...#..#.#.##..#....#......#.   .#...####....#..#...#.#.#...#.
+..#..#..#.#..#..#.....#....#..   ..#..#..#.#.##..#....#.....#..   ..#..#..#....#..#...#..#...#..
+...#.#..#.#..#.#......#...#...   ...#.#..#.#..#.#......#...#...   ...#.#..#.###..#.....##.#.#...
+...............#..............   ...............#.......#......   ...............#..............
+```
 
 #### Delimiter (long `next`, decision UX-29)
 
@@ -394,6 +524,52 @@ Rules for the Morse table (`keyer_spec.md`, owner `architector`):
 - The elements of the character in progress are dropped. The next character starts from its first element.
 - The keyer and the sidetone do not change. A tone that sounds while the user clears continues until the key opens.
 - The device does not ask again before it clears. The 800 ms hold is the protection (UX-23).
+
+### 5.10 `Prosigns` setting (decision UX-38)
+
+Purpose: the user chooses how AR, BT, KN and AS show in Free Input (section 5.9). SK always shows as `<SK>`.
+
+| Item | Value |
+| --- | --- |
+| Label | `Prosigns` (8 characters, fit rule 8 <= 9) |
+| List and position | `Settings`, index 2: row 3, after `Show CW Code` and before `Max Word Length` |
+| Kind | choice, field width 11 |
+| Values in order | `Punctuation`, `Prosign`, `Both`. `prev` goes towards `Punctuation`, `next` towards `Both`. No wrap. |
+| Default | `Both`. A record of the earlier firmware also gives `Both` (section 8, F-14). |
+| Effect | At the next start of Free Input (section 6.7). No effect in the menu, no sound, no preview. |
+| Save | The rule of section 7 (UX-15): on the exit from Settings, after an edit step. |
+
+Settings list in browse mode, cursor on `Prosigns`, default values:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Settings                 | title bar, inverted
+1  |CW                      >|
+2  |Show CW Code         On  |
+3  |Prosigns           Both  | selected: highlight x 0-127, y 25-31
+4  |Max Word Length       5  |
+5  |Display                 >|
+6  |Reset Statistics         |
+7  |                         | blank: the list has 6 items
+```
+
+The value is right-aligned to column 22 in browse mode: `Both` in columns 19-22, `Prosign` in columns 16-22,
+`Punctuation` in columns 12-22. Each value shows in full.
+
+Edit mode (section 5.4) with fw 11: the value field is columns 12-22, `<` is in column 10, column 11 is blank, `>` is
+in column 24. The highlight band is x 51-127, y 25-31. The label `Prosigns` (columns 0-7) stays in normal video.
+Columns 8 and 9 stay blank.
+
+```
+    0         1         2
+    0123456789012345678901234
+3  |Prosigns  <        Both  |   Both (default, last value): only '<'
+3  |Prosigns  <     Prosign >|   Prosign: both markers
+3  |Prosigns    Punctuation >|   Punctuation (first value): only '>'
+```
+
+From `Both`, two `prev` presses reach `Punctuation`. A third `prev` changes nothing. `next` goes back.
 
 ## 6. Control mapping
 
@@ -428,8 +604,8 @@ Other rules:
 
 - "Applies at once": contrast goes to the LCD and the backlight level goes to the PWM at each step. The other
   values change only in memory until the save. In the menu, Tone is the only value with an audible effect: the Tone
-  preview (section 6.5). `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` take effect at the next start
-  of Free Input (section 6.7). The other values have no effect in this version.
+  preview (section 6.5). `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone` and `Prosigns` take effect at
+  the next start of Free Input (section 6.7). The other values have no effect in this version.
 - Effective-speed rule (plan): an effective speed can never be higher than its base speed. Lowering a base speed
   below its effective speed lowers the effective speed in the same step. Raising a base speed never changes the
   effective speed.
@@ -604,8 +780,8 @@ Special cases:
 ### 6.7 Keyer from the user's view (decision plan, UX-33 to UX-35, UX-37)
 
 The keyer runs only in Free Input. The mode start starts the keyer, and the mode end stops it. At the mode start the
-keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` once. The settings cannot change while the
-mode is open. `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` have no effect on Free Input.
+keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` once. Free Input also reads `Prosigns`
+once at the mode start (UX-38). The settings cannot change while the mode is open. `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` have no effect on Free Input.
 
 #### Key Type
 
@@ -669,8 +845,9 @@ has no effect.
 | Long press in a mode screen | The result of the action at 800 ms, during the hold. Nothing else. | UX-23 |
 | Short press or repeat in a mode screen | Nothing. | UX-24 |
 | Key element in Free Input | The sidetone, at once. The screen does not show elements. | plan, UX-26 |
-| Character keyed in Free Input | The glyph appears after the 2-dit pause. Target: visible within 100 ms after the character gap (unverified, D-21). | UX-26 |
+| Character keyed in Free Input | The glyph, or the prosign text of section 5.9, appears after the 2-dit pause. Target: visible within 100 ms after the character gap (unverified, D-21). | UX-26 |
 | Pattern not in the table | `*` in its cell. | UX-27 |
+| `Prosigns` edit | The value changes in the field. Nothing else changes in the menu, and nothing sounds. The new text shows at the next Free Input start. | UX-38 |
 | Word space in Free Input | No visible change until the next character, which starts one cell later. | UX-26 |
 | Save on leaving Settings | Nothing extra. The main menu appears with the cursor on `Settings`. The erase and write take about 5-7 ms (datasheet: erase 4-6 ms, 15 bytes x 40 us), which the user does not notice. | UX-15 |
 | Save not needed | Same screen, no EEPROM access. A save needs two conditions: at least one edit step changed a value during this Settings visit, and the current values differ from the stored record. A value changed and changed back does not cause a write. A visit without an edit step does not cause a write, also after a display recovery start. | UX-15 |
@@ -682,7 +859,7 @@ has no effect.
 | ID | Condition | What the user sees | Device behaviour | Recovery |
 | --- | --- | --- | --- | --- |
 | F-1 | First power-on, empty EEPROM | The main menu, no message. Settings show the defaults. | Defaults load. Nothing is written until the user changes a value and leaves Settings. | None needed. |
-| F-2 | Record with a wrong magic, version or CRC (for example a power loss during a save) | Same as F-1, no message. | Defaults load. | The user sets the values again. |
+| F-2 | Record with a wrong magic, a layout version other than 1 or 2, or a wrong CRC (for example a power loss during a save) | Same as F-1, no message. | Defaults load. | The user sets the values again. |
 | F-3 | Valid record with a value out of range | The clamped value. | Each field is clamped. An effective speed above its base speed becomes the base speed. | None needed. |
 | F-4 | Power loss while inside Settings | After power-on, the values from before the visit. | Unsaved changes are lost (plan). | The user sets the values again. |
 | F-5 | Contrast set to a value that makes the screen unreadable | Blank or black screen. | The value applies at once. If the user leaves Settings, it is saved. | During the edit: press the opposite button. After a save: the display recovery start (section 8.1). |
@@ -694,10 +871,16 @@ has no effect.
 | F-11 | The main loop falls behind and the keyer event queue overflows (more than 8 events). | `*` in place of the character in progress. The text continues after it. | The keyer drops the new event and sets an overflow flag. Sound and keying stay correct. | None needed. If it happens often, record it for `architector` (D-21). |
 | F-12 | Power loss while Free Input is open. | After power-on, the main menu. The text is gone. | No mode state survives. The settings stay as stored. | Open Free Input again. |
 | F-13 | No plug, or the key is not connected. | `Free Input` and a blank text area. No sound. | The keyer idles. The `enter` button still keys the tip. | Connect the key. |
+| F-14 | First power-on after the update from the earlier firmware: a valid record of layout version 1. | The main menu, no message. All earlier settings stay. `Prosigns` shows `Both`. Free Input shows AR, BT, KN and AS in the `Both` text. | The record loads. `Prosigns` takes its default. Nothing is written at start-up. The first save after an edit step writes the new layout (version 2) with all current values (`keyer_spec.md` section 17.4.2). | None needed. The user can choose another value in Settings. |
+| F-15 | Return to the earlier firmware after a save with this firmware. | The earlier firmware shows all its defaults, no message. | The earlier firmware does not accept layout version 2. It uses F-2. | The user sets the values again. The release notes say this (`technical-writer`). |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
 `Settings reset to defaults` message (costs a state and a string for a very rare event).
+
+F-14 is silent for the same reasons (UX-17, UX-38). The user keeps every earlier setting. The new item is visible in
+Settings with its default. A message after the update tells the user nothing that the Settings list does not show. Each start-up loads the version 1 record again with the same result, until the first save. So an update
+alone never erases the EEPROM.
 
 ### 8.1 Display recovery start (decision UX-19, user)
 
@@ -758,7 +941,7 @@ debounced press and release.
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
 | V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`. `TEXT(2,0,"Sending")`, `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. Rows 5-7 have all pixels off. No EEPROM erase or write. |
-| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `5`. Display shows `8`, `32`. |
+| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `Both`, `5`. Display shows `8`, `32`. |
 | V-03 | Main menu: press prev, then press next. | After prev: `SEL(4)`, `PLAIN(1)`. After next: `SEL(1)`. |
 | V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `Settings` (`SEL(4)`). It does not wrap to `Receiving`. |
 | V-05 | Enter Settings. Enter CW. Press menu/back. | Title `Settings`, `SEL(1)` on `CW`. Then title `Settings > CW`, `SEL(1)` on `Tone`. Then title `Settings`, `SEL(1)` on `CW`. No EEPROM access. |
@@ -776,8 +959,8 @@ debounced press and release.
 | V-17 | Edit Tone 600 -> 620. Press menu/back once. | Still on `Settings > CW`, `SEL(1)`, `620 Hz`. No EEPROM access. |
 | V-18 | Main menu: press menu/back. | Framebuffer unchanged, no dirty page. |
 | V-19 | Main menu: enter on Receiving. Press prev, next, enter, menu/back. Long prev, long next. Then long menu/back. | Title `Receiving`, `TEXT(3,8,"Not ready")`, `PLAIN(1)`..`PLAIN(7)`. The short presses and the long prev and next change nothing: framebuffer unchanged, no dirty page. Long menu/back: main menu with `SEL(1)` on `Receiving`. Same for `Sending` (`SEL(2)` after back). |
-| V-20 | Settings: enter on Reset Statistics. Enter. | Dialog: title `Reset Statistics`, `TEXT(3,4,"Reset statistics?")`, `BUTTON(37,56)` with `No` inverted, `Yes` normal. After enter: Settings, `SEL(5)` on `Reset Statistics`. `stats_reset()` not called. |
-| V-21 | Open the dialog. Next. Next. Enter. Enter. | `BUTTON(67,91)` after the first next. The second next changes nothing. First enter: `stats_reset()` called once. `TEXT(3,4,"Statistics reset")`, `BUTTON(52,71)` with `OK`. Second enter: Settings, `SEL(5)`. |
+| V-20 | Settings: enter on Reset Statistics. Enter. | Dialog: title `Reset Statistics`, `TEXT(3,4,"Reset statistics?")`, `BUTTON(37,56)` with `No` inverted, `Yes` normal. After enter: Settings, `SEL(6)` on `Reset Statistics`. `stats_reset()` not called. |
+| V-21 | Open the dialog. Next. Next. Enter. Enter. | `BUTTON(67,91)` after the first next. The second next changes nothing. First enter: `stats_reset()` called once. `TEXT(3,4,"Statistics reset")`, `BUTTON(52,71)` with `OK`. Second enter: Settings, `SEL(6)`. |
 | V-22 | Open the dialog. Next. Menu/back. | Same as No: Settings, `stats_reset()` not called. |
 | V-23 | Open the dialog. Next. Menu/back. Open the dialog again. | Focus is on `No`. |
 | V-24 | Hold enter (P3.2 low) for 5 s in a list. Meanwhile press next. | Exactly one enter event. The next press works. |
@@ -843,7 +1026,8 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 - `LONG(X)`: hold button `X` until its long event comes, then release it.
 - `BLANK(r)`: all pixels of row `r` are off.
 - `LINE(r)`: pixels `(x, 8r + 3)` are on for x = 2..126. All other pixels of rows `8r` to `8r + 7` are off.
-- Global rule for the Free Input tests (V-54 to V-73): in rows 1-7, the pixels with x = 0, 1 and 127 are off.
+- Global rule for the Free Input tests (V-54 to V-73, V-84 to V-89): in rows 1-7, the pixels with x = 0, 1 and 127
+  are off.
 
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
@@ -855,7 +1039,7 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | V-59 | `FI`. `KEY(E24)`. One WORD_GAP. `KEY("T")`. | Row 1: 24 letters `E`, cell (1,24) blank. `TEXT(2,0,"T")`. |
 | V-60 | `FI`. Key 7 lines `L25(A)` to `L25(G)`. Check. Then `KEY("H")`. | After 175 characters: rows 1-7 show `A` to `G`, no scroll yet. After `H`: rows 1-6 show `B` to `G`, `TEXT(7,0,"H")`, the rest of row 7 blank. `TITLE` holds. Page 0 is not dirty. |
 | V-61 | `FI`. `KEYP("........")`. `KEYP(".......")`. A pattern with an empty table slot. Set the overflow flag, then `KEYP(".-")`. | Four cells `*`: `TEXT(1,0,"****")`. |
-| V-62 | `FI`. `KEYP(".-.-.")`, `KEYP("-...-")`, `KEYP("...-.-")`. | `TEXT(1,0,"+=<SK>")`. |
+| V-62 | Valid record with `Prosigns` = `Punctuation`. `FI`. `KEYP(".-.-.")`, `KEYP("-...-")`, `KEYP("...-.-")`. | `TEXT(1,0,"+=<SK>")`. With the default `Both`, the same input gives V-84. |
 | V-63 | `FI`. `KEY(E23)`. `KEYP("...-.-")`. Then a new `FI`: `KEY(E25)`, one WORD_GAP, `KEYP("...-.-")`. | First: `<S` in cells (1,23) and (1,24), `TEXT(2,0,"K>")`. Second: row 1 is `L25(E)`, `TEXT(2,0,"<SK>")`, no space at the line start. |
 | V-64 | `FI`. `KEY("ABC")`. DIT, DIT. `LONG(prev)`. DAH, CHAR_GAP. | After the clear: `BLANK(1)`..`BLANK(7)`, `TITLE` holds, page 0 is not dirty. Then `TEXT(1,0,"T")`: the two dits are dropped. |
 | V-65 | `FI`. `LONG(prev)`. One CHAR_GAP with no elements. One WORD_GAP. `KEY("A")`. | No change before `A`. `TEXT(1,0,"A")`. |
@@ -871,8 +1055,28 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | V-75 | `buttons` only: hold prev. At 800 ms after the press event, the long event and a repeat are due in the same poll. | The first poll gives the long event of prev. The next poll gives the repeat. |
 | V-76 | Settings > CW. | 7 rows. `TEXT(7,0,"Paddle")`, `TEXT(7,17,"Normal")`. |
 | V-77 | CW: enter on Paddle. Next. Next. Enter. Leave Settings. Re-init from the fake EEPROM. | `EDIT(7,8)`. `Normal`: only `>`. `Reversed` (`TEXT(7,15,"Reversed",inv)`): only `<`. The second next changes nothing. One save. After re-init: `Reversed`. |
-| V-78 | Valid record from the earlier firmware (flags bit 1 = 0). | `Paddle` shows `Normal`. |
+| V-78 | Valid record from the earlier firmware (layout version 1, flags bit 1 = 0). | `Paddle` shows `Normal`. `Prosigns` shows `Both` (V-83). |
 | V-79 | Settings: `Key Type` = `Straight`, `Paddle` = `Reversed`, TX Speed 25, TX Eff. Speed 15. Leave Settings. `FI`-style entry from the main menu. | The keyer starts once with `Straight`, swapped, 25 WPM, 15 WPM. |
+
+### 9.3 `Prosigns` tests (sections 5.9, 5.10, F-14)
+
+These tests use the probes and the notation of sections 9 and 9.2. Prosign patterns: AR `.-.-.`, BT `-...-`,
+KN `-.--.`, AS `.-...`, SK `...-.-`. "AR" in an action means `KEYP(".-.-.")`, and the same for the others. "A record
+with `Prosigns` = X" means a valid layout version 2 record from `keyer_spec.md` section 17.4.2 with that value. The
+tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-80 | Power-on, empty EEPROM. Open Settings. Then prev. Then next. Then next, next. | Title `Settings`. `SEL(1)` with `TEXT(1,0,"CW",inv)` and `TEXT(1,24,">",inv)`. `TEXT(2,0,"Show CW Code")`, `TEXT(2,21,"On")`. `TEXT(3,0,"Prosigns")`, `TEXT(3,19,"Both")`. `TEXT(4,0,"Max Word Length")`, `TEXT(4,22,"5")`. `TEXT(5,0,"Display")`, `TEXT(5,24,">")`. `TEXT(6,0,"Reset Statistics")`. `BLANK(7)`. After prev: `SEL(6)` (wrap from the first to the last item). After next: `SEL(1)`. After next, next: `SEL(3)` with `TEXT(3,0,"Prosigns",inv)` and `TEXT(3,19,"Both",inv)`. (AC-P14) |
+| V-81 | Settings, cursor on `Prosigns`. Enter. Prev. Prev. Prev. Next. Next. Next. Enter. | After enter: `EDIT(3,11)`, `TEXT(3,0,"Prosigns")` in normal video, `TEXT(3,19,"Both",inv)`, `TEXT(3,10,"<",inv)`, cell (3,24) blank inside the band. First prev: `TEXT(3,16,"Prosign",inv)`, `<` in (3,10), `>` in (3,24). Second prev: `TEXT(3,12,"Punctuation",inv)` (all 11 characters), cell (3,10) blank inside the band, `>` in (3,24). Third prev changes nothing. Next, next: `Prosign`, then `Both` with the markers above. The third next changes nothing. After enter: `SEL(3)`, `TEXT(3,19,"Both",inv)`. (AC-P15) |
+| V-82 | Settings: edit `Prosigns` to `Punctuation` (enter, prev, prev, enter). Menu/back. Re-init from the fake EEPROM. Open Settings. Repeat with `Prosign` (enter, next, enter) and with `Both` (enter, next, enter). Then change `Both` -> `Prosign` -> `Both` and leave Settings. | Each of the first three exits: exactly one erase and one record write, at the menu/back from Settings. Main menu, `SEL(4)`. After each re-init: `TEXT(3,12,"Punctuation")`, then `TEXT(3,16,"Prosign")`, then `TEXT(3,19,"Both")`. The stored record has layout version 2 and flags bits 2-3 = 0, 1, then 2. The last exit: no EEPROM erase or write (UX-15). (AC-P15) |
+| V-83 | The fake EEPROM holds the version 1 record `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` (`Paddle` = `Reversed`). Power-on. Open Settings, then CW. Go back to the main menu without an edit step. Then open Settings > CW, change Tone 600 -> 610 and leave Settings. Re-init from the fake EEPROM. | No message screen (F-14). Settings shows `On`, `Both`, `5`. CW shows `Reversed` and the other default values. First exit: no EEPROM erase or write. Second exit: one save. The stored record has layout version 2, flags byte `0x0B` and Tone 610 Hz. After re-init: `Reversed`, `Both`, `610 Hz`. (AC-P9, AC-P10 from the user's view) |
+| V-84 | For each value: a record with `Prosigns` = that value (empty EEPROM for `Both`). `FI`. AR, BT, KN, AS, SK with no word gap. | `Punctuation`: `TEXT(1,0,"+=(&<SK>")`. `Prosign`: `TEXT(1,0,"<AR><BT><KN><AS><SK>")`. `Both`: `TEXT(1,0,"<AR/+><BT/=><KN/(><AS/&><")` and `TEXT(2,0,"SK>")`. Every other cell of rows 1-7 is blank. (AC-P18) |
+| V-85 | For each value as V-84. `FI`. AR, one WORD_GAP, BT, one WORD_GAP, KN, one WORD_GAP, AS, one WORD_GAP, SK. Then a new `FI` with `Both`: `KEY("A")`, AR, one WORD_GAP, `KEY("K")`. | `Punctuation`: `TEXT(1,0,"+ = ( & <SK>")`. `Prosign`: `TEXT(1,0,"<AR> <BT> <KN> <AS> <SK>")`, cell (1,24) blank. `Both`: `TEXT(1,0,"<AR/+> <BT/=> <KN/(> <AS/")` and `TEXT(2,0,"&> <SK>")`. Last case: `TEXT(1,0,"A<AR/+> K")`: a word gap after a prosign text adds one blank cell. (AC-P20) |
+| V-86 | `Both`, a new `FI` for each case. `KEY(E19)`, AR, `KEY("T")`. `KEY(E22)`, AR. `KEY(E23)`, AR. `KEY(E25)`, AR. `KEY(E23)`, KN. Then `Prosign`: `KEY(E23)`, BT. | E19: `<AR/+>` in cells (1,19) to (1,24), then `TEXT(2,0,"T")` (the column was 25). E22: `<AR` in (1,22) to (1,24), `TEXT(2,0,"/+>")`. E23: `<A` in (1,23) and (1,24), `TEXT(2,0,"R/+>")`. E25: row 1 is `L25(E)`, `TEXT(2,0,"<AR/+>")`. KN: `<K` in (1,23) and (1,24), `TEXT(2,0,"N/(>")`. `Prosign` BT: `<B` in (1,23) and (1,24), `TEXT(2,0,"T>")`. (AC-P19) |
+| V-87 | `Both`. `FI`. Key rows 1-6 `L25(A)` to `L25(F)`, then 22 letters `G`. Then AR. | Rows 1-5 show `B` to `F`. Row 6 shows 22 letters `G` and `<AR` in (6,22) to (6,24). `TEXT(7,0,"/+>")`. `TITLE` holds. Page 0 is never written and never dirty. (AC-P19) |
+| V-88 | Power-on, empty EEPROM. `FI`. AR. Test only: `settings_set(SETTINGS_ID_PROSIGN_STYLE, 0)`. AR. `LONG(menu)`. Then `FI` again. AR. Then `LONG(menu)`, set `Prosigns` = `Prosign` in Settings, leave Settings, `FI`, AR. | First mode: `TEXT(1,0,"<AR/+><AR/+>")`: the change during the mode has no effect. Second mode: `TEXT(1,0,"+")`. Third mode: `TEXT(1,0,"<AR>")`. (AC-P17) |
+| V-89 | Run V-54 to V-61 and V-63 to V-73 once for each value of `Prosigns` (a record with that value). | The same results as with the default for every value. These tests key no AR, BT, KN or AS. (AC-P20) |
 
 ## 10. Durable decisions
 
@@ -905,7 +1109,7 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | UX-25 | Free Input screen: `FONTS_ID_5X8`, the grid of section 4.1, title bar `Free Input` in row 0, text in rows 1-7 (7 x 25 cells). No status, no cursor mark, no hint. | Same font, grid and title rule as every other screen. 175 visible characters keep about 30 words of context. One text row is one LCD page, so a scroll is a page copy. The settings are one menu level away, and the sound shows the speed and the key type at once. | `FONTS_ID_8X16` (16 x 3 with a title: 48 characters, a scroll every 16 characters, a second grid, a scroll moves 2 pages per line). No title (one more line, but the screen does not say which mode is open). Key type or speed in the title (code and strings for a value the user just set). A blinking or static cursor (code and a timer, small gain). |
 | UX-26 | Text rules of section 5.9. A character comes at the character gap. A word space is a blank cell. The wrap is per character and lazy. A scroll moves the text up by one line. A line never starts with a space. No text buffer. | Cheapest in RAM and flash: the framebuffer is the only store. The lazy wrap never shows an empty last line. Dropped edge spaces keep the left edge aligned. | Word wrap (needs a buffer of the current word). Clear a full screen (loses all context at once). Show the elements of the character in progress (code, and the sidetone already gives this feedback). |
 | UX-27 | Unknown glyph: `*`. One cell for any pattern that is not in the table, more than 6 elements, the 8-dit error sign, or a lost event. | User decision: one unknown glyph. `*` has no Morse code, so it never looks like a correct character. ASCII, no ink in cell column 4. | `?` (a valid Morse character). An inverted cell (heavy in running text, more code). `#` (touches its neighbours). Nothing (hides the error from the student). A separate glyph for the error sign (the user decided against it). |
-| UX-28 | Prosigns: AR = `+`, BT = `=`, SK = `<SK>` (four cells, per-character wrap). Prosigns with the code of a punctuation mark show that mark (KN = `(`, AS = `&`). Others are `*`. | User decision (Q-9). SK has no punctuation mark. The brackets show a prosign, not the letters `S` and `K`. `<` and `>` are edit markers only in lists, and Free Input has no edit mode, so there is no conflict. Per-character wrap needs no extra rule. | `SK` (looks the same as `S` then `K`). Keep `<SK>` on one line (needs a look-ahead rule for one token). A rare ASCII sign such as `%` (the student must learn a code for it). `*` for SK (a correct prosign must not look like an error). |
+| UX-28 | UX-38 refines this decision: AR, BT, KN and AS follow the `Prosigns` setting, and the rule below is its value `Punctuation`. Prosigns: AR = `+`, BT = `=`, SK = `<SK>` (four cells, per-character wrap). Prosigns with the code of a punctuation mark show that mark (KN = `(`, AS = `&`). Others are `*`. | User decision (Q-9). SK has no punctuation mark. The brackets show a prosign, not the letters `S` and `K`. `<` and `>` are edit markers only in lists, and Free Input has no edit mode, so there is no conflict. Per-character wrap needs no extra rule. | `SK` (looks the same as `S` then `K`). Keep `<SK>` on one line (needs a look-ahead rule for one token). A rare ASCII sign such as `%` (the student must learn a code for it). `*` for SK (a correct prosign must not look like an error). |
 | UX-29 | Delimiter: a 1 px line at `y = 8r + 3`, x 2-126, in its own text row. The next character starts a new row. | Clear separation of practice blocks for about 30 bytes of code. A continuous line cannot look like keyed text. | A blank row (looks like unused space). A row of `-` glyphs (looks like keyed `-` characters). A dashed line (more code, no gain). |
 | UX-30 | Clear: rows 1-7 off, cursor home, the character in progress dropped. Title not redrawn. No question to the user. | Practice text has a low value, and the 800 ms hold protects it. Dropping the partial character gives a clean restart. | A Yes/No dialog (slow for a frequent action). Keep the partial character (its first elements are from before the clear). |
 | UX-31 | Receiving and Sending placeholders: `Not ready`, only a long menu/back exits. | User decision: long menu/back exits any mode. The placeholders follow the same rule as the real modes. The real modes later keep the same gesture. | Short menu/back in placeholders only (two exit rules for the same screen family). |
@@ -915,6 +1119,7 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | UX-35 | Key Type semantics of section 6.7. The thresholds come from `TX Speed` and `TX Eff. Speed`. A straight-key mark of 2 dits or longer is a dah. | User decision: no adaptive decoding. The student practises at the speed of the settings. | Adaptive speed tracking (more code, and the student gets no feedback on the speed). |
 | UX-36 | No hint about the long `menu/back` on the placeholders or in Free Input. The user manual explains it. | User decision (Q-7). No string and no code. Free Input has no free row. | A `Hold menu to exit` line in row 5 of the placeholders. |
 | UX-37 | No stuck-key timeout. A contact that closes after the mode start keys until it opens or the user exits (F-9). The manual tells the user to insert the plug before opening Free Input. | User decision (Q-8). The state is harmless, and the recovery is one long `menu/back`. No keyer code. | Mute or mask a contact that stays closed for some seconds (keyer code, and a new rule for a real long mark). |
+| UX-38 | `Prosigns` setting (sections 5.9 and 5.10). Label `Prosigns`, `Settings` index 2 after `Show CW Code`, choice `Punctuation`, `Prosign`, `Both` in this order, fw 11, default `Both`. AR, BT, KN and AS show `+` `=` `(` `&`, or `<AR>` `<BT>` `<KN>` `<AS>`, or `<AR/+>` `<BT/=>` `<KN/(>` `<AS/&>`. SK is `<SK>` for every value. A record of the earlier firmware gives `Both` and keeps the other settings, with no message (F-14). A text of up to 6 cells wraps per cell (UX-26). The value applies at the next Free Input start. | User decisions: the values, their order, the default, SK unchanged, the item in Settings. Label: `Prosigns` names what the setting changes and fits (8 of 9). Position: next to `Show CW Code`, the other item about how characters show. The CW list is full, and Display holds screen hardware settings. A setting is read once per mode start, as `Paddle` (UX-32), because the settings cannot change while Free Input is open. Per-cell wrap keeps one wrap rule for all text. The brackets bound every prosign text, so the inner `/` of `Both` stays readable next to a keyed `/`. | Label `Prosign` (the same word as a value: the row reads `Prosign  Prosign`). `Prosign Style`, `Prosign As` (do not fit: 13 and 10 of 9). `AR Style` (names one prosign). Index 1 before `Show CW Code`, or after `Max Word Length` (splits the two character-display items). Keep a prosign text on one line (a look-ahead rule, and an empty cell run at a line end). A space inside the `Both` text (`<AR +>`: looks like a word space). A message after the update (UX-17). A live preview of the text in the menu (no free row, and it needs a second draw path). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -944,6 +1149,7 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | D-22 | Mono plug with a straight key: insert it before Free Input opens, then key. Then insert it while Free Input is open. | Before: the tip keys, the ring short has no effect. During: record the behaviour (F-9). A long `menu/back` stops the tone. |
 | D-23 | Delimiter and clear on the glass. Key text with `-` and `_` characters around a delimiter. | The delimiter line is clearly different from the `-` and `_` glyphs. Clear leaves the title bar intact and gives no flicker of the title. |
 | D-24 | Receiving and Sending placeholders: a user who has not read the manual tries to leave. | Record whether the user finds the long `menu/back`. If not, record it for the user. Decision UX-36: no hint on the screen. |
+| D-25 | Prosign texts on the glass (UX-38, `keyer_spec.md` DC-P1). In Free Input with `Both`, key AR, KN and AS. Also key KN and then a keyed `)` (`-.--.-`). Key a `/` (`-..-.`) next to AR. Key AR with the cursor in column 22, so that `<AR` and `/+>` split. Repeat with `Prosign` and `Punctuation`. Contrast 32, backlight 8 and 0, 30-60 cm, indoor light, straight and at an angle. | The user reads `<AR/+>`, `<KN/(>` and `<AS/&>` correctly at a glance. The user tells `(` from `<` in `<KN/(>`. The user tells the inner `/` of `<AR/+>` from a keyed `/` beside it. The user joins a split text across the line end. No glyph pair looks joined (`+>`, `&>`, `/(`). If a text fails, record it for the user: the options are the `Prosign` or `Punctuation` value, or a new text (a user decision, then `architector` changes `keyer_spec.md` section 17). |
 
 ## 12. Open questions
 
@@ -955,6 +1161,10 @@ Resolved by the user during the keyer specification:
 - Q-7: no hint on the mode screens. The manual explains the long `menu/back` (UX-36).
 - Q-8: no stuck-key timeout. The manual tells the user to insert the plug before opening Free Input (UX-37).
 - Q-9: SK shows as `<SK>` (UX-28).
+
+Resolved by the user for the prosign display setting (`keyer_spec.md` section 17.1): AR, BT, KN and AS follow a
+setting with the values `Punctuation`, `Prosign` and `Both`, default `Both`, also for an old record. SK stays `<SK>`.
+The item is in the Settings list (UX-38).
 
 Resolved by `architector`: Q-4 (`eeprom_write` reads back each byte, and a failed save shows `Not saved` / `OK`, see
 F-7 and `menu_subsystem_spec.md` sections 3.5 and 3.6).

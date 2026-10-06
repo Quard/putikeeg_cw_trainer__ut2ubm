@@ -11,6 +11,8 @@ static const menu_text_t MEM_CODE menu_show_code_texts[2] = {"Off", "On"};
 static const menu_text_t MEM_CODE menu_key_texts[3] = {"Straight", "Iambic A", "Iambic B"};
 static const menu_text_t MEM_CODE menu_backlight_texts[1] = {"Off"};
 static const menu_text_t MEM_CODE menu_paddle_texts[2] = {"Normal", "Reversed"};
+/* Indexed by SETTINGS_PROSIGN_*. */
+static const menu_text_t MEM_CODE menu_prosign_texts[3] = {"Punctuation", "Prosign", "Both"};
 
 static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Receiving", NULL, NULL, MENU_KIND_MODE, MENU_MODE_RECEIVING, 0U},
@@ -22,6 +24,7 @@ static const menu_item_t MEM_CODE menu_main_items[] = {
 static const menu_item_t MEM_CODE menu_settings_items[] = {
     {"CW", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_CW, 0U},
     {"Show CW Code", NULL, menu_show_code_texts, MENU_KIND_CHOICE, SETTINGS_ID_SHOW_CW_CODE, 3U},
+    {"Prosigns", NULL, menu_prosign_texts, MENU_KIND_CHOICE, SETTINGS_ID_PROSIGN_STYLE, 11U},
     {"Max Word Length", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_MAX_WORD_LEN, 1U},
     {"Display", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_DISPLAY, 0U},
     {"Reset Statistics", NULL, NULL, MENU_KIND_ACTION, MENU_ACTION_RESET_STATS, 0U},

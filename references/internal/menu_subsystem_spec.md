@@ -10,7 +10,7 @@ Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-
 | This document | Interfaces, data formats, behavior, task split and acceptance criteria. It refines the plan and does not change any user decision. |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | Screen layout, label strings, value formats, edit-mode marker, dialog and placeholder layout, auto-repeat and debounce timing values. |
 | `references/context/STC8H_datasheet.md` | Register facts. Section 8 lists the facts that the developer must check. |
-| `references/internal/keyer_spec.md` (owner `architector`) | Adds long-press events, P3.2 ownership, the `Paddle` setting (flags bit 1) and the Free Input mode screen. Its sections 6.12 to 6.14 are binding for these items. This document repeats them in sections 4.5, 4.8, 4.10, 5, 6.1, 6.3, 6.4, 7 and 14. |
+| `references/internal/keyer_spec.md` (owner `architector`) | Adds long-press events, P3.2 ownership, the `Paddle` setting (flags bit 1) and the Free Input mode screen. Its sections 6.12 to 6.14 are binding for these items. Its section 17 adds the prosign display setting (flags bits 2-3, layout version 2, the Settings item) and is binding for it. This document repeats these items in sections 4.5, 4.8, 4.10, 5, 6.1, 6.3, 6.4, 7 and 14. |
 | `AGENTS.md` | Project rules (memory, software SPI, interrupts, team workflow). |
 
 Precedence rules:
@@ -595,11 +595,16 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_BACKLIGHT 8U
 #define SETTINGS_ID_CONTRAST 9U
 #define SETTINGS_ID_PADDLE_SWAP 10U  /* 0 Normal, 1 Reversed (keyer_spec.md section 6.13) */
-#define SETTINGS_ID_COUNT 11U
+#define SETTINGS_ID_PROSIGN_STYLE 11U  /* SETTINGS_PROSIGN_* (keyer_spec.md section 17) */
+#define SETTINGS_ID_COUNT 12U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
 #define SETTINGS_KEY_IAMBIC_B 2U
+
+#define SETTINGS_PROSIGN_PUNCTUATION 0U
+#define SETTINGS_PROSIGN_NAME 1U
+#define SETTINGS_PROSIGN_BOTH 2U
 
 typedef uint8_t settings_load_status_t;
 #define SETTINGS_LOAD_OK 0U
@@ -616,7 +621,7 @@ typedef uint8_t settings_save_status_t;
 #define SETTINGS_RECORD_SIZE 15U
 #define SETTINGS_MAGIC_0 0x43U        /* 'C' */
 #define SETTINGS_MAGIC_1 0x57U        /* 'W' */
-#define SETTINGS_LAYOUT_VERSION 1U
+#define SETTINGS_LAYOUT_VERSION 2U
 
 settings_load_status_t settings_load(void);
 settings_save_status_t settings_save_if_changed(void);
@@ -634,6 +639,8 @@ void settings_use_display_defaults(void);
 
 - Call it once at start-up, before any other settings call.
 - It reads the record (section 5). It checks in this order: read status, magic, version, CRC.
+- Layout versions 1 and 2 pass the version check. A version 1 record loads as section 5.1 says: its values stay,
+  and `Prosigns` takes its default.
 - On a failure, all values take their defaults and the function returns the matching status.
 - On success, every field goes through the clamp rule (section 5.3). Base speeds come before effective speeds.
 - It never writes the EEPROM.
@@ -795,14 +802,14 @@ only file that sets `EA`.
 | --- | --- | --- | --- |
 | 0 | 1 | magic 0 | `0x43` |
 | 1 | 1 | magic 1 | `0x57` |
-| 2 | 1 | layout version | `0x01` |
+| 2 | 1 | layout version | `0x02`. A load also accepts `0x01` (see below). |
 | 3 | 2 | tone, Hz | little-endian (low byte at 3) |
 | 5 | 1 | RX speed, WPM | |
 | 6 | 1 | effective RX speed, WPM | |
 | 7 | 1 | TX speed, WPM | |
 | 8 | 1 | effective TX speed, WPM | |
 | 9 | 1 | key type | 0 straight, 1 iambic A, 2 iambic B |
-| 10 | 1 | flags | bit 0 = show CW code. Bit 1 = paddle swap (1 = `Reversed`). Bits 2-7 are written as 0 and ignored on load. |
+| 10 | 1 | flags | Bit 0 = show CW code. Bit 1 = paddle swap (1 = `Reversed`). Bits 2-3 = prosign style (`SETTINGS_PROSIGN_*`, 3 loads as 2). Bits 4-7 are written as 0 and ignored on load. |
 | 11 | 1 | max word length | |
 | 12 | 1 | backlight level | |
 | 13 | 1 | contrast | |
@@ -813,15 +820,27 @@ Serialize and parse byte by byte. Never copy a C struct. Bytes 0x00F-0x1FF of pa
 CRC-8: polynomial `0x07`, initial value `0x00`, no reflection, no final XOR, MSB first, bitwise (no table). Check
 value: ASCII `123456789` gives `0xF4`.
 
-Default record (test vector): `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54`.
+Default record (test vector): `43 57 02 58 02 20 20 14 14 02 09 05 08 20 03`.
 
-Default record with `Paddle` = `Reversed` (test vector, `keyer_spec.md` section 6.13):
-`43 57 01 58 02 20 20 14 14 02 03 05 08 20 78`.
+`keyer_spec.md` section 17.4.2 gives the other test vectors of version 2 and version 1.
 
-The `Paddle` setting changes neither the layout nor the layout version. A record of the earlier firmware has bit 1
-= 0, so it reads as `Normal`, and its CRC stays valid. `settings_get()` returns flags bit 0 for
-`SETTINGS_ID_SHOW_CW_CODE` and flags bit 1 for `SETTINGS_ID_PADDLE_SWAP`, each as 0 or 1. `settings_set()` for
-these two ids changes only the bit of the id.
+Flag fields: `settings_get()` returns `(flags & mask) >> shift` of the id: bit 0 for `SETTINGS_ID_SHOW_CW_CODE`,
+bit 1 for `SETTINGS_ID_PADDLE_SWAP`, bits 2-3 for `SETTINGS_ID_PROSIGN_STYLE`. `settings_set()` for these ids changes
+only the bits of the id. The `Paddle` setting changed neither the layout nor the version.
+
+Layout version 2 (`keyer_spec.md` section 17, decision D-P6). The layout of version 1 is the same, but bits 2-3 of
+its flags byte have no meaning. Load of a version 1 record with a valid CRC:
+
+1. Keep flags bits 0-1, clear bits 2-7. Set `Prosigns` to its default, `Both`.
+2. Clamp every field as for version 2.
+3. Return `SETTINGS_LOAD_OK`. The record in RAM gets version 2. The baseline takes these values, so no save happens
+   until an edit step (UX-15). The load never writes the EEPROM.
+
+Every save writes version 2. Earlier firmware reads a version 2 record as `SETTINGS_LOAD_BAD_VERSION` and uses its
+defaults. This is accepted.
+
+Version 1 test vectors, for load tests only: `43 57 01 58 02 20 20 14 14 02 01 05 08 20 54` (defaults, loads as
+`Both`) and `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` (`Paddle` = `Reversed`, loads as `Reversed` and `Both`).
 
 ### 5.2 Parameters
 
@@ -838,6 +857,7 @@ these two ids changes only the bit of the id.
 | `BACKLIGHT` | Backlight | 0 | 10 | 1 | 8 | none |
 | `CONTRAST` | Contrast | 0 | 63 | 1 | `LCD_DEFAULT_CONTRAST` (32) | none |
 | `PADDLE_SWAP` | Paddle | 0 | 1 | 1 | 0 (Normal) | choice (0 Normal, 1 Reversed) |
+| `PROSIGN_STYLE` | Prosigns | 0 | 2 | 1 | 2 (Both) | choice (0 Punctuation, 1 Prosign, 2 Both) |
 
 The final unit and choice strings come from `ui-ux.md`.
 
@@ -872,9 +892,10 @@ Node `MENU_NODE_SETTINGS` (title `Settings`, flag: save on exit):
 | --- | --- | --- | --- |
 | 0 | `CW` | submenu | `MENU_NODE_CW` |
 | 1 | `Show CW Code` | choice | `SETTINGS_ID_SHOW_CW_CODE` (`Off`, `On`) |
-| 2 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN` |
-| 3 | `Display` | submenu | `MENU_NODE_DISPLAY` |
-| 4 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` (0) |
+| 2 | `Prosigns` | choice | `SETTINGS_ID_PROSIGN_STYLE` (`Punctuation`, `Prosign`, `Both`), field width 11 (`keyer_spec.md` section 17.4.3) |
+| 3 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN` |
+| 4 | `Display` | submenu | `MENU_NODE_DISPLAY` |
+| 5 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` (0) |
 
 Node `MENU_NODE_CW` (title `Settings > CW`):
 
@@ -956,7 +977,8 @@ tries the save again.
 - The 8 x 25 grid with x origin 2.
 - The inverted title bar.
 - The 7-row highlight band with the gap line.
-- The field widths.
+- The field widths. The value text buffer of `menu_render.c` (`VALUE_TEXT_SIZE`) holds the longest value or choice
+  text of the tree plus the NUL: 12 bytes for `Punctuation` (`keyer_spec.md` decision D-P7).
 - The edit mode: the highlight shrinks to the value field, with the `<` and `>` limit markers.
 - The placeholder, the dialog and the message screen.
 

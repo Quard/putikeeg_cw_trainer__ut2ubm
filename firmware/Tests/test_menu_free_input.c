@@ -1,5 +1,6 @@
 /*
- * Menu scenarios V-54 to V-73 and V-79 of references/internal/ui-ux.md section 9.2 (AC-K51), with the real menu,
+ * Menu scenarios V-54 to V-73, V-79, V-88 and V-89 of references/internal/ui-ux.md sections 9.2 and 9.3 (AC-K51,
+ * AC-P17, AC-P20), with the real menu,
  * buttons and Free Input, a fake keyer and a fake sidetone. A long press is measured on the debounced state: the
  * hold time is the time from the press event to the debounced release.
  */
@@ -40,6 +41,23 @@ static uint16_t event_times[LOG_CAPACITY];
 static size_t event_count;
 /* Redraws since the last reset_counters(). */
 static size_t render_count;
+/* The prosign style of the record that reset_eeprom() writes (V-89). */
+static uint8_t record_style = SETTINGS_PROSIGN_BOTH;
+
+/* Layout version 2 records of keyer_spec.md section 17.4.2, by SETTINGS_PROSIGN_*. */
+static const uint8_t style_records[3][SETTINGS_RECORD_SIZE] = {
+    {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0xB3U},
+    {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x05U, 0x05U, 0x08U, 0x20U, 0xEBU},
+    {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U},
+};
+
+/* An empty EEPROM for Both, else the record of record_style. */
+static void reset_eeprom(void) {
+  fake_iap_reset();
+  if (record_style != SETTINGS_PROSIGN_BOTH) {
+    memcpy(fake_iap_memory(), style_records[record_style], SETTINGS_RECORD_SIZE);
+  }
+}
 
 static void power_on(void) {
   fake_lcd_contrast_reset();
@@ -166,9 +184,9 @@ static void single(keyer_event_t event) {
   pump();
 }
 
-/* FI: power-on with an empty EEPROM, cursor to Free Input, press enter. */
+/* FI: power-on with an empty EEPROM (V-89: the record of record_style), cursor to Free Input, press enter. */
 static void open_free_input(void) {
-  fake_iap_reset();
+  reset_eeprom();
   power_on();
   press(NEXT_PIN);
   press(NEXT_PIN);
@@ -237,6 +255,7 @@ static void snapshot(uint8_t* before) {
 
 static void test_v54_open(void) {
   open_free_input();
+  TEST_ASSERT_EQUAL(record_style, settings_get(SETTINGS_ID_PROSIGN_STYLE));
   TEST_ASSERT(is_free_input_screen());
   TEST_ASSERT(text_area_is_blank());
   TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
@@ -254,7 +273,7 @@ static void test_v54_open(void) {
 static void test_v55_closed_contact_at_start(void) {
   uint8_t before[LCD_PAGE_COUNT * LCD_WIDTH];
 
-  fake_iap_reset();
+  reset_eeprom();
   power_on();
   press(NEXT_PIN);
   press(NEXT_PIN);
@@ -351,14 +370,19 @@ static void test_v61_unknown(void) {
   TEST_ASSERT(row_is(1, "****"));
 }
 
-static void test_v62_v63_prosigns(void) {
-  char line[26];
-
+/* V-62: the record sets Prosigns = Punctuation. */
+static void test_v62_prosigns(void) {
+  record_style = SETTINGS_PROSIGN_PUNCTUATION;
   open_free_input();
+  record_style = SETTINGS_PROSIGN_BOTH;
   keyp(".-.-.");
   keyp("-...-");
   keyp("...-.-");
   TEST_ASSERT(row_is(1, "+=<SK>"));
+}
+
+static void test_v63_sk(void) {
+  char line[26];
 
   open_free_input();
   key_times('E', 23U);
@@ -567,22 +591,64 @@ static void test_v79_keyer_settings(void) {
   TEST_ASSERT_EQUAL(15U, fake_keyer_last_eff_wpm());
 }
 
+/* V-88 (AC-P17): the style is read once at each Free Input start. */
+static void test_v88_style_read_at_start(void) {
+  open_free_input();
+  keyp(".-.-.");
+  TEST_ASSERT(settings_set(SETTINGS_ID_PROSIGN_STYLE, SETTINGS_PROSIGN_PUNCTUATION));
+  keyp(".-.-.");
+  TEST_ASSERT(row_is(1, "<AR/+><AR/+>"));
+
+  long_press(MENU_PIN);
+  TEST_ASSERT(is_main_menu_on_free_input());
+  press(ENTER_PIN);
+  TEST_ASSERT(is_free_input_screen());
+  keyp(".-.-.");
+  TEST_ASSERT(row_is(1, "+"));
+
+  /* Settings > Prosigns (index 2): Punctuation -> Prosign, then leave Settings. */
+  long_press(MENU_PIN);
+  press(NEXT_PIN);
+  press(ENTER_PIN);
+  press(NEXT_PIN);
+  press(NEXT_PIN);
+  press(ENTER_PIN);
+  press(NEXT_PIN);
+  press(ENTER_PIN);
+  press(MENU_PIN);
+  TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
+  TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_NAME, settings_get(SETTINGS_ID_PROSIGN_STYLE));
+  press(PREV_PIN);
+  press(ENTER_PIN);
+  TEST_ASSERT(is_free_input_screen());
+  keyp(".-.-.");
+  TEST_ASSERT(row_is(1, "<AR>"));
+  TEST_ASSERT(row_is(2, NULL));
+}
+
 int main(void) {
-  TEST_RUN(test_v54_open);
-  TEST_RUN(test_v55_closed_contact_at_start);
-  TEST_RUN(test_v56_text);
-  TEST_RUN(test_v57_no_space_at_line_start);
-  TEST_RUN(test_v58_v59_space_at_line_end);
-  TEST_RUN(test_v60_scroll);
-  TEST_RUN(test_v61_unknown);
-  TEST_RUN(test_v62_v63_prosigns);
-  TEST_RUN(test_v64_v65_clear);
-  TEST_RUN(test_v66_to_v69_delimiter);
-  TEST_RUN(test_v70_short_presses_do_nothing);
-  TEST_RUN(test_v71_exit_and_reopen);
-  TEST_RUN(test_v72_held_contact_at_exit);
-  TEST_RUN(test_v73_long_threshold);
+  /* V-89: the scenarios that key no AR, BT, KN or AS give the same result for each prosign style. */
+  for (record_style = SETTINGS_PROSIGN_PUNCTUATION; record_style <= SETTINGS_PROSIGN_BOTH; ++record_style) {
+    printf("prosign style %u\n", record_style);
+    TEST_RUN(test_v54_open);
+    TEST_RUN(test_v55_closed_contact_at_start);
+    TEST_RUN(test_v56_text);
+    TEST_RUN(test_v57_no_space_at_line_start);
+    TEST_RUN(test_v58_v59_space_at_line_end);
+    TEST_RUN(test_v60_scroll);
+    TEST_RUN(test_v61_unknown);
+    TEST_RUN(test_v63_sk);
+    TEST_RUN(test_v64_v65_clear);
+    TEST_RUN(test_v66_to_v69_delimiter);
+    TEST_RUN(test_v70_short_presses_do_nothing);
+    TEST_RUN(test_v71_exit_and_reopen);
+    TEST_RUN(test_v72_held_contact_at_exit);
+    TEST_RUN(test_v73_long_threshold);
+  }
+  record_style = SETTINGS_PROSIGN_BOTH;
+  TEST_RUN(test_v62_prosigns);
   TEST_RUN(test_v79_keyer_settings);
+  TEST_RUN(test_v88_style_read_at_start);
   TEST_ASSERT(!fake_keyer_is_overflowed());
   return TEST_FINISH();
 }
