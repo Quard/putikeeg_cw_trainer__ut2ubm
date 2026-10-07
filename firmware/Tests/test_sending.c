@@ -897,7 +897,7 @@ static void test_v118_end_and_enter(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT_EQUAL(stops + 1U, fake_keyer_stop_count());
   TEST_ASSERT(!fake_keyer_is_running());
-  TEST_ASSERT(next_button());
+  TEST_ASSERT(start_button());
   harness_pins_for(BUTTON_BIT_ENTER, 2000U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
@@ -982,6 +982,7 @@ static void test_leave_in_each_phase(void) {
   tx_open_one(LEVEL_KM, "K");
   harness_event(LONG_EVENT(L_TAP));
   harness_set_time(HARNESS_T0);
+  harness_event(ENTER_EVENT);
   harness_event(ENTER_EVENT);
   {
     uint8_t number;
@@ -1081,7 +1082,7 @@ static void test_v136_word_pass_rate(void) {
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS, progress_level(PROGRESS_MODE_SENDING, 20U));
 
   tx_run_km_words(LEVEL_FIRST_WORDS, 8U);
-  TEST_ASSERT(text_at(3, 9, "Passed"));
+  TEST_ASSERT(text_at(3, 4, "Passed, new level"));
   TEST_ASSERT(end_screen_is(8U, 10U, 8U, 3U));
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS + 1U, progress_level(PROGRESS_MODE_SENDING, 20U));
 
@@ -1112,9 +1113,247 @@ static void test_v121_not_passed_80(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT(text_at(2, 7, "Score 0/100"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
-  TEST_ASSERT(text_at(4, 4, "Repeat level L154"));
-  TEST_ASSERT(next_button());
+  TEST_ASSERT(lvl(154U, 154U));
+  TEST_ASSERT(start_button());
   TEST_ASSERT(margins_off());
+}
+
+/* ---------- Level selection (ui-ux.md 5.16, V-108, V-137, V-142, V-143, V-147, AC-T33) ---------- */
+
+/* EARN(TX, @p level) at TX Speed 20, then OPEN(TX): the start screen shows. */
+static void tx_earn_open(uint16_t level) {
+  fake_iap_reset();
+  if (level != 0U) {
+    progress_fixture_write(PROGRESS_MODE_SENDING, 20U, level);
+  }
+  harness_power_on();
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
+  harness_open_start_screen(1U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+}
+
+/* Keys every item right until the end screen. */
+static void tx_pass_session(void) {
+  unsigned guard = 0U;
+  while ((training_phase() != TRAINING_PHASE_END) && (guard < 200U)) {
+    run_to_item();
+    key(training_item_text());
+    while ((training_phase() == TRAINING_PHASE_RESULT) || (training_phase() == TRAINING_PHASE_GAP)) {
+      harness_set_time((uint16_t)(harness_now + 1U));
+      harness_pass();
+    }
+    ++guard;
+  }
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+}
+
+/* V-137 (Sending), AC-T33 (1): the start screen; the keyer does not start; a limit redraws nothing. */
+static void test_v137_start_screen(void) {
+  tx_earn_open(0U);
+  TEST_ASSERT(hdr("TX 20/20 L1          1/50"));
+  TEST_ASSERT(body_off(1, 3));
+  TEST_ASSERT(lvl(1U, 1U));
+  TEST_ASSERT(desc("K and M"));
+  TEST_ASSERT(blank_row(6));
+  TEST_ASSERT(start_button());
+  TEST_ASSERT(margins_off());
+  snapshot(snapshot_before);
+  harness_clear_dirty();
+  harness_event(M_TAP);
+  harness_event(R_TAP);
+  harness_pins_for(BUTTON_BIT_NEXT, 1000U);
+  harness_pins_for(0U, 30U);
+  harness_pins_for(BUTTON_BIT_PREV, 1000U);
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT(dirty_is(0U));
+  TEST_ASSERT(is_screen_unchanged());
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+  TEST_ASSERT(!fake_keyer_is_running());
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
+}
+
+/* V-142, AC-T33 (3): P3.2 is enter on the start screen; its press starts the keyer once and the session. */
+static void test_v142_tip_starts_keyer_once(void) {
+  uint16_t start;
+
+  tx_earn_open(19U);
+  TEST_ASSERT(hdr("TX 20/20 L20         1/50"));
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+  harness_clear_dirty();
+  harness_event(M_TAP);
+  TEST_ASSERT(dirty_is(PAGE(0) | PAGE(4) | PAGE(5)));
+  TEST_ASSERT(hdr("TX 20/20 L19         1/50"));
+  TEST_ASSERT(lvl(19U, 20U));
+  harness_clear_dirty();
+  harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+  harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  start = harness_now;
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(18U, training_level());
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask() & PAGE(0));
+  TEST_ASSERT(hdr("TX 20/20 L19         1/50"));
+  TEST_ASSERT(body_off(1, 7));
+  TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
+  TEST_ASSERT(fake_keyer_is_running());
+  TEST_ASSERT_EQUAL(KEYER_KEY_IAMBIC_B, fake_keyer_last_key_type());
+  TEST_ASSERT(!fake_keyer_last_is_swapped());
+  TEST_ASSERT_EQUAL(20U, fake_keyer_last_wpm());
+  TEST_ASSERT_EQUAL(20U, fake_keyer_last_eff_wpm());
+  /* The contact stays closed to 2000 ms: enter is disabled in the session, so nothing more comes. */
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(2000U - BUTTONS_DEBOUNCE_MS - 1U));
+  harness_pins_for(0U, 30U);
+  harness_run_to((uint16_t)(start + 2100U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(1U, training_item_number());
+  harness_pins_for(BUTTON_BIT_ENTER, 50U);
+  harness_pins_for(0U, 50U);
+  TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
+  TEST_ASSERT_EQUAL(0U, harness_overlap_count);
+}
+
+/* V-143 (Sending), AC-T33 (5): a leave from the start screen stops no keyer and leaves P3.2 with the menu. */
+static void test_v143_leave_start_screen(void) {
+  uint8_t menu_image[FB_SIZE];
+
+  tx_earn_open(19U);
+  harness_event(M_TAP);
+  harness_event(M_TAP);
+  harness_event(M_TAP);
+  harness_pins_for(BUTTON_BIT_MENU, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT_EQUAL(1U, menu_cursor());
+  TEST_ASSERT(menu_row_is(2, "Sending", "L20", true));
+  snapshot(menu_image);
+  harness_pins_for(BUTTON_BIT_MENU, 1000U);
+  snapshot(snapshot_before);
+  TEST_ASSERT_EQUAL(0, memcmp(menu_image, snapshot_before, FB_SIZE));
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+  TEST_ASSERT_EQUAL(0U, fake_keyer_stop_count());
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
+  /* P3.2 is still the menu enter: a press opens Sending again at the earned level. */
+  harness_pins_for(BUTTON_BIT_ENTER, 25U);
+  harness_pins_for(0U, 25U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
+  TEST_ASSERT(lvl(20U, 20U));
+}
+
+/* V-108 runs 4 and 5, AC-T33 (4), (5): the Sending end screen steps, leaves and starts at the press. */
+static void test_v108_end_screen(void) {
+  tx_earn_open(0U);
+  harness_event(ENTER_EVENT);
+  tx_pass_session();
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
+  TEST_ASSERT(text_at(3, 4, "Passed, new level"));
+  TEST_ASSERT(lvl(2U, 2U));
+  TEST_ASSERT(desc("New char R"));
+  TEST_ASSERT(start_button());
+  TEST_ASSERT_EQUAL(1U, fake_keyer_stop_count());
+  TEST_ASSERT(!fake_keyer_is_running());
+  harness_clear_dirty();
+  harness_event(M_TAP);
+  TEST_ASSERT(lvl(1U, 2U));
+  TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
+  harness_pins_for(BUTTON_BIT_MENU, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT_EQUAL(1U, menu_cursor());
+  TEST_ASSERT_EQUAL(1U, fake_keyer_stop_count());
+  harness_pins_for(0U, 30U);
+
+  /* Run 5: P3.2 low for 100 ms starts a new session at its press; the keyer starts once. */
+  harness_pins_for(BUTTON_BIT_ENTER, 25U);
+  harness_pins_for(0U, 25U);
+  harness_event(ENTER_EVENT);
+  tx_pass_session();
+  TEST_ASSERT_EQUAL(2U, fake_keyer_start_count());
+  harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT(hdr("TX 20/20 L3          1/10"));
+  TEST_ASSERT_EQUAL(3U, fake_keyer_start_count());
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(100U - BUTTONS_DEBOUNCE_MS - 1U));
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(3U, fake_keyer_start_count());
+  TEST_ASSERT(fake_keyer_is_running());
+  /* A long menu/back in the session stops the keyer once and gives P3.2 back. */
+  harness_event(LONG_EVENT(L_TAP));
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT_EQUAL(3U, fake_keyer_stop_count());
+  TEST_ASSERT_EQUAL(0U, harness_overlap_count);
+}
+
+/* V-147: a replay pass at L1 below L20 stores nothing; a pass at L20 stores L21. */
+static void test_v147_replay_and_pass(void) {
+  tx_earn_open(19U);
+  while (training_selected_level() != 0U) {
+    harness_event(REPEAT_EVENT(M_TAP));
+  }
+  TEST_ASSERT(lvl(1U, 20U));
+  harness_event(ENTER_EVENT);
+  tx_pass_session();
+  TEST_ASSERT(text_at(3, 9, "Passed"));
+  TEST_ASSERT(lvl(2U, 20U));
+  TEST_ASSERT(desc("New char R"));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
+
+  tx_earn_open(19U);
+  (void)settings_set(SETTINGS_ID_MAX_WORD_LEN, 5U);
+  harness_event(ENTER_EVENT);
+  tx_pass_session();
+  TEST_ASSERT(hdr("TX 20/20 L20        50/50"));
+  TEST_ASSERT(text_at(3, 4, "Passed, new level"));
+  TEST_ASSERT(lvl(21U, 21U));
+  TEST_ASSERT(desc("Words of 5"));
+  TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(1U));
+  TEST_ASSERT_EQUAL(1U, fake_iap_program_count(0x0200U));
+}
+
+/*
+ * V-144 (Sending), D-T43: prev or next pressed 100 ms after the last keyed character and held 2000 ms through the
+ * session end gives no step, no repeat and no long event on the end screen. A new press then steps once.
+ */
+static void test_v144_held_through_end(void) {
+  static const uint8_t pins[2] = {BUTTON_BIT_NEXT, BUTTON_BIT_PREV};
+  size_t run;
+
+  for (run = 0U; run < 2U; ++run) {
+    unsigned guard = 0U;
+
+    tx_earn_open(19U);
+    while (training_selected_level() != 9U) {
+      harness_event(M_TAP);
+    }
+    harness_event(ENTER_EVENT);
+    do {
+      run_to_item();
+      key(training_item_text());
+      ++guard;
+    } while ((training_item_number() < training_item_count()) && (guard < 100U));
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+    harness_run_to((uint16_t)(harness_now + 100U));
+    harness_pins_for(pins[run], 600U);
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+    TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS_REPLAY, training_outcome());
+    TEST_ASSERT(lvl(11U, 20U));
+    harness_clear_dirty();
+    harness_pins_for(pins[run], 1400U);
+    harness_pins_for(0U, 30U);
+    TEST_ASSERT(dirty_is(0U));
+    TEST_ASSERT(lvl(11U, 20U));
+    harness_pins_for(pins[run], 30U);
+    harness_pins_for(0U, 30U);
+    TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
+    TEST_ASSERT(lvl((run == 0U) ? 12U : 10U, 20U));
+  }
 }
 
 int main(void) {
@@ -1143,5 +1382,11 @@ int main(void) {
   TEST_RUN(test_v121_longest_texts);
   TEST_RUN(test_v121_not_passed_80);
   TEST_RUN(test_v136_word_pass_rate);
+  TEST_RUN(test_v137_start_screen);
+  TEST_RUN(test_v142_tip_starts_keyer_once);
+  TEST_RUN(test_v143_leave_start_screen);
+  TEST_RUN(test_v108_end_screen);
+  TEST_RUN(test_v147_replay_and_pass);
+  TEST_RUN(test_v144_held_through_end);
   return TEST_FINISH();
 }

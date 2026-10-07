@@ -83,7 +83,8 @@ static void start_engine(uint8_t mode, uint8_t wpm, uint16_t level) {
   fake_iap_reset();
   progress_fixture_write(mode, wpm, level);
   harness_power_on();
-  training_start(mode, wpm, 8U);
+  training_prepare(mode, wpm, 8U);
+  training_start();
 }
 
 /* AC-T18: the session threshold at every level up to all 100-word levels, the top levels, both modes. */
@@ -270,17 +271,18 @@ static bool is_eeprom_unchanged(void) {
   return memcmp(eeprom_before, fake_iap_memory(), FAKE_IAP_SIZE) == 0;
 }
 
-/* The end screen of ui-ux.md 5.15 (rows 1 to 7), every text centered and inside 25 cells. */
-static void expect_end_screen(const char* score, const char* result, const char* level_text) {
+/*
+ * The end screen of ui-ux.md 5.15 (rows 1 to 7), every text centered and inside 25 cells. The selector shows the
+ * shown level @p selected of the shown earned level @p earned (D-T42).
+ */
+static void expect_end_screen(const char* score, const char* result, unsigned selected, unsigned earned) {
   TEST_ASSERT(strlen(result) <= 25U);
-  TEST_ASSERT(strlen(level_text) <= 25U);
   TEST_ASSERT(blank_row(1));
   TEST_ASSERT(centered(2, score));
   TEST_ASSERT(centered(3, result));
-  TEST_ASSERT(centered(4, level_text));
-  TEST_ASSERT(blank_row(5));
+  TEST_ASSERT(lvl(selected, earned));
   TEST_ASSERT(blank_row(6));
-  TEST_ASSERT(next_button());
+  TEST_ASSERT(start_button());
   TEST_ASSERT(margins_off());
 }
 
@@ -296,23 +298,20 @@ static void check_boundary(uint8_t mode, uint16_t level, const char* item, unsig
   const unsigned threshold = oracle_threshold(oracle_is_word(level), count);
   char score[32];
   char result[32];
-  char level_text[32];
 
   run_session(mode, level, item, threshold - 1U, late_correct);
   TEST_ASSERT_EQUAL(threshold, training_pass_threshold());
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
   (void)snprintf(score, sizeof(score), "Score %u/%u", threshold - 1U, count);
   (void)snprintf(result, sizeof(result), "Not passed, need %u", threshold);
-  (void)snprintf(level_text, sizeof(level_text), "Repeat level L%u", (unsigned)level + 1U);
-  expect_end_screen(score, result, level_text);
+  expect_end_screen(score, result, (unsigned)level + 1U, (unsigned)level + 1U);
   TEST_ASSERT(is_eeprom_unchanged());
   TEST_ASSERT_EQUAL(level, stored_level(mode));
 
   run_session(mode, level, item, threshold, late_correct);
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
   (void)snprintf(score, sizeof(score), "Score %u/%u", threshold, count);
-  (void)snprintf(level_text, sizeof(level_text), "New level L%u", (unsigned)level + 2U);
-  expect_end_screen(score, "Passed", level_text);
+  expect_end_screen(score, "Passed, new level", (unsigned)level + 2U, (unsigned)level + 2U);
   TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(EEPROM_MAP_PROGRESS_PAGE));
   TEST_ASSERT_EQUAL(1U, fake_iap_program_count(EEPROM_MAP_PROGRESS_ADDRESS));
   TEST_ASSERT_EQUAL(level + 1U, stored_level(mode));
@@ -339,14 +338,14 @@ static void test_sending_boundaries(void) {
 static void test_top_level_texts(void) {
   run_session(PROGRESS_MODE_SENDING, LEVEL_TOP, "KM", 79U, 0U);
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
-  expect_end_screen("Score 79/100", "Not passed, need 80", "Repeat level L65535");
+  expect_end_screen("Score 79/100", "Not passed, need 80", 65535U, 65535U);
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
-  TEST_ASSERT(text_at(4, 3, "Repeat level L65535"));
+  TEST_ASSERT(text_at(4, 2, "<  L65535 of 65535"));
   TEST_ASSERT(is_eeprom_unchanged());
 
   run_session(PROGRESS_MODE_SENDING, LEVEL_TOP, "KM", 100U, 0U);
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS_TOP, training_outcome());
-  expect_end_screen("Score 100/100", "Passed", "Top level L65535");
+  expect_end_screen("Score 100/100", "Passed", 65535U, 65535U);
   TEST_ASSERT(is_eeprom_unchanged());
 }
 

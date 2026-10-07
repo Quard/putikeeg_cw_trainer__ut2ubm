@@ -555,8 +555,8 @@ static void run_km_session_to_end(void) {
 }
 
 /*
- * End screen (ui-ux.md 6.8, UX-51): a long enter and a long tip closure do nothing; a short tip closure (also a plug
- * glitch, D-5) starts the next session at its release; tap mode stays on in the new session.
+ * End screen (ui-ux.md 6.8, 5.16.4, D-T39): a long enter does nothing. Tap mode is off there, so a short tip closure
+ * (also a plug glitch, D-5) starts the next session at its press; tap mode is on in the new session.
  */
 static void test_end_screen_long_enter_and_short_tip(void) {
   rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, "K");
@@ -565,18 +565,19 @@ static void test_end_screen_long_enter_and_short_tip(void) {
     const size_t calls = fake_player_call_count();
     mark_quiet_start();
     tap(LONG_EVENT(ENTER_EVENT));
-    pin_press(BUTTON_BIT_ENTER, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 10U));
     TEST_ASSERT(is_quiet_since_mark());
     TEST_ASSERT_EQUAL(calls, fake_player_call_count());
   }
-  TEST_ASSERT(next_button());
-  harness_pins_for(BUTTON_BIT_ENTER, 60U);
-  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase()); /* nothing at the press */
+  TEST_ASSERT(start_button());
+  harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  harness_pins_for(BUTTON_BIT_ENTER, 40U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase()); /* at the press */
   harness_pins_for(0U, BUTTONS_DEBOUNCE_MS + 1U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
   TEST_ASSERT(hdr("RX 32/32 L2          1/50"));
   TEST_ASSERT(keys("K", "M", "R", ""));
-  /* Tap mode still on: a menu/back press gives nothing until its release, and then selects run 0 only in ITEM. */
+  /* Tap mode on: a menu/back press gives nothing until its release, and then selects run 0 only in ITEM. */
   run_to_item();
   harness_pins_for(BUTTON_BIT_MENU, 60U);
   TEST_ASSERT_EQUAL(0U, training_answer_length());
@@ -601,7 +602,12 @@ static void test_opening_enter_held_into_item(void) {
   harness_pins_for(0U, 4U);
   harness_pins_for(BUTTON_BIT_ENTER, 3U);
   harness_pins_for(0U, 200U);
-  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  /* D-T39: the opening enter shows the start screen; its hold and its release bounce give nothing there. */
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(0U, fake_player_call_count());
+  harness_pins_for(BUTTON_BIT_ENTER, 30U);
+  harness_pins_for(0U, 30U);
+  run_to_item();
   TEST_ASSERT_EQUAL(1U, fake_player_call_count());
   TEST_ASSERT_EQUAL(0U, training_answer_length());
   TEST_ASSERT(keys("K", "M", "R", "S"));

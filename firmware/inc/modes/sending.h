@@ -11,7 +11,10 @@
 
 #include "buttons/buttons.h"
 
-/** Seeds the RNG, takes P3.2 from the menu, sets the tone, starts the keyer and a session at the TX speed. */
+/**
+ * Seeds the RNG, reads the settings, sets the tone and prepares the engine (phase SELECT). No keyer: P3.2 stays with
+ * the menu.
+ */
 void sending_enter(void);
 /** Draws the whole Sending screen for the current state. menu_render() calls it after the clear. */
 void sending_render(void);
@@ -19,7 +22,10 @@ void sending_render(void);
 void sending_poll(void);
 /** Applies a button event (section 12). Returns true when the user asks to leave. */
 bool sending_handle(button_event_t event);
-/** Stops the keyer and the session and gives P3.2 back to the menu. Draws nothing. */
+/**
+ * In GAP, ITEM and RESULT: stops the keyer and gives P3.2 back. In SELECT and END no keyer runs (D-T40). Then stops
+ * the session. Draws nothing.
+ */
 void sending_leave(void);
 
 #endif /* MODES_SENDING_H */

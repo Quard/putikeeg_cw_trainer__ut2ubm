@@ -203,6 +203,20 @@ static unsigned reference_threshold(unsigned count, unsigned p, unsigned q) {
   return threshold;
 }
 
+/* AC-T30 (4), D-T5, D-T37: the shown level is the index + 1, saturated at 65535. */
+static void test_shown_level(void) {
+  uint32_t level;
+
+  TEST_ASSERT_EQUAL(1U, koch_shown_level(0U));
+  TEST_ASSERT_EQUAL(2U, koch_shown_level(1U));
+  TEST_ASSERT_EQUAL(65534U, koch_shown_level(65533U));
+  TEST_ASSERT_EQUAL(65535U, koch_shown_level(65534U));
+  TEST_ASSERT_EQUAL(65535U, koch_shown_level(65535U));
+  for (level = 0U; level < KOCH_LEVEL_MAX; ++level) {
+    TEST_ASSERT_EQUAL(level + 1U, koch_shown_level((uint16_t)level));
+  }
+}
+
 /* AC-T6 (D-T33): ceil(0.9 n) for a character session, ceil(0.8 n) for a word session. */
 static void test_pass_threshold(void) {
   unsigned count;
@@ -348,6 +362,7 @@ int main(void) {
   TEST_RUN(test_level_model);
   TEST_RUN(test_reference_rows);
   TEST_RUN(test_word_length_clamp);
+  TEST_RUN(test_shown_level);
   TEST_RUN(test_pass_threshold);
   TEST_RUN(test_char_item_mix);
   TEST_RUN(test_word_items);

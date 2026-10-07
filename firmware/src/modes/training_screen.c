@@ -3,9 +3,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "buttons/buttons.h"
 #include "cw/morse.h"
 #include "gfx/fonts.h"
 #include "gfx/gfx.h"
+#include "koch/koch.h"
 #include "lcd/lcd_fb.h"
 #include "mcu/compiler.h"
 #include "modes/training.h"
@@ -25,15 +27,16 @@
 #define SCREEN_BLOCK_HEIGHT 14
 #define SCREEN_BAR_Y 38
 #define SCREEN_BAR_HEIGHT 2
+#define SCREEN_END_SAVE_ROW 1U
 #define SCREEN_END_SCORE_ROW 2U
 #define SCREEN_END_RESULT_ROW 3U
-#define SCREEN_END_LEVEL_ROW 4U
-#define SCREEN_END_SAVE_ROW 5U
-#define SCREEN_NEXT_COLUMN 10U
-#define SCREEN_NEXT_BAND_X 47 /* cells 9-14 */
-#define SCREEN_NEXT_BAND_WIDTH 30
-#define SCREEN_NEXT_BAND_Y 57 /* y 56, the gap line, stays off */
-#define SCREEN_NEXT_BAND_HEIGHT 7
+#define SCREEN_SELECTOR_ROW 4U
+#define SCREEN_DESCRIPTION_ROW 5U
+#define SCREEN_START_COLUMN 10U
+#define SCREEN_START_BAND_X 47 /* cells 9-15, x 47-81 */
+#define SCREEN_START_BAND_WIDTH 35
+#define SCREEN_START_BAND_Y 57 /* y 56, the gap line, stays off */
+#define SCREEN_START_BAND_HEIGHT 7
 #define SCREEN_NUMBER_SIZE ((2U * GFX_U16_TEXT_SIZE) + 1U) /* "100/100" and room for two numbers */
 _Static_assert(SCREEN_NUMBER_SIZE >= MORSE_TEXT_SIZE, "the number buffer also holds the text of one character");
 
@@ -44,6 +47,7 @@ static MEM_XDATA char screen_number[SCREEN_NUMBER_SIZE];
 #define screen_glyph_text screen_number
 /* Held in xdata across the calls of training_screen_draw_header(). */
 static MEM_XDATA bool screen_is_receiving;
+/* A pixel x, or the item count of the header: one xdata work value, never both at once. */
 static MEM_XDATA int16_t screen_x;
 /* Sending: a word space inside a word ended the attempt (UX-52, D-T31). */
 static const MEM_CODE char screen_pause_text[] = "pause too long";
@@ -151,7 +155,10 @@ void training_screen_draw_mark(uint8_t slot, MEM_XDATA uint8_t count, MEM_XDATA 
   }
 }
 
-/* ui-ux.md section 5.11.1: tag, speeds from column 3, level from column 9, item right-aligned to column 24. */
+/*
+ * ui-ux.md section 5.11.1: tag, speeds from column 3, level from column 9, item right-aligned to column 24. In SELECT
+ * the header is the one of the start pause at the selected level (SL-6), so a start does not redraw it.
+ */
 void training_screen_draw_header(void) {
   uint8_t length;
 
@@ -164,22 +171,98 @@ void training_screen_draw_header(void) {
   training_screen_append_u16(settings_get(screen_is_receiving ? SETTINGS_ID_RX_EFF_WPM : SETTINGS_ID_TX_EFF_WPM));
   screen_pad(SCREEN_LEVEL_COLUMN);
   training_screen_append("L");
-  training_screen_append_u16(training_shown_level());
-  length = gfx_format_u16(training_shown_item_number(), screen_number);
+  if (training_phase() == TRAINING_PHASE_SELECT) {
+    training_screen_append_u16(training_new_shown_level());
+    screen_number[0] = '1';
+    length = 1U;
+    screen_x = koch_item_count(training_selected_level());
+  } else {
+    training_screen_append_u16(training_shown_level());
+    length = gfx_format_u16(training_shown_item_number(), screen_number);
+    screen_x = training_item_count();
+  }
   screen_number[length] = '/';
   ++length;
-  length = (uint8_t)(length + gfx_format_u16(training_item_count(), &screen_number[length]));
+  length = (uint8_t)(length + gfx_format_u16((uint16_t)screen_x, &screen_number[length]));
   screen_pad((uint8_t)(TRAINING_SCREEN_COLUMNS - length));
   training_screen_append(screen_number);
   gfx_fill_rect(0, 0, (int16_t)LCD_WIDTH, (int16_t)SCREEN_ROW_HEIGHT, LCD_PIXEL_ON);
   (void)gfx_draw_text((int16_t)SCREEN_GRID_X, 0, training_screen_text, GFX_TEXT_INVERTED);
 }
 
-/* ui-ux.md section 5.15. */
+/*
+ * ui-ux.md section 5.16.2: '<', two blanks, "L<s> of <e>", two blanks, '>'. A marker shows only when a step is
+ * possible; a blank keeps its cell, so the centered line starts in column floor((19 - len) / 2).
+ */
+static void screen_draw_selector(void) {
+  training_screen_compose();
+  training_screen_append("   L");
+  training_screen_append_u16(training_new_shown_level());
+  training_screen_append(" of ");
+  training_screen_append_u16(koch_shown_level(training_earned_level()));
+  training_screen_append("   ");
+  if (training_selected_level() != 0U) {
+    training_screen_text[0] = '<';
+  }
+  if (training_selected_level() < training_earned_level()) {
+    training_screen_text[screen_length - 1U] = '>';
+  }
+  training_screen_draw_centered(SCREEN_SELECTOR_ROW);
+}
+
+/* ui-ux.md section 5.16.3 (SL-2): what the selected level adds. The settings cannot change on a training screen. */
+static void screen_draw_description(void) {
+  training_screen_compose();
+  if (training_selected_level() == 0U) {
+    training_screen_append("K and M");
+  } else if (koch_kind(training_selected_level()) == KOCH_KIND_CHAR) {
+    training_screen_append("New char ");
+    (void)morse_format(koch_char((uint8_t)(koch_learned_count(training_selected_level()) - 1U)),
+                       (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE), screen_glyph_text);
+    training_screen_append(screen_glyph_text);
+  } else {
+    training_screen_append("Words of ");
+    training_screen_append_u16(
+        koch_word_length(training_selected_level(), (uint8_t)settings_get(SETTINGS_ID_MAX_WORD_LEN)));
+  }
+  training_screen_draw_centered(SCREEN_DESCRIPTION_ROW);
+}
+
+void training_screen_draw_select(void) {
+  if (training_phase() == TRAINING_PHASE_SELECT) {
+    training_screen_draw_header();
+  }
+  screen_draw_selector();
+  screen_draw_description();
+}
+
+/*
+ * ui-ux.md section 5.16.1: rows 1-3 and 6 blank, the selector, the description and the Start band. The end screen
+ * draws its rows 1-3 over it, so both screens share one band (SL-5).
+ */
+void training_screen_draw_start(void) {
+  training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
+  screen_draw_selector();
+  screen_draw_description();
+  gfx_fill_rect(SCREEN_START_BAND_X, SCREEN_START_BAND_Y, SCREEN_START_BAND_WIDTH, SCREEN_START_BAND_HEIGHT,
+                LCD_PIXEL_ON);
+  (void)gfx_draw_text((int16_t)(SCREEN_GRID_X + (SCREEN_START_COLUMN * GFX_FONT_5X8_WIDTH)),
+                      (int16_t)(TRAINING_SCREEN_LAST_ROW * SCREEN_ROW_HEIGHT), "Start", GFX_TEXT_INVERTED);
+  /* Inverted text paints the gap line y 56; the band leaves it off (ui-ux.md UX-2). */
+  gfx_fill_rect(SCREEN_START_BAND_X, (int16_t)(SCREEN_START_BAND_Y - 1), SCREEN_START_BAND_WIDTH, 1, LCD_PIXEL_OFF);
+}
+
+/* ui-ux.md section 5.15 (SL-7, D-T42 (3)). */
 void training_screen_draw_end(void) {
   const training_outcome_t outcome = training_outcome();
 
-  training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
+  training_screen_draw_start();
+  if (outcome == TRAINING_OUTCOME_PASS_NOT_SAVED) {
+    training_screen_compose();
+    training_screen_append("Not saved");
+    training_screen_draw_centered(SCREEN_END_SAVE_ROW);
+  }
+
   training_screen_compose();
   training_screen_append("Score ");
   training_screen_append_u16(training_score());
@@ -193,29 +276,37 @@ void training_screen_draw_end(void) {
     training_screen_append_u16(training_pass_threshold());
   } else {
     training_screen_append("Passed");
+    if ((uint8_t)(outcome - TRAINING_OUTCOME_PASS) <= (TRAINING_OUTCOME_PASS_NOT_SAVED - TRAINING_OUTCOME_PASS)) {
+      training_screen_append(", new level");
+    }
   }
   training_screen_draw_centered(SCREEN_END_RESULT_ROW);
+}
 
-  training_screen_compose();
-  if (outcome == TRAINING_OUTCOME_FAIL) {
-    training_screen_append("Repeat level L");
-  } else if (outcome == TRAINING_OUTCOME_PASS_TOP) {
-    training_screen_append("Top level L");
-  } else {
-    training_screen_append("New level L");
+_Static_assert((TRAINING_OUTCOME_PASS_NOT_SAVED == (TRAINING_OUTCOME_PASS + 1U)),
+               "the advancing passes must be one range");
+_Static_assert(((BUTTON_EVENT_NEXT & 1U) != 0U) && ((BUTTON_EVENT_PREV & 1U) == 0U), "bit 0 must tell next from prev");
+
+/* ui-ux.md section 5.16.4 (D-T38). Tap mode is off, so a press acts at once; a long event never acts. */
+training_select_action_t training_screen_select_input(button_event_t event) {
+  const uint8_t code = BUTTON_EVENT_CODE(event);
+
+  if ((event & BUTTON_EVENT_LONG_FLAG) != 0U) {
+    return TRAINING_SELECT_NONE;
   }
-  training_screen_append_u16(training_new_shown_level());
-  training_screen_draw_centered(SCREEN_END_LEVEL_ROW);
-
-  if (outcome == TRAINING_OUTCOME_PASS_NOT_SAVED) {
-    training_screen_compose();
-    training_screen_append("Not saved");
-    training_screen_draw_centered(SCREEN_END_SAVE_ROW);
+  if ((code == BUTTON_EVENT_PREV) || (code == BUTTON_EVENT_NEXT)) {
+    /* Bit 0 tells next from prev; a bool from a compare would need a bit of internal RAM in SDCC. */
+    if (training_select_step((bool)(code & 1U))) {
+      training_screen_draw_select();
+    }
+    return TRAINING_SELECT_NONE;
   }
-
-  gfx_fill_rect(SCREEN_NEXT_BAND_X, SCREEN_NEXT_BAND_Y, SCREEN_NEXT_BAND_WIDTH, SCREEN_NEXT_BAND_HEIGHT, LCD_PIXEL_ON);
-  (void)gfx_draw_text((int16_t)(SCREEN_GRID_X + (SCREEN_NEXT_COLUMN * GFX_FONT_5X8_WIDTH)),
-                      (int16_t)(TRAINING_SCREEN_LAST_ROW * SCREEN_ROW_HEIGHT), "Next", GFX_TEXT_INVERTED);
-  /* Inverted text paints the gap line y 56; the band leaves it off (ui-ux.md UX-2). */
-  gfx_fill_rect(SCREEN_NEXT_BAND_X, (int16_t)(SCREEN_NEXT_BAND_Y - 1), SCREEN_NEXT_BAND_WIDTH, 1, LCD_PIXEL_OFF);
+  /* A whole-event compare also rejects a repeat. */
+  if (event == BUTTON_EVENT_ENTER) {
+    return TRAINING_SELECT_START;
+  }
+  if (event == BUTTON_EVENT_MENU) {
+    return TRAINING_SELECT_LEAVE;
+  }
+  return TRAINING_SELECT_NONE;
 }

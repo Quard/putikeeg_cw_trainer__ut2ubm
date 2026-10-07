@@ -121,6 +121,10 @@ uint8_t koch_alphabet_count(uint16_t level) {
   return count;
 }
 
+uint16_t koch_shown_level(uint16_t level) {
+  return (level != KOCH_LEVEL_MAX) ? (uint16_t)(level + 1U) : (uint16_t)KOCH_LEVEL_MAX;
+}
+
 uint8_t koch_pass_threshold(koch_kind_t kind, MEM_XDATA uint8_t item_count) {
   uint8_t numerator = 9U;
   uint8_t denominator = 10U;

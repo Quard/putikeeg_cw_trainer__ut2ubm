@@ -45,7 +45,8 @@ typedef uint8_t training_phase_t;
 #define TRAINING_PHASE_GAP 1U    /* pause before an item; Sending shows a blank item area */
 #define TRAINING_PHASE_ITEM 2U   /* the item is shown or played; answers count */
 #define TRAINING_PHASE_RESULT 3U /* a check result shows; answers are dropped */
-#define TRAINING_PHASE_END 4U    /* session end screen */
+#define TRAINING_PHASE_END 4U    /* session end screen; the level selector is active */
+#define TRAINING_PHASE_SELECT 5U /* start screen: the level selector, no session (D-T36) */
 
 typedef uint8_t training_check_t;
 #define TRAINING_CHECK_PARTIAL 0U /* the answer so far is accepted; more characters needed */
@@ -66,10 +67,27 @@ typedef uint8_t training_outcome_t;
 #define TRAINING_OUTCOME_PASS 1U           /* the level went up and is stored */
 #define TRAINING_OUTCOME_PASS_NOT_SAVED 2U /* the level went up in RAM only */
 #define TRAINING_OUTCOME_PASS_TOP 3U       /* passed at level index 65535; no change, no save (D-T17) */
+#define TRAINING_OUTCOME_PASS_REPLAY 4U    /* passed below the earned level; no change, no save (D-T36) */
 
-/** Starts a session of @p mode (unknown gives RECEIVING) at the stored level of @p wpm. Phase GAP, TRAINING_START_MS.
+/**
+ * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. Phase
+ * SELECT. No session runs. Reads the progress RAM only (D-T36).
  */
-void training_start(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+/**
+ * Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS.
+ * No phase check: the modes call it in SELECT and END only.
+ */
+void training_start(void);
+/**
+ * In phase SELECT or END: moves the selected level one step up (@p is_up) or down, inside 0..training_earned_level().
+ * No wrap. Returns true when the level changed. Other phases: no change, returns false.
+ */
+bool training_select_step(bool is_up);
+/** Level index that the next training_start() uses: 0..training_earned_level(). */
+uint16_t training_selected_level(void);
+/** Earned level index: progress_level() of the prepared mode and speed, read at each call. */
+uint16_t training_earned_level(void);
 /** Ends the session without a store. Phase IDLE. */
 void training_stop(void);
 /** Runs the time-based steps of section 11. Returns at most one event. Reads the tick once. */
@@ -89,8 +107,8 @@ uint8_t training_mode(void);
 uint8_t training_wpm(void); /* the progress key of the session */
 koch_kind_t training_kind(void);
 uint16_t training_level(void);           /* level index of the session */
-uint16_t training_shown_level(void);     /* D-T5: min(training_level() + 1, 65535) */
-uint16_t training_new_shown_level(void); /* in phase END: the shown level of the next session */
+uint16_t training_shown_level(void);     /* koch_shown_level(training_level()) */
+uint16_t training_new_shown_level(void); /* koch_shown_level(training_selected_level()) (D-T36) */
 uint8_t training_learned_count(void);
 uint8_t training_alphabet_count(void);    /* koch_alphabet_count() of the session level */
 uint8_t training_item_number(void);       /* 0 before the first item, then 1..item count */

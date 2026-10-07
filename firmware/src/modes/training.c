@@ -15,6 +15,8 @@ static MEM_XDATA uint8_t training_mode_value;
 static MEM_XDATA uint8_t training_wpm_value;
 static MEM_XDATA uint8_t training_max_word_len;
 static MEM_XDATA uint16_t training_level_value;
+/* Selection (D-T36). The earned level has no copy, so it is never stale. */
+static MEM_XDATA uint16_t training_selected;
 /* Counters. */
 static MEM_XDATA uint8_t training_item_number_value;
 static MEM_XDATA uint8_t training_item_count_value;
@@ -47,14 +49,16 @@ static void training_clear_answer(void) {
   training_answer[0] = '\0';
 }
 
-/* D-T5: level index + 1, saturated at 65535. */
-static uint16_t training_shown_of(uint16_t level) { return (level == KOCH_LEVEL_MAX) ? level : (uint16_t)(level + 1U); }
-
-void training_start(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len) {
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len) {
   training_mode_value = (mode == TRAINING_MODE_SENDING) ? TRAINING_MODE_SENDING : TRAINING_MODE_RECEIVING;
   training_wpm_value = wpm;
   training_max_word_len = max_word_len;
-  training_level_value = progress_level(training_mode_value, wpm);
+  training_selected = training_earned_level();
+  training_phase_value = TRAINING_PHASE_SELECT;
+}
+
+void training_start(void) {
+  training_level_value = training_selected;
   training_item_count_value = koch_item_count(training_level_value);
   training_threshold = koch_pass_threshold(koch_kind(training_level_value), training_item_count_value);
   training_item_number_value = 0U;
@@ -71,17 +75,44 @@ void training_start(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_w
 
 void training_stop(void) { training_phase_value = TRAINING_PHASE_IDLE; }
 
-/* Section 11.4. */
-static void training_finish(void) {
-  if (training_score_value < training_threshold) {
-    training_outcome_value = TRAINING_OUTCOME_FAIL;
-  } else if (!progress_advance(training_mode_value, training_wpm_value)) {
-    training_outcome_value = TRAINING_OUTCOME_PASS_TOP;
-  } else if (progress_save() == PROGRESS_OK) {
-    training_outcome_value = TRAINING_OUTCOME_PASS;
-  } else {
-    training_outcome_value = TRAINING_OUTCOME_PASS_NOT_SAVED;
+bool training_select_step(bool is_up) {
+  if ((training_phase_value != TRAINING_PHASE_SELECT) && (training_phase_value != TRAINING_PHASE_END)) {
+    return false;
   }
+  if (is_up) {
+    if (training_selected >= training_earned_level()) {
+      return false;
+    }
+    ++training_selected;
+  } else {
+    if (training_selected == 0U) {
+      return false;
+    }
+    --training_selected;
+  }
+  return true;
+}
+
+/*
+ * Section 11.4. Only a pass at the earned level changes the store (D-T36). A fail keeps the selection: no step acts
+ * during a session, so it still equals the session level.
+ */
+static void training_finish(void) {
+  training_outcome_t outcome = TRAINING_OUTCOME_FAIL;
+
+  if (training_score_value >= training_threshold) {
+    training_selected = koch_shown_level(training_level_value);
+    if (training_level_value != training_earned_level()) {
+      outcome = TRAINING_OUTCOME_PASS_REPLAY;
+    } else if (!progress_advance(training_mode_value, training_wpm_value)) {
+      outcome = TRAINING_OUTCOME_PASS_TOP;
+    } else if (progress_save() == PROGRESS_OK) {
+      outcome = TRAINING_OUTCOME_PASS;
+    } else {
+      outcome = TRAINING_OUTCOME_PASS_NOT_SAVED;
+    }
+  }
+  training_outcome_value = outcome;
 }
 
 training_event_t training_poll(void) {
@@ -195,11 +226,13 @@ koch_kind_t training_kind(void) { return koch_kind(training_level_value); }
 
 uint16_t training_level(void) { return training_level_value; }
 
-uint16_t training_shown_level(void) { return training_shown_of(training_level_value); }
+uint16_t training_selected_level(void) { return training_selected; }
 
-uint16_t training_new_shown_level(void) {
-  return training_shown_of(progress_level(training_mode_value, training_wpm_value));
-}
+uint16_t training_earned_level(void) { return progress_level(training_mode_value, training_wpm_value); }
+
+uint16_t training_shown_level(void) { return koch_shown_level(training_level_value); }
+
+uint16_t training_new_shown_level(void) { return koch_shown_level(training_selected); }
 
 uint8_t training_learned_count(void) { return koch_learned_count(training_level_value); }
 

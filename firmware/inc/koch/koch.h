@@ -43,6 +43,8 @@ uint8_t koch_item_count(uint16_t level);
 uint8_t koch_word_length(uint16_t level, MEM_XDATA uint8_t max_word_len);
 /** Characters that an item of @p level can hold: the learned count, or min(learned, 40) at a word level (D-T4). */
 uint8_t koch_alphabet_count(uint16_t level);
+/** Level number that the user sees: @p level + 1, saturated at KOCH_LEVEL_MAX (D-T5, D-T37). */
+uint16_t koch_shown_level(uint16_t level);
 /**
  * Smallest score that passes a session of @p item_count items (D-T33): ceil(0.8 * item_count) for KOCH_KIND_WORD,
  * else ceil(0.9 * item_count).

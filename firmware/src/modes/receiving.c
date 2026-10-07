@@ -59,8 +59,10 @@ static MEM_XDATA bool rx_is_block;
 
 static void rx_play_item(void) { (void)player_start(training_item_text(), training_item_length(), rx_wpm, rx_eff_wpm); }
 
+/* Tap mode is on only during a session (D-T39); the switch drops the press that starts it. */
 static void rx_start_session(void) {
-  training_start(TRAINING_MODE_RECEIVING, rx_wpm, rx_max_word_len);
+  buttons_set_tap_mode(true);
+  training_start();
   keyboard_reset(training_alphabet_count());
 }
 
@@ -158,18 +160,26 @@ void receiving_enter(void) {
   rx_max_word_len = (uint8_t)settings_get(SETTINGS_ID_MAX_WORD_LEN);
   rx_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
-  buttons_set_tap_mode(true);
-  rx_start_session();
+  training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, rx_max_word_len);
+}
+
+/* Rows 1-7 of a session. */
+static void rx_draw_session(void) {
+  rx_draw_input();
+  rx_draw_key_bars();
 }
 
 void receiving_render(void) {
-  training_screen_draw_header();
-  if (training_phase() == TRAINING_PHASE_END) {
+  const training_phase_t phase = training_phase();
+
+  if (phase == TRAINING_PHASE_SELECT) {
+    training_screen_draw_start();
+  } else if (phase == TRAINING_PHASE_END) {
     training_screen_draw_end();
-    return;
+  } else {
+    rx_draw_session();
   }
-  rx_draw_input();
-  rx_draw_key_bars();
+  training_screen_draw_header();
 }
 
 void receiving_poll(void) {
@@ -188,6 +198,7 @@ void receiving_poll(void) {
     training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_ITEM_LAST_ROW + 1U);
     training_screen_draw_header();
   } else if (event == TRAINING_EVENT_END) {
+    buttons_set_tap_mode(false);
     training_screen_draw_header();
     training_screen_draw_end();
   }
@@ -244,7 +255,25 @@ static bool rx_handle_item(void) {
 
 bool receiving_handle(button_event_t event) {
   const training_phase_t phase = training_phase();
+  training_select_action_t action;
 
+  if ((phase == TRAINING_PHASE_SELECT) || (phase == TRAINING_PHASE_END)) {
+    action = training_screen_select_input(event);
+    if (action == TRAINING_SELECT_LEAVE) {
+      return true;
+    }
+    if (action == TRAINING_SELECT_START) {
+      rng_mix(tick_now());
+      rx_start_session();
+      training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
+      /* The start screen header already shows the start pause of the selected level (D-T42 (4)). */
+      if (phase == TRAINING_PHASE_END) {
+        training_screen_draw_header();
+      }
+      rx_draw_session();
+    }
+    return false;
+  }
   if ((event & BUTTON_EVENT_REPEAT_FLAG) != 0U) {
     return false;
   }
@@ -252,21 +281,6 @@ bool receiving_handle(button_event_t event) {
   rx_is_long = false;
   if ((event & BUTTON_EVENT_LONG_FLAG) != 0U) {
     rx_is_long = true;
-  }
-  if (phase == TRAINING_PHASE_END) {
-    if (rx_is_long) {
-      return false;
-    }
-    if (rx_code == BUTTON_EVENT_MENU) {
-      return true;
-    }
-    if (rx_code == BUTTON_EVENT_ENTER) {
-      rng_mix(tick_now());
-      rx_start_session();
-      training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
-      receiving_render();
-    }
-    return false;
   }
   if ((phase == TRAINING_PHASE_ITEM) && rx_handle_item()) {
     rng_mix(tick_now());

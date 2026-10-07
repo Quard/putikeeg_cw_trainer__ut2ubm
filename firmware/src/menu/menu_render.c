@@ -1,11 +1,23 @@
 #include <stddef.h>
 
 #include "gfx/gfx.h"
+#include "koch/koch.h"
 #include "lcd/lcd_fb.h"
 #include "menu_internal.h"
 #include "modes/receiving.h"
 #include "modes/sending.h"
+#include "progress/progress.h"
 #include "settings/settings.h"
+
+/* The target of a mode item goes to progress_level() as it is (D-T41). */
+#if (MENU_MODE_RECEIVING != PROGRESS_MODE_RECEIVING) || (MENU_MODE_SENDING != PROGRESS_MODE_SENDING)
+#error "The menu modes must equal the progress modes"
+#endif
+/* RX Speed of Receiving (mode 0), TX Speed of Sending (mode 1). */
+#define MENU_MODE_SPEED_ID(mode) ((settings_id_t)(SETTINGS_ID_RX_WPM + (uint8_t)(2U * (mode))))
+_Static_assert((MENU_MODE_SPEED_ID(MENU_MODE_RECEIVING) == SETTINGS_ID_RX_WPM) &&
+                   (MENU_MODE_SPEED_ID(MENU_MODE_SENDING) == SETTINGS_ID_TX_WPM),
+               "each mode must read its own speed");
 
 /* Screen grid (references/internal/ui-ux.md sections 4 and 5): 8 rows x 25 columns of 5 x 8 cells from x = 2. */
 #define GRID_X 2U
@@ -126,6 +138,18 @@ static void draw_value(const menu_item_t MEM_CODE* item, MEM_XDATA bool is_edit)
   draw_text((uint8_t)(VALUE_END_COLUMN - value_length), value_text, color);
 }
 
+/*
+ * ui-ux.md section 5.16.6: "L<n>", the earned level of mode @p mode at its own speed, right-aligned to column 22, in
+ * the video of the label. A mode row has no edit mode, so the row selection gives the video.
+ */
+static void draw_mode_level(uint8_t mode) {
+  item_value = koch_shown_level(progress_level(mode, (uint8_t)settings_get(MENU_MODE_SPEED_ID(mode))));
+  value_text[0] = 'L';
+  value_length = (uint8_t)(gfx_format_u16(item_value, &value_text[1]) + 1U);
+  draw_text((uint8_t)(VALUE_END_COLUMN - value_length), value_text,
+            (render_index == menu_stack_cursors[menu_depth - 1U]) ? GFX_TEXT_INVERTED : GFX_TEXT_NORMAL);
+}
+
 static void draw_item_row(const menu_item_t MEM_CODE* item) {
   const bool is_selected = (render_index == menu_stack_cursors[menu_depth - 1U]);
   const bool is_edit = is_selected && (menu_current_screen == MENU_SCREEN_EDIT);
@@ -140,6 +164,8 @@ static void draw_item_row(const menu_item_t MEM_CODE* item) {
     draw_text(GRID_LAST_COLUMN, ">", label_color);
   } else if ((item->kind == MENU_KIND_VALUE) || (item->kind == MENU_KIND_CHOICE)) {
     draw_value(item, is_edit);
+  } else if ((item->kind == MENU_KIND_MODE) && (item->target != MENU_MODE_FREE_INPUT)) {
+    draw_mode_level(item->target);
   }
   if (is_selected) {
     finish_band();

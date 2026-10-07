@@ -11,7 +11,8 @@
 
 #include "buttons/buttons.h"
 
-/** Seeds the RNG, sets the tone, turns tap mode on and starts a session at the RX speed. Draws nothing. */
+/** Seeds the RNG, reads the settings, sets the tone and prepares the engine (phase SELECT). Tap mode stays off. Draws
+ * nothing. */
 void receiving_enter(void);
 /** Draws the whole Receiving screen for the current state. menu_render() calls it after the clear. */
 void receiving_render(void);

@@ -869,6 +869,7 @@ static void test_reentry_clears_armed(void) {
   harness_set_time((uint16_t)(harness_now + 10U));
   harness_event(ENTER_EVENT);
   TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
+  harness_event(ENTER_EVENT); /* the start screen (D-T35) */
   run_to_item();
   TEST_ASSERT_EQUAL(0U, training_answer_length());
   expect_word_gap_no_effect();

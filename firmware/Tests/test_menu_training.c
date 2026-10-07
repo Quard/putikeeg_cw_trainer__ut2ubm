@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 
+#include "eeprom/eeprom_map.h"
 #include "modes/training.h"
 #include "support/training_harness.h"
 
@@ -210,6 +211,118 @@ static void test_random_walk_keyer_and_player_exclusive(void) {
   TEST_ASSERT(!fake_keyer_is_overflowed());
 }
 
+/* ---------- Main menu level (ui-ux.md 5.16.6, D-T41, AC-T34) ---------- */
+
+/* The Free Input and Settings rows have no level (V-01). */
+static bool other_rows_unchanged(void) {
+  const row_text_t settings_row[2] = {{0, "Settings", false}, {24, ">", false}};
+  return menu_row_is(3, "Free Input", NULL, false) && row_matches(4, HARNESS_NO_BAND, 0, settings_row, 2U);
+}
+
+/* AC-T34: stored levels 0, 11, 65534 and 65535 show L1, L12, L65535 and L65535, right-aligned to column 22. */
+static void test_menu_level_texts(void) {
+  static const uint16_t levels[4] = {0U, 11U, 65534U, 65535U};
+  static const char* const texts[4] = {"L1", "L12", "L65535", "L65535"};
+  size_t index;
+
+  for (index = 0U; index < 4U; ++index) {
+    fake_iap_reset();
+    progress_fixture_write(PROGRESS_MODE_RECEIVING, 32U, levels[index]);
+    progress_fixture_add(PROGRESS_MODE_SENDING, 20U, levels[3U - index]);
+    harness_power_on();
+    TEST_ASSERT(menu_row_is(1, "Receiving", texts[index], true));
+    TEST_ASSERT(menu_row_is(2, "Sending", texts[3U - index], false));
+    TEST_ASSERT(other_rows_unchanged());
+    TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U) + fake_iap_command_count(3U));
+  }
+}
+
+/* V-149: each mode shows the level of its own speed; the cursor move and a speed change redraw it. */
+static void test_v149_level_per_speed(void) {
+  unsigned index;
+
+  fake_iap_reset();
+  progress_fixture_write(PROGRESS_MODE_RECEIVING, 32U, 11U);
+  progress_fixture_add(PROGRESS_MODE_RECEIVING, 20U, 4U);
+  progress_fixture_add(PROGRESS_MODE_SENDING, 20U, 0U);
+  progress_fixture_add(PROGRESS_MODE_SENDING, 25U, 65534U);
+  harness_power_on();
+  TEST_ASSERT(menu_row_is(1, "Receiving", "L12", true));
+  TEST_ASSERT(menu_row_is(2, "Sending", "L1", false));
+  TEST_ASSERT(other_rows_unchanged());
+  harness_clear_dirty();
+  harness_event(BUTTON_EVENT_NEXT);
+  TEST_ASSERT(menu_row_is(1, "Receiving", "L12", false));
+  TEST_ASSERT(menu_row_is(2, "Sending", "L1", true));
+  /* Settings > CW: RX Speed 32 -> 20, TX Speed 20 -> 25. */
+  harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_ENTER);
+  harness_event(BUTTON_EVENT_ENTER);
+  harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_ENTER);
+  for (index = 0U; index < 12U; ++index) {
+    harness_event(BUTTON_EVENT_PREV);
+  }
+  harness_event(BUTTON_EVENT_ENTER);
+  harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_ENTER);
+  for (index = 0U; index < 5U; ++index) {
+    harness_event(BUTTON_EVENT_NEXT);
+  }
+  harness_event(BUTTON_EVENT_ENTER);
+  TEST_ASSERT_EQUAL(20U, settings_get(SETTINGS_ID_RX_WPM));
+  TEST_ASSERT_EQUAL(25U, settings_get(SETTINGS_ID_TX_WPM));
+  fake_iap_clear_counters();
+  harness_event(BUTTON_EVENT_MENU);
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
+  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT(menu_row_is(1, "Receiving", "L5", false));
+  TEST_ASSERT(menu_row_is(2, "Sending", "L65535", false));
+  TEST_ASSERT(menu_row_is(3, "Free Input", NULL, false));
+  TEST_ASSERT_EQUAL(0U, fake_iap_erase_count(EEPROM_MAP_PROGRESS_PAGE));
+  TEST_ASSERT_EQUAL(0U, fake_iap_program_count(EEPROM_MAP_PROGRESS_ADDRESS));
+}
+
+/* V-150, AC-T34: a pass at the earned level shows the new level; a reset shows L1 again. */
+static void test_v150_level_after_pass_and_reset(void) {
+  unsigned number;
+
+  fake_iap_reset();
+  harness_power_on();
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
+  harness_open_mode(0U);
+  for (number = 0U; number < 50U; ++number) {
+    unsigned guard = 0U;
+    while ((training_phase() != TRAINING_PHASE_ITEM) && (guard < 5000U)) {
+      harness_run_to((uint16_t)(harness_now + 1U));
+      ++guard;
+    }
+    fake_player_finish();
+    harness_set_time((uint16_t)(harness_now + 1U));
+    harness_event(BUTTON_EVENT_MENU); /* run 0 holds K */
+  }
+  harness_run_to((uint16_t)(harness_now + 700U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT(menu_row_is(1, "Receiving", "L2", true));
+  TEST_ASSERT(menu_row_is(2, "Sending", "L1", false));
+  confirm_reset();
+  /* The menu tests link a fake stats_reset(); the real one is progress_reset() (src/stats/stats.c). */
+  TEST_ASSERT_EQUAL(PROGRESS_OK, progress_reset());
+  harness_event(BUTTON_EVENT_ENTER);
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
+  TEST_ASSERT(menu_row_is(1, "Receiving", "L1", false));
+  TEST_ASSERT(menu_row_is(2, "Sending", "L1", false));
+}
+
 int main(void) {
   TEST_RUN(test_reset_stored);
   TEST_RUN(test_reset_not_stored);
@@ -218,5 +331,8 @@ int main(void) {
   TEST_RUN(test_message_over_mode_screen);
   TEST_RUN(test_main_loads_progress);
   TEST_RUN(test_random_walk_keyer_and_player_exclusive);
+  TEST_RUN(test_menu_level_texts);
+  TEST_RUN(test_v149_level_per_speed);
+  TEST_RUN(test_v150_level_after_pass_and_reset);
   return TEST_FINISH();
 }

@@ -4,7 +4,10 @@ Owner: `architector`. Status: T0-T10 implemented, final review `approved` on 202
 request D-T27 to D-T29 (four-button Receiving keyboard, user decision 2026-10-06): D1, T11 and Q2 done, final review
 `approved` on 2026-10-06 (section 22.1). W2 is open. Change request D-T30/D-T31 (Sending retry screen and word
 space, user decision 2026-10-07): D2, T12, Q3 and W3 done, final review `approved` on 2026-10-07 (section 22.2). Change request D-T33 (word pass rate 80 %, user
-decision 2026-10-07): D3, T13, Q4 and W4 done, final review `approved` on 2026-10-07 (section 22.3). The user answered Q-T1 and Q-T2 (section 20). Section 21
+decision 2026-10-07): D3, T13, Q4 and W4 done, final review `approved` on 2026-10-07 (section 22.3). Change request
+D-T35 to D-T41 (level selection in Receiving and Sending, user decisions 2026-10-07): specification published on
+2026-10-07. D4 done, review `approved` on 2026-10-07 (D-T42). T14 and Q5 done, final review `approved` on
+2026-10-07 after fix F1 (section 22.4). W5 ready to start (section 17.4). The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -15,6 +18,7 @@ Readers: `c-embedded-developer`, `qa-embedded`,
 | --- | --- |
 | This document | Interfaces, memory placement, level model, EEPROM record, player, session engine, task split and acceptance criteria. It refines the approved plan. It does not change a user decision. |
 | Approved plan `~/.claude/plans/silly-knitting-flurry.md` | User decisions (section 2.1) and the module split. |
+| Approved plan `~/.claude/plans/lively-exploring-reef.md` | Level selection: user requirements and user decisions of 2026-10-07 (D-T35), proposed interface. |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | All that the user sees, hears or presses: layouts, texts, delays, control tables. Section 21 lists every value that this document takes from it. |
 | `references/internal/keyer_spec.md` | Keyer contract. Decision D-T1 of this document revises D-K1 (section 3.1). The keyer timing of section 6.7 stays the reference for the timing extraction. |
 | `references/internal/sidetone_spec.md` | Sidetone contract, envelope, ISR frame. |
@@ -45,7 +49,10 @@ Precedence rules:
 | Attempts | 3 per item. The correct answer shows only after the third wrong attempt. |
 | Receiving word input | Pick characters one by one. Check the whole word after the last one. Long `prev` undoes the last pick or steps out of a group. Long `enter` replays (D-T27). |
 | Progress key | One 16-bit level per mode per character WPM (5..50). The effective speed has no effect. The level stops at 65535 and never wraps. |
-| Manual level | None. `Reset Statistics` sets all levels back to level 1. |
+| Manual level | Revised by D-T35 (user decision 2026-10-07). The user selects the level of the next session on a start screen and on the session end screen. The range is level 1 up to the earned level, the stored level of the mode at the current speed. `Reset Statistics` sets all levels back to level 1. |
+| Replay | A pass below the earned level never changes or saves the stored level. A pass at the earned level advances and saves it. After a session, the selector shows the next level after a pass and the same level after a fail. Example: earned L20, the user passes L5. The selector then shows L6, the store keeps L20, and the selector still reaches L20 (D-T35). |
+| Level selector | `prev` and `next` move the selected level by one, with auto-repeat. No wrap: the steps stop at L1 and at the earned level. A line under the selector describes the selected level (`New char F`, `Words of 4`). Layout and texts: `ui-ux.md` (task D4). |
+| Main menu level | The main menu shows the earned level next to `Receiving` and `Sending`, at the current `RX Speed` and `TX Speed` (D-T41). |
 | Button order on the case | `menu/back`, `prev`, `next`, `enter` from left to right (user fact 2026-10-06: `enter` is right of `next`). The four group labels follow this order (D-T27). |
 | Receiving keyboard | Four groups, one per button, in the case order (user decision 2026-10-06, D-T27). Three groups were confusing. |
 | Sending retry screen | At the retry, the code row (row 7) and the answer code row (row 5) are blank, as for a new item. The bar goes back to the first character. The status keeps `Try 2 of 3` or `Try 3 of 3`, as in Receiving (user decision 2026-10-07, D-T30). |
@@ -67,7 +74,7 @@ unverified until the user tests it (section 18).
 
 ### 2.3 Out of scope
 
-- A manual level choice.
+- A level above the earned level. The user cannot skip ahead (D-T35).
 - Statistics other than the level.
 - Any change in `firmware/drivers/`.
 - Any change of the keyer behavior or timing.
@@ -121,7 +128,7 @@ fails. Do not try another layout.
 | D-T14 | Result hold (`ui-ux.md` Q-14). After the third wrong attempt, Receiving plays the item once more. `training_hold_result(true)` stops the RESULT delay. The mode calls `training_hold_result(player_is_busy())` on each poll. The first call with false starts `TRAINING_FAILED_MS` at the tick of that call. | The answer playback of a long word at a low speed is longer than 2500 ms. The engine stays free of the player. The delay counts exactly from the first poll that sees the player idle. |
 | D-T15 | Dropped-character rule (`ui-ux.md` Q-15, item 1). In Sending, a DIT or DAH outside phase ITEM sets a drop flag. While the flag is set, the mode drops every keyer event up to and including the next CHAR_GAP, also in phase ITEM. That CHAR_GAP clears the flag. | A character that starts during a delay never counts and never uses an attempt. |
 | D-T16 | Overflow (`ui-ux.md` Q-15, item 2). In phase ITEM, OVERFLOW empties the pattern and sets the drop flag of D-T15. No check, no attempt, no status. | A lost event is a fault of the device, not of the user. If the lost events held a CHAR_GAP, the next character is dropped too. The user keys it again. |
-| D-T17 | Top level outcome. A pass at level index 65535 gives `TRAINING_OUTCOME_PASS_TOP`. The end screen then shows `Top level L65535`. | `ui-ux.md` UX-47 has its own text for this case. |
+| D-T17 | Top level outcome. A pass at level index 65535 gives `TRAINING_OUTCOME_PASS_TOP`. The end screen then shows `Top level L65535`. Revised text (D-T42, UX-56): row 3 shows `Passed`, and the selector shows `L65535 of 65535`. | `ui-ux.md` UX-47 has its own text for this case. |
 | D-T18 | Test seam for items. `koch_make_item()` is in its own file, `src/koch/koch_item.c`. The modes and menu test groups link `Tests/fakes/fake_koch_item.c` in its place. The level, and so the keyboard set and the session kind, come from a progress record in the fake EEPROM. | The V-tests of `ui-ux.md` 9.4 need scripted items. The production code has no test hook. |
 | D-T20 | `check_asm.sh` R7 stays strict: any `sdcc_atomic` text in any scanned `.asm` file is a violation. The stale `accept/real_image` fixture is regenerated from the current build (section 13.2). | Any `sdcc_atomic` text in a new build means that `--norestartseqatomics` is lost. A narrow R7 (for example only `sdcc_atomic_maybe_rollback`) lets the helper code back in unseen. The fixture shows real compiler output, so it must come from the current flags. |
 | D-T21 | Accepted implementation details of T0-T6. The koch test group links `src/cw/morse.c` (AC-T4 calls `morse_encode()`). The Koch tables use `[]` with a `_Static_assert` on the size. `keyboard_group_first()` returns `range_first + range_count` for an unknown group. The player start call loads `player_ticks = 1` in the gap state and uses the normal countdown, with the same result as section 9.2. The `stats_reset()` result wiring in `menu.c` came in T4. The clang-tidy finding `bugprone-easily-swappable-parameters` stays on `player_start()`, `koch_word_length()` and the internal `progress_offset()`: no suppression and no signature change. | Each detail keeps the contract behavior. AC-T12, AC-T4 and AC-T8 prove it. The signatures are part of the contract. |
@@ -138,6 +145,15 @@ fails. Do not try another layout.
 | D-T32 | Accepted implementation details of T12. The WORD_GAP test in `tx_handle_keyer_event()` keeps its phase check (D-T31), although the armed flag is set only in ITEM. The push of `event` around `training_phase()` raises the summed-push stack bound from 65 to 66 B (margin 107 B). The real call-site depth stays 35 B. The ITEM/RETRY branch of `sending_poll()` clears rows 5 to 7 in one call: row 6 is always off in Sending. The CHAR_GAP and WORD_GAP paths share one check tail. | The phase check keeps the rule local: it does not depend on the fact that ITEM has no time-out in Sending. 1 B of stack is far inside the 64 B margin rule. The "no deeper chain" target of 14.2 is waived for this 1 B. |
 | D-T33 | User decision (2026-10-07). Every word session, the final word levels included, passes at `ceil(0.8 n)` correct on the first attempt: 10 -> 8, 11 -> 9, 15 -> 12, 50 -> 40, 100 -> 80. Character sessions keep `ceil(0.9 n)` (45 of 50). Interface: `koch_pass_threshold()` takes the session kind as its first parameter, because the item count alone cannot tell the kind (a final level of 50 words has the count of a character session). `training_start()` gives `koch_kind()` of the session level. A kind other than `KOCH_KIND_WORD` uses the character rule. No change in the progress record, the level model or the engine state. The rounding rule for the final levels is an assumption, confirmed with the user by the coordinator. | One function keeps one place for the rule. Taking the kind (not the level) keeps the pure arithmetic testable for every count 0..255. Defaulting an unknown kind to the stricter character rule never lets a session pass easier by mistake. |
 | D-T34 | Accepted details of T13. Flash +41 B, 1 B above the +40 B target and far below the +100 B hard limit. `koch_pass_threshold()` selects the numerator and denominator by kind and uses one formula `(p n + p) / q`. The test helper `pick()` uses 0xFF, not 0, for "not found". `training_harness.h` gets an `end_screen_is` probe. | 1 B over a target is not worth a rework. The helper change fixes test code only. QA showed that the old helper failed loudly and hid no result. |
+| D-T35 | User decisions (2026-10-07), level selection. (1) Receiving and Sending open on a start screen with a level selector. No session runs before the user starts it. (2) The session end screen has the same selector. (3) The range is level index 0 up to the earned level, `progress_level(mode, wpm)` at the speed of the mode (`RX Speed` or `TX Speed`). `prev` steps down and `next` steps up. The steps stop at the limits and never wrap. (4) A pass below the earned level never changes or saves the stored level. A pass at the earned level advances and saves it, as before. (5) After a session, the selector preselects the session level + 1 after a pass, and the same level after a fail. (6) `prev` and `next` auto-repeat on the selector. If the repeat costs more than the D-T39 limit, `architector` replaces it with a long `prev` or `next` that steps by 10. (7) The description line under the selector names the selected level: `New char F`, `Words of 4`. (8) The main menu shows the earned level next to `Receiving` and `Sending`, at the current speed. This revises "Manual level: none" of section 2.1. | The user wants to repeat levels that they passed without losing progress. |
+| D-T36 | Engine interface of D-T35 (section 5.10). (1) New phase `TRAINING_PHASE_SELECT` = 5: no session, the selector is active. (2) `training_prepare(mode, wpm, max_word_len)` takes the parameters of the old `training_start()`. It stores them, sets the selected level to the earned level and sets phase SELECT. It reads the progress RAM only. (3) `training_start(void)` starts a session at the selected level. It does not read the progress any more. (4) `training_select_step(bool is_up)` acts in SELECT and END only. (5) The selected level is one `static MEM_XDATA uint16_t`. The earned level has no copy: `training_earned_level()` calls `progress_level()` with the prepared mode and speed. (6) Invariant: 0 <= selected <= earned after every engine call. (7) Finish (section 11.4): only a pass with the session level equal to the earned level calls `progress_advance()` and `progress_save()`. A pass at another level gives the new outcome `TRAINING_OUTCOME_PASS_REPLAY` = 4. (8) `training_new_shown_level()` keeps its name. It now gives the shown selected level. (9) In SELECT, only `training_phase()`, `training_mode()`, `training_wpm()`, `training_selected_level()`, `training_earned_level()` and `training_new_shown_level()` have a meaning. The session accessors keep the values of the last session. | The engine owns the level rules, so both modes get the same replay rule. No copy of the earned level means no stale value. The test `!=` (not `<`) makes sure that no level other than the earned one ever reaches the store. A start without parameters makes the next session at END use the values of the mode entry (UX-49). |
+| D-T37 | `koch_shown_level(uint16_t level)` in `koch/koch.h` is the one copy of the D-T5 rule (level + 1, saturated at 65535). `training.c`, `training_screen.c` and `menu_render.c` call it. The private `training_shown_of()` goes away. The D-T5 limit stays: level indexes 65534 and 65535 both show 65535, also on the selector. | Three files need the rule. The menu needs it without the engine. The level model belongs to `koch`. |
+| D-T38 | Shared selector code in `training_screen.c` (section 5.11). `training_screen_draw_start()`, `training_screen_draw_select()` and `training_screen_select_input()` serve both modes. The selector input acts on `prev` and `next` press and repeat events, and on `enter` and `menu/back` press events. It ignores long events. It returns an action, and the mode starts the session or leaves. The description line reads `Max Word Length` and `Prosigns` with `settings_get()`, as the header reads the effective speed (D-T25). No `morse_format()` style changes. No table per level in flash: the text comes from the level model. | One copy of the selector code for both modes. The settings cannot change on a training screen, so `settings_get()` gives the values of the mode entry. |
+| D-T39 | Tap mode in Receiving (revises D-T7 and U-11). Tap mode is on only in GAP, ITEM and RESULT. `receiving_enter()` leaves it off. `rx_start_session()` turns it on. The END event of `training_poll()` and `receiving_leave()` turn it off. So `prev` and `next` auto-repeat on the start screen and on the end screen (400 ms, then every 80 ms, `buttons_config.h`). `buttons_set_tap_mode()` drops pending presses, long-pending states and the repeat, so a button held across a switch gives no event. Cost limit for the repeat: the tap switches and the repeat acceptance can add at most 100 B of flash. Above it, the developer reports, and `architector` decides on the fallback of D-T35 (6). | The buttons module already gives repeats with tap mode off. No buttons change is necessary. |
+| D-T40 | Keyer in Sending (revises 12.3 entry and the `sending_leave()` detail of D-T25). `sending_enter()` does not start the keyer and does not call `buttons_set_enter_enabled()`. P3.2 stays with the menu on the start screen, so `enter` and the paddle tip act there. `tx_start_session()` starts the keyer as before. `sending_leave()` calls `keyer_stop()` and `buttons_set_enter_enabled(true)` only in GAP, ITEM and RESULT. In SELECT and END the keyer does not run. | The keyer runs only during a session, so the selector gets every button. |
+| D-T41 | Main menu level. `draw_item_row()` in `menu_render.c` draws `L<n>` for a mode item with target `MENU_MODE_RECEIVING` or `MENU_MODE_SENDING`. `n` = `koch_shown_level(progress_level(target, settings_get(SETTINGS_ID_RX_WPM or SETTINGS_ID_TX_WPM)))`. The value is read at each render. No cache. The text uses the color of the label (inverted on the selected row). The column comes from `ui-ux.md` (task D4). `Free Input` and `Settings` rows do not change. `menu_render.c` checks at compile time that `MENU_MODE_RECEIVING` equals `PROGRESS_MODE_RECEIVING` and that `MENU_MODE_SENDING` equals `PROGRESS_MODE_SENDING`. | The user sees the earned level before entering a mode. A read at each render always shows the RAM value, also after a session or a speed change. |
+| D-T42 | Review of D4 (2026-10-07): `approved`. Accepted UI values of `ui-ux.md` 5.11.1, 5.15, 5.16 (UX-53 to UX-57), V-01, V-19, V-105 to V-108, V-121, V-136, V-137 to V-151 and D-35 to D-37. (1) `Start` replaces `Next` on the end screen. One band helper serves both screens (cells 9-15, x 47-81). (2) `Not saved` moves to row 1. (3) Row 3: `Passed, new level` for PASS and PASS_NOT_SAVED. `Passed` for PASS_REPLAY and PASS_TOP. `Not passed, need <t>` for FAIL. The texts `New level L`, `Repeat level L`, `Top level L` and `Next` go away. (4) Start screen header: level field `training_new_shown_level()`, item field `1/<n>` with `n` = `koch_item_count(training_selected_level())`. A step redraws pages 0, 4 and 5. The end screen header keeps the session that ended, and a step there redraws pages 4 and 5 only. (5) A-L1 to A-L5 hold for D-T36. A pass at index 65534 below an earned index 65535 is a replay and preselects 65535 (V-148). (6) The steps "no DIT from the held contact" of V-108 run 5 and V-142 have no host test, as D-T26: the keyer entry mask (AC-K3) gives this behavior. The host test checks that the keyer starts once. D-35 to D-37 are the device checks of DC-T9. | The draft meets D-T35 to D-T41 and SL-1 to SL-7. The texts are short `MEM_CODE` constants, and four old texts go away, so the flash budget of T14 holds. |
+| D-T43 | Decisions on the T14 and Q5 results (2026-10-07). (1) F1, fix required: in Sending, a `prev` or `next` held from the last RESULT across END keeps its repeat and steps the selector on the end screen. The END branch of `sending_poll()` calls `buttons_set_tap_mode(false)` with `keyer_stop()` and `buttons_set_enter_enabled(true)`. The call drops the pending press, the long-pending state and the repeat, as in Receiving (D-T39). Tap mode stays off. (2) F2, accepted: `receiving_leave()` calls `player_stop()` in every phase, also in SELECT and END. A second stop has no effect (section 5.4), and D-T12 asks every leave path to stop the module of its mode. The V-143 oracle "no player call" means "no playback starts": `fake_player_start_count()` stays 0. No phase guard. (3) Accepted deviation: `training_finish()` does not assign the selected level on a fail. `training_start()` copies the selected level into the session level. `training_select_step()` acts only in SELECT and END. So the selected level equals the session level at the finish. QA mutants M5 and M9 prove that the tests guard this. (4) Accepted: the developer changed QA-owned test files (`test_qa_*`) only for the interface change and the new entry. QA reviewed each change, and no check is removed or loosened (F3). Later interface changes in QA files go through QA. | (1) The user must not lose the preselection through a button that was pressed during the session. One call gives both modes the same rule. (2) A guard costs flash and changes nothing that the user can see or hear. (3) The invariant holds by construction, and the assignment costs flash. |
 | D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
 
 ## 4. Baseline (measured)
@@ -191,7 +207,7 @@ General rules:
 | `inc/stats/stats.h`, `src/stats/stats.c` (change) | `bool stats_reset(void)` | menu |
 | `inc/buttons/buttons.h`, `src/buttons/buttons.c` (change) | `buttons_set_tap_mode()` | receiving |
 | `inc/modes/training.h`, `src/modes/training.c` (new) | Session engine | receiving, sending, training_screen |
-| `inc/modes/training_screen.h`, `src/modes/training_screen.c` (new) | Header row and end screen | receiving, sending |
+| `inc/modes/training_screen.h`, `src/modes/training_screen.c` (new) | Header row, start screen, end screen, level selector (D-T38) | receiving, sending |
 | `src/modes/training_screen_internal.h` (new, private) | Draw helpers shared by the training screens (D-T25) | `training_screen.c`, receiving, sending |
 | `inc/modes/receiving.h`, `src/modes/receiving.c` (new) | Receiving mode | menu |
 | `inc/modes/sending.h`, `src/modes/sending.c` (new) | Sending mode | menu |
@@ -384,6 +400,8 @@ uint8_t koch_item_count(uint16_t level);
 uint8_t koch_word_length(uint16_t level, MEM_XDATA uint8_t max_word_len);
 /** Characters that an item of @p level can hold: the learned count, or min(learned, 40) at a word level (D-T4). */
 uint8_t koch_alphabet_count(uint16_t level);
+/** Level number that the user sees: @p level + 1, saturated at KOCH_LEVEL_MAX (D-T5, D-T37). */
+uint16_t koch_shown_level(uint16_t level);
 /**
  * Smallest score that passes a session of @p item_count items (D-T33): ceil(0.8 * item_count) for KOCH_KIND_WORD,
  * else ceil(0.9 * item_count).
@@ -569,7 +587,8 @@ typedef uint8_t training_phase_t;
 #define TRAINING_PHASE_GAP 1U     /* pause before an item; Sending shows a blank item area */
 #define TRAINING_PHASE_ITEM 2U    /* the item is shown or played; answers count */
 #define TRAINING_PHASE_RESULT 3U  /* a check result shows; answers are dropped */
-#define TRAINING_PHASE_END 4U     /* session end screen */
+#define TRAINING_PHASE_END 4U     /* session end screen; the level selector is active */
+#define TRAINING_PHASE_SELECT 5U  /* start screen: the level selector, no session (D-T36) */
 
 typedef uint8_t training_check_t;
 #define TRAINING_CHECK_PARTIAL 0U  /* the answer so far is accepted; more characters needed */
@@ -590,9 +609,24 @@ typedef uint8_t training_outcome_t;
 #define TRAINING_OUTCOME_PASS 1U            /* the level went up and is stored */
 #define TRAINING_OUTCOME_PASS_NOT_SAVED 2U  /* the level went up in RAM only */
 #define TRAINING_OUTCOME_PASS_TOP 3U        /* passed at level index 65535; no change, no save (D-T17) */
+#define TRAINING_OUTCOME_PASS_REPLAY 4U     /* passed below the earned level; no change, no save (D-T36) */
 
-/** Starts a session of @p mode (unknown gives RECEIVING) at the stored level of @p wpm. Phase GAP, TRAINING_START_MS. */
-void training_start(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+/**
+ * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. Phase
+ * SELECT. No session runs. Reads the progress RAM only (D-T36).
+ */
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+/** Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS. */
+void training_start(void);
+/**
+ * In phase SELECT or END: moves the selected level one step up (@p is_up) or down, inside 0..training_earned_level().
+ * No wrap. Returns true when the level changed. Other phases: no change, returns false.
+ */
+bool training_select_step(bool is_up);
+/** Level index that the next training_start() uses: 0..training_earned_level(). */
+uint16_t training_selected_level(void);
+/** Earned level index: progress_level() of the prepared mode and speed, read at each call. */
+uint16_t training_earned_level(void);
 /** Ends the session without a store. Phase IDLE. */
 void training_stop(void);
 /** Runs the time-based steps of section 11. Returns at most one event. Reads the tick once. */
@@ -612,8 +646,8 @@ uint8_t training_mode(void);
 uint8_t training_wpm(void);                 /* the progress key of the session */
 koch_kind_t training_kind(void);
 uint16_t training_level(void);              /* level index of the session */
-uint16_t training_shown_level(void);        /* D-T5: min(training_level() + 1, 65535) */
-uint16_t training_new_shown_level(void);    /* in phase END: the shown level of the next session */
+uint16_t training_shown_level(void);        /* koch_shown_level(training_level()) */
+uint16_t training_new_shown_level(void);    /* koch_shown_level(training_selected_level()) (D-T36) */
 uint8_t training_learned_count(void);
 uint8_t training_alphabet_count(void);      /* koch_alphabet_count() of the session level */
 uint8_t training_item_number(void);         /* 0 before the first item, then 1..item count */
@@ -630,19 +664,68 @@ const char MEM_XDATA* training_answer_text(void);  /* NUL-terminated, 0..item le
 uint8_t training_answer_length(void);
 ```
 
+Rules of D-T36 for the level selection:
+
+- `training_prepare()` replaces the level read of the old `training_start()`. The clang-tidy finding
+  `bugprone-easily-swappable-parameters` of D-T25 moves with the parameters to `training_prepare()`: no suppression.
+- `training_start()` has no phase check. The modes call it only in SELECT and END.
+- Invariant: `training_selected_level() <= training_earned_level()` after every engine call.
+- In phase SELECT, only `training_phase()`, `training_mode()`, `training_wpm()`, `training_selected_level()`,
+  `training_earned_level()` and `training_new_shown_level()` have a meaning. The session accessors keep the values
+  of the last session. Screen code in SELECT reads only these six functions and the `koch` level model.
+- `training_poll()` returns `TRAINING_EVENT_NONE` in SELECT. `training_add_char()` returns IGNORED,
+  `training_undo_char()` returns false and `training_hold_result()` does nothing, as in every phase other than ITEM
+  and RESULT.
+
 ### 5.11 `modes/training_screen.h`, `modes/receiving.h`, `modes/sending.h` (new)
 
 ```c
 /* training_screen.h: drawing shared by Receiving and Sending. Layouts: ui-ux.md (U-7, U-10). */
 /** Draws row 0 (ui-ux.md 5.11.1): mode tag, speeds, shown level, training_shown_item_number() and the count. */
 void training_screen_draw_header(void);
-/** Draws the session end screen in rows 1-7 from the engine state. */
+/** Draws the session end screen in rows 1-7 from the engine state, with the level selector (D-T38). */
 void training_screen_draw_end(void);
 ```
 
+Additions of D-T38 to `training_screen.h` (it includes `buttons/buttons.h` for `button_event_t`):
+
+```c
+typedef uint8_t training_select_action_t;
+#define TRAINING_SELECT_NONE 0U   /* the event did nothing, or it only changed the selection */
+#define TRAINING_SELECT_START 1U  /* the user starts a session at the selected level */
+#define TRAINING_SELECT_LEAVE 2U  /* the user leaves the mode */
+
+/** Draws the start screen in rows 1-7 (ui-ux.md, task D4): the selector, the description and the Start band. */
+void training_screen_draw_start(void);
+/**
+ * Redraws the rows that show the selection: the selector line and the description line of the start screen (SELECT)
+ * or of the end screen (END), and row 0 when ui-ux.md shows the selected level in the header of that screen.
+ */
+void training_screen_draw_select(void);
+/**
+ * Applies @p event in phase SELECT or END. prev or next, press or repeat: training_select_step() (next is up), then
+ * training_screen_draw_select() when the level changed. enter press: START. menu/back press: LEAVE. A long event
+ * and every other event: NONE, no redraw.
+ */
+training_select_action_t training_screen_select_input(button_event_t event);
+```
+
+Contract of the selector screens. `ui-ux.md` (task D4) owns the rows, columns, texts and markers. This document owns
+the data and the limits:
+
+| ID | Rule |
+| --- | --- |
+| SL-1 | Selector line data: the shown selected level `training_new_shown_level()` and the shown earned level `koch_shown_level(training_earned_level())`. With `training_selected_level() > 0`, the `<` marker shows. Else it does not. With `training_selected_level() < training_earned_level()`, the `>` marker shows. Else it does not. Example of the plan: `<  L5 of 20  >`. |
+| SL-2 | Description line data, from `L = training_selected_level()`. Level 0: the text for K and M (plan: `K and M`). Other character level (`koch_kind(L) == KOCH_KIND_CHAR`): the new character `koch_char(koch_learned_count(L) - 1)` through `morse_format()` in the `Prosigns` style (plan: `New char F`). Word level: `koch_word_length(L, max)` with `max` = `settings_get(SETTINGS_ID_MAX_WORD_LEN)` (plan: `Words of 4`). The final word levels use the word rule. Any extra value (for example the item count `koch_item_count(L)`) comes from the `koch` level model. |
+| SL-3 | Each text is at most `TRAINING_SCREEN_COLUMNS` (25) cells, ASCII 0x20-0x7E, built in `training_screen_text`. No new `morse_format()` style, no text table per level. Fixed words are `MEM_CODE` constants. |
+| SL-4 | A step redraws only the rows of `training_screen_draw_select()`. A press or a repeat at a limit changes nothing and redraws nothing. |
+| SL-5 | One helper draws the `Start` band of the start screen and of the end screen (`ui-ux.md` 5.15 and 5.16.1 use the same band). |
+| SL-6 | Header in SELECT: the level field shows `training_new_shown_level()`. The item field shows `1/<n>` with `n` = `koch_item_count(training_selected_level())` (`ui-ux.md` 5.16.1). It reads no session accessor. Header in END: the header of the session that ended, also while the selection changes (`ui-ux.md` 5.11.1). |
+| SL-7 | End screen (`ui-ux.md` 5.15, D-T42). Row 1: `Not saved` (PASS_NOT_SAVED only). Row 2: the score. Row 3: the result text of D-T42 (3). Row 4: the selector. Row 5: the description. Row 6: blank. Row 7: the `Start` band. |
+
 ```c
 /* receiving.h. Main loop only; only menu.c calls these functions. */
-/** Seeds the RNG, sets the tone, turns tap mode on and starts a session at the RX speed. Draws nothing. */
+/** Seeds the RNG, reads the settings, sets the tone and prepares the engine (phase SELECT). Tap mode stays off. Draws nothing. */
 void receiving_enter(void);
 /** Draws the whole Receiving screen for the current state. menu_render() calls it after the clear. */
 void receiving_render(void);
@@ -656,13 +739,13 @@ void receiving_leave(void);
 
 ```c
 /* sending.h. Main loop only; only menu.c calls these functions. */
-/** Seeds the RNG, takes P3.2 from the menu, sets the tone, starts the keyer and a session at the TX speed. */
+/** Seeds the RNG, reads the settings, sets the tone and prepares the engine (phase SELECT). No keyer. P3.2 stays with the menu. */
 void sending_enter(void);
 void sending_render(void);
 /** Reads at most KEYER_QUEUE_SIZE + 1 keyer events, runs the engine and redraws the rows that change. */
 void sending_poll(void);
 bool sending_handle(button_event_t event);
-/** Stops the keyer and the session and gives P3.2 back to the menu. At END both are already done (D-T25). Draws nothing. */
+/** In GAP, ITEM and RESULT: stops the keyer and gives P3.2 back. In SELECT and END no keyer runs (D-T40). Then stops the session. Draws nothing. */
 void sending_leave(void);
 ```
 
@@ -741,7 +824,8 @@ Reference values for `KOCH_CHAR_COUNT` = 43:
 The call order of `rng_below()` is part of the contract, so tests can predict items from a seed.
 
 Seeding: `receiving_enter()` and `sending_enter()` call `rng_seed(tick_now())`. Each accepted button event in the
-modes and each keyer DIT or DAH event in Sending calls `rng_mix(tick_now())`.
+modes and each keyer DIT or DAH event in Sending calls `rng_mix(tick_now())`. On the selector screens (D-T38), only
+the session start (`TRAINING_SELECT_START`) mixes. A level step does not mix.
 
 ## 8. Group keyboard
 
@@ -896,7 +980,8 @@ version. Load never writes the EEPROM.
 
 ### 10.4 Rules
 
-- The engine saves only after a passed session that changed a level (section 11.4).
+- The engine saves only after a passed session that changed a level (section 11.4). Only a pass at the earned level
+  changes a level (D-T36). A pass at another level calls neither `progress_advance()` nor `progress_save()`.
 - `progress_reset()` sets every level byte to 0, then saves. Also with all levels already at 0, it saves.
 - A failed save loses the stored record, because the erase came first. The next start then loads level 0 everywhere.
   Risk R-T1.
@@ -907,6 +992,7 @@ version. Load never writes the EEPROM.
 ### 11.1 State (all `static MEM_XDATA` in `training.c`)
 
 - Session: phase, mode, wpm, kind, level, learned count, max word length.
+- Selection: the selected level (`uint16_t`, D-T36). The earned level has no copy.
 - Counters: item number, item count, score, pass threshold, wrong attempts, last check, outcome.
 - Time: phase start tick (`uint16_t`), phase duration (`uint16_t`), result hold flag (`bool`, D-T14).
 - Texts: item text and answer text (`TRAINING_TEXT_SIZE` each), item length, answer length.
@@ -915,7 +1001,9 @@ version. Load never writes the EEPROM.
 
 | From | Trigger | Actions | To | Event |
 | --- | --- | --- | --- | --- |
-| any | `training_start(mode, wpm, max)` | Read the level with `progress_level()`. Set kind, learned count, item count, threshold (`koch_pass_threshold(koch_kind(level), item count)`, D-T33). Item number 0, score 0. Empty answer. Duration `TRAINING_START_MS`. | GAP | - |
+| any | `training_prepare(mode, wpm, max)` | Store the mode (unknown gives RECEIVING), wpm and max. Selected level = `progress_level(mode, wpm)` (D-T36). | SELECT | - |
+| SELECT, END | `training_select_step(is_up)` | Up with selected < earned: selected + 1. Down with selected > 0: selected - 1. Else no change. A change returns true, no change returns false. | same | - |
+| any | `training_start()` | Level = selected level. Set kind, learned count, item count, threshold (`koch_pass_threshold(koch_kind(level), item count)`, D-T33). Item number 0, score 0. Empty answer. Duration `TRAINING_START_MS`. | GAP | - |
 | any | `training_stop()` | - | IDLE | - |
 | GAP | duration passed (poll) | Item number + 1. Wrong attempts 0. `koch_make_item()`. Empty answer. | ITEM | ITEM |
 | ITEM | `training_add_char()` gives CORRECT | First attempt (wrong attempts 0): score + 1. Duration `TRAINING_CORRECT_MS`. | RESULT | - |
@@ -926,7 +1014,8 @@ version. Load never writes the EEPROM.
 | RESULT | duration passed with the hold off, last check WRONG | Empty answer. | ITEM | RETRY |
 | RESULT | duration passed with the hold off, CORRECT or FAILED, item number < item count | Duration `TRAINING_RECEIVING_GAP_MS` or `TRAINING_SENDING_GAP_MS` by mode. | GAP | GAP |
 | RESULT | duration passed with the hold off, CORRECT or FAILED, last item | Finish (11.4). No GAP after the last item. | END | END |
-| END, IDLE | poll | - | - | NONE |
+| SELECT, END, IDLE | poll | - | - | NONE |
+| GAP, ITEM, RESULT, IDLE | `training_select_step()` | No change. Returns false. | same | - |
 
 Time: `training_poll()` reads `tick_now()` once and compares `(uint16_t)(now - phase start) >= duration`. Each
 phase change sets the phase start to the tick of the call that makes the change. So `training_start()` and a
@@ -948,11 +1037,23 @@ phase change sets the phase start to the tick of the call that makes the change.
 
 ### 11.4 Finish
 
+Revised by D-T36:
+
 1. `passed = score >= pass threshold`.
-2. Not passed: outcome FAIL. The level stays.
-3. Passed and `progress_advance(mode, wpm)` returns false (level 65535): outcome PASS_TOP. No save.
-4. Passed and changed: `progress_save()`. OK gives PASS. SAVE_FAILED gives PASS_NOT_SAVED.
-5. `training_new_shown_level()` = `min(progress_level(mode, wpm) + 1, 65535)`.
+2. Not passed: outcome FAIL. The stored level stays. Selected level = session level.
+3. Passed, and the session level is not equal to `progress_level(mode, wpm)`: outcome PASS_REPLAY. No
+   `progress_advance()`, no `progress_save()`. Selected level = `koch_shown_level(session level)` (level + 1,
+   saturated).
+4. Passed and `progress_advance(mode, wpm)` returns false (level 65535): outcome PASS_TOP. No save. Selected level =
+   65535.
+5. Passed and changed: `progress_save()`. OK gives PASS. SAVE_FAILED gives PASS_NOT_SAVED. The new level stays in
+   RAM in both cases. Selected level = session level + 1, which equals the new earned level.
+6. In steps 3 to 5 the selected level is `koch_shown_level(session level)`, so one assignment covers all passes.
+   Then `training_new_shown_level()` = `koch_shown_level(selected level)`.
+
+Example (D-T35): earned index 19 (L20), the user selects index 4 (L5) and passes. The outcome is PASS_REPLAY. The
+EEPROM gets no erase and no write. The earned level stays 19. The selected level becomes 5 (L6), and
+`training_select_step(true)` still reaches 19.
 
 The save stops the CPU for the erase (4-6 ms). The keyer and the player are idle or near their end at that time. The
 tick loses at most the stopped time, as with a settings save.
@@ -981,24 +1082,34 @@ tick loses at most the stopped time, as with a settings save.
 
 ### 12.2 Receiving (`ui-ux.md` sections 5.12, 5.14, 6.8)
 
-Entry (`receiving_enter()`), in this order: `rng_seed(tick_now())`. Read `RX Speed`, `RX Eff. Speed`, `Tone`,
-`Max Word Length` and `Prosigns` once into xdata (UX-49). `sidetone_set_tone_hz()`. `buttons_set_tap_mode(true)`.
-`training_start(TRAINING_MODE_RECEIVING, rx_wpm, max_word_len)`. `keyboard_reset(training_alphabet_count())`.
-The next session (`enter` at END) uses the stored values and calls `training_start()` and `keyboard_reset()` again.
+Entry (`receiving_enter()`), in this order (revised by D-T39): `rng_seed(tick_now())`. Read `RX Speed`,
+`RX Eff. Speed`, `Tone`, `Max Word Length` and `Prosigns` once into xdata (UX-49). `sidetone_set_tone_hz()`.
+`training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, max_word_len)`. No tap mode call, no session, no player, no
+keyboard reset. `menu_render()` then calls `receiving_render()`, which draws the start screen.
 
-Tap mode is on for the whole screen, the end screen included. So `menu/back`, `prev`, `next` and `enter` (button
-or tip) arrive at the release (D-T7, D-T28).
+Session start (`rx_start_session()`, from SELECT or END), in this order: `buttons_set_tap_mode(true)`,
+`training_start()`, `keyboard_reset(training_alphabet_count())`. The caller then clears rows 1-7 and draws the
+session rows 1-7 (status, item line, labels, key bars). From END it also redraws the header. From SELECT it does not
+touch row 0: the start screen header already equals the header of the start pause (`ui-ux.md` 5.11.1 and the page
+budget of 5.16.4).
+
+Tap mode (D-T39) is on in GAP, ITEM and RESULT only. In these phases `menu/back`, `prev`, `next` and `enter`
+(button or tip) arrive at the release (D-T7, D-T28). On the start screen and on the end screen tap mode is off.
+There `menu/back` and `enter` act at the press, and `prev` and `next` give press and repeat events. The `enter`
+press that opens the mode gives no event at its release, because tap mode is off. The `enter` press that starts a
+session gives no event at its release, because `buttons_set_tap_mode(true)` drops its long-pending state.
+
+`receiving_render()`: SELECT draws the header and `training_screen_draw_start()`. END draws the header and
+`training_screen_draw_end()`. Other phases as before.
 
 | Phase | Event | Action |
 | --- | --- | --- |
+| SELECT, END | any event | `training_screen_select_input(event)`. START: `rng_mix(tick_now())`, `rx_start_session()`, then the redraw of the session start above. LEAVE: return true. NONE: return false. The repeat filter of the other phases does not apply here. |
 | ITEM | `menu/back`, `prev`, `next`, `enter` (button or tip) | `keyboard_select()` of `KEYBOARD_GROUP_MENU`, `_PREV`, `_NEXT`, `_ENTER`. A pick goes to `training_add_char()`. Redraw the labels and the item line. An empty run: ignored, no redraw. |
 | ITEM | long `enter` (button or tip) | Replay: `player_start()` of the item. A running playback starts again. The picks and the current run stay. |
 | ITEM | long `prev` | Undo one step: first `keyboard_back()`. If it returns false, `training_undo_char()`. Redraw. |
 | GAP, RESULT | any | Ignored. No redraw. |
-| END | `enter` (button or tip) | Next session. |
-| END | `menu/back` | Return true (leave). |
-| END | `prev`, `next`, long `enter`, long `prev`, long `next` | Ignored. |
-| any | long `next` | Ignored. |
+| GAP, ITEM, RESULT | long `next`, repeats | Ignored. |
 
 Button to run, left to right: MENU -> 0, PREV -> 1, NEXT -> 2, ENTER -> 3. `BUTTON_EVENT_MENU - code` does not
 give the run for ENTER. `receiving.c` maps the code in any small form (a `MEM_CODE` table, a switch, or
@@ -1038,23 +1149,37 @@ Poll (`receiving_poll()`), in this order:
 | ITEM | Empty slots, block on the first slot, labels of the whole set, header number. `player_start()` of the item. |
 | RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Empty slots, block on the first slot, labels of the whole set (`keyboard_top()`). `player_start()` of the item. |
 | GAP | Blank moment: rows 1-5 off, header shows `training_shown_item_number()`. The key bar segments and the labels of the whole set stay. |
-| END | `training_screen_draw_end()` and the header with `i` = `n`. |
+| END | `buttons_set_tap_mode(false)` (D-T39), then `training_screen_draw_end()` and the header with `i` = `n`. A button held at this call gives no event until it is released and pressed again. |
 
 ### 12.3 Sending (`ui-ux.md` sections 5.13, 5.14, 6.9)
 
 Entry (`sending_enter()`), in this order: `rng_seed(tick_now())`. Read `Key Type`, `Paddle`, `TX Speed`,
 `TX Eff. Speed`, `Tone`, `Max Word Length`, `Show CW Code` and `Prosigns` once into xdata (UX-49).
-`sidetone_set_tone_hz()`. `buttons_set_enter_enabled(false)`. `keyer_start()`. Clear the drop flag and the pattern.
-`training_start(TRAINING_MODE_SENDING, tx_wpm, max_word_len)`. Tap mode stays off.
+`sidetone_set_tone_hz()`. `training_prepare(TRAINING_MODE_SENDING, tx_wpm, max_word_len)`. Tap mode stays off.
+Revised by D-T40: no `buttons_set_enter_enabled()` call and no `keyer_start()` at the entry. P3.2 stays with the
+menu, so `enter` and the paddle tip act on the start screen.
 
-The keyer owns P3.2 during the session, so `enter` never comes then. The keyer runs in GAP, ITEM and RESULT.
+Session start (`tx_start_session()`, from SELECT or END), in this order: `buttons_set_enter_enabled(false)`,
+`keyer_start()` with the stored values, clear the drop flag, the armed flag and the pattern, `training_start()`. The
+caller then clears rows 1-7 and draws the session rows 1-7. From END it also redraws the header. From SELECT it does
+not touch row 0, as in Receiving.
+
+The keyer owns P3.2 during the session, so `enter` never comes then. The keyer runs in GAP, ITEM and RESULT only.
+
+`sending_render()`: SELECT draws the header and `training_screen_draw_start()`. END draws the header and
+`training_screen_draw_end()`. Other phases as before.
+
+`sending_poll()` needs no SELECT branch. `training_poll()` gives NONE in SELECT. No keyer runs, and any keyer event
+left in the queue is dropped by the phase rules below. `tx_start_session()` clears the flags.
 
 | Phase | Event | Action |
 | --- | --- | --- |
+| SELECT, END | any event | `training_screen_select_input(event)`. START: `rng_mix(tick_now())`, `tx_start_session()`, then the redraw of the session start above. LEAVE: return true. NONE: return false. |
 | GAP, ITEM, RESULT | short events, repeats | Ignored. No redraw. |
-| any | long `prev`, long `next` | Ignored. |
-| END | `enter` (button or tip contact) | Next session: `buttons_set_enter_enabled(false)`, `keyer_start()` with the stored values, clear the drop flag, the armed flag and the pattern, `training_start()`, full redraw. |
-| END | `menu/back` | Return true (leave). |
+| GAP, ITEM, RESULT | long `prev`, long `next` | Ignored. |
+
+`sending_leave()` (D-T40): in GAP, ITEM and RESULT, `keyer_stop()` and `buttons_set_enter_enabled(true)`. In SELECT
+and END, no keyer call and no buttons call. Then `training_stop()` in all phases.
 
 Mode state (`static MEM_XDATA`): the pattern, the drop flag `sending_is_dropping` (D-T15), the armed flag
 `tx_is_word_gap_armed` (D-T31), the code-row mark count (0..`TX_CODE_MAX_MARKS`) and the code-row x position.
@@ -1094,7 +1219,7 @@ Check results:
 | ITEM | Draw the item in the 8 x 16 font. Word item: bar under the first character. |
 | RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Bar back to the first character. Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
 | GAP | Blank moment: rows 1-7 off, header shows `training_shown_item_number()`. |
-| END | `keyer_stop()`, `buttons_set_enter_enabled(true)`, `training_screen_draw_end()`. |
+| END | `keyer_stop()`, `buttons_set_enter_enabled(true)`, `buttons_set_tap_mode(false)` (D-T43: drops a held `prev` or `next` and its repeat), `training_screen_draw_end()`. |
 
 Each 8 x 16 draw selects `FONTS_ID_8X16` and selects `FONTS_ID_5X8` again before it returns.
 
@@ -1132,6 +1257,27 @@ Limits for the word-space look. `ui-ux-embedded-designer` owns the text and the 
 ### 12.4 `main.c`
 
 `(void)progress_load();` right after `(void)settings_load();`. No other change.
+
+### 12.5 Main menu level (D-T41)
+
+`draw_item_row()` in `src/menu/menu_render.c`, for an item with `kind == MENU_KIND_MODE`:
+
+| Target | Text |
+| --- | --- |
+| `MENU_MODE_RECEIVING` | `L` and `koch_shown_level(progress_level(PROGRESS_MODE_RECEIVING, settings_get(SETTINGS_ID_RX_WPM)))` |
+| `MENU_MODE_SENDING` | `L` and `koch_shown_level(progress_level(PROGRESS_MODE_SENDING, settings_get(SETTINGS_ID_TX_WPM)))` |
+| `MENU_MODE_FREE_INPUT` | nothing |
+
+- The text has 2 to 6 cells (`L1` to `L65535`). Column and alignment: `ui-ux.md` (task D4). The label column 0 and
+  the longest label `Free Input` (10 cells) leave room up to column 24.
+- Color: the color of the label. On the selected row it is inverted inside the band.
+- The text is built in the existing `value_text` buffer (12 bytes) with `gfx_format_u16()`. No new xdata.
+- The level is read at each render. A session, a speed change or `Reset Statistics` shows at the next render of
+  the main menu with no extra code.
+- The new draw path is no deeper than the existing `draw_value()` path (`draw_item_row()` -> helper ->
+  `draw_text()` -> `gfx_draw_text()`).
+- A compile-time check (`#if` or `_Static_assert`) proves `MENU_MODE_RECEIVING == PROGRESS_MODE_RECEIVING` and
+  `MENU_MODE_SENDING == PROGRESS_MODE_SENDING`. Then the target can go to `progress_level()` directly.
 
 ## 13. ISR rules and `check_asm.sh`
 
@@ -1266,6 +1412,33 @@ T13 measures the baseline again before the first change and reports the 14.2 tab
 Final (T13): flash 26 781 B (+41, D-T34), xdata 1812 B (+1), DSEG, overlay and bit bytes unchanged, 191 B stack free,
 margin 107 B.
 
+Change D-T35 to D-T41 (task T14): level selection. No new file, no ISR change. Baseline measured by the coordinator
+on the unchanged tree (2026-10-07), equal to the final T13 values.
+
+| Resource | Baseline (after T13) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 26 781 B | at most +800 B | +1200 B |
+| xdata | 1812 B | at most +2 B (the selected level) | +4 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | starts at 0x41, 191 B free, summed-push bound 66 B, margin 107 B | no deeper main-loop chain | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged: no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+| Repeat cost (D-T39) | - | tap switches and repeat acceptance in the modes | +100 B, then the D-T35 (6) fallback decision |
+
+Flash estimate: engine +150 B, selector screens and description +400 B, mode changes +60 B. The main menu level
+adds about +100 B. `koch_shown_level()` adds about 0 B net, because it replaces `training_shown_of()`. The texts of the description and the
+`Start` band are short `MEM_CODE` constants.
+
+Stack candidates for T14, to compare with the 66 B bound:
+
+- `menu_handle` -> `receiving_handle` -> `training_screen_select_input` -> `training_screen_draw_select` ->
+  `training_screen_draw_centered` (or the selector draw) -> `training_screen_draw_text` -> `gfx_draw_text` -> ...
+- `menu_handle` -> `sending_handle` -> `training_screen_select_input` -> ... (same tail).
+- `menu_poll` -> `menu_render` -> `draw_list` -> `draw_item_row` -> level helper -> `draw_text` -> `gfx_draw_text`
+  -> ...
+
+T14 measures the baseline again before the first change. It reports the 14.2 table before and after. It also
+reports the flash per changed file and the deepest chain by name.
+
 Report table from `build.sh`, `.map` and `.mem`, before and after each task:
 
 | Task | Flash B | DSEG B | Overlay B | Bit bytes | xdata B | Stack start | Stack free B | Deepest main-loop stack B | Largest ISR frame B | Margin B |
@@ -1373,6 +1546,15 @@ Player tests define `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()`, include 
   argument. Expected thresholds and end-screen texts of word sessions change from `ceil(0.9 n)` to `ceil(0.8 n)`:
   `test_training.c` (10 words: 9 -> 8, 100 words: 90 -> 80), V-121 in `test_sending.c` (`Not passed, need 90` ->
   `need 80`), and every QA or menu test with a word-session threshold. Character-session values do not change.
+- D-T35 to D-T41 (task T14): a call `training_start(mode, wpm, max)` becomes `training_prepare(mode, wpm, max)` and
+  then `training_start()`. A scenario that expects a session right after the mode entry gets one `enter` press on the
+  start screen first. The entry helper of `training_harness.h` can do this. Expected values of the end
+  screen level row (`New level`, `Repeat level`, `Top level`) change to the selector of `ui-ux.md` (task D4).
+  Receiving tests that expect tap mode on the end screen (an `enter` or `menu/back` at the release there) change to
+  the press. Sending tests that expect `keyer_start()` at `sending_enter()` change to the start from the start
+  screen. This covers `test_training.c`, `test_receiving.c`, `test_sending.c`, `test_menu_training.c`, the
+  `test_qa_*` files of these groups and `Tests/support/`. Each changed expected value traces to D-T35 to D-T41 or to
+  a revised V-vector of task D4.
 - No change removes a check or loosens an expected value.
 
 ## 16. Acceptance criteria
@@ -1411,6 +1593,13 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T27 | Change D-T27/D-T28. Memory within the T11 budget of section 14.2, with the before and after report. `check_asm.sh` passes. The revised and new V-vectors of task D1 pass. The labels meet LC-1 to LC-7 (section 12.2). A host test checks the button-to-run mapping for all four buttons. |
 | AC-T28 | Change D-T30/D-T31, through the menu with the fake keyer. (1) Retry screen: after a wrong character, an unknown pattern (`*`) and a word-space error, with `Show CW Code` `On` and `Off`, a character item and a word item: at RETRY, rows 5 and 7 are off, the status is `Try 2 of 3` (then `Try 3 of 3`), a word item has the bar under its first character, a character item has no bar. The first DIT after the retry draws its mark at x 2. During RESULT, row 7 keeps the marks of the keyed character. (2) Word space: in a word item, a WORD_GAP right after the PARTIAL CHAR_GAP of character k (k = 1 and k = length - 1) gives the word-space result of `ui-ux.md` 5.14 with `TRAINING_WRONG_MS`. Three in a row give FAILED with row 5 showing the code of item character k + 1. The retry is the whole item and the score does not count it. (3) No effect, with no status, no attempt and no redraw: a WORD_GAP before the first character of the item (also after a retry), after the last character, after a wrong character, in the start pause, RESULT and GAP, after OVERFLOW (with the drop flag set, and after the CHAR_GAP that clears it), after a character dropped by D-T15, and after a DIT that follows the PARTIAL CHAR_GAP. A WORD_GAP in a character session. (4) CHAR_GAP (PARTIAL) and WORD_GAP in one poll give the wrong attempt. (5) The revised and new V-vectors of task D2 pass. (6) Memory within the T12 budget of section 14.2, with the before and after report. `check_asm.sh` passes, and no ISR file changes. |
 | AC-T29 | Change D-T33. (1) AC-T6 and AC-T18 as revised. (2) Through the menu: a Receiving and a Sending word session of 10 items with 8 first-attempt correct pass (`Passed`, `New level`, progress saved), with 7 fail (`Not passed, need 8`, `Repeat level`, no EEPROM write). A character session with 44 of 50 still fails (`need 45`). A final level of 100 words with 79 fails (`need 80`) and with 80 passes. (3) The revised and new V-vectors of task D3 (`ui-ux.md` V-121, V-136 and any other) pass. (4) Memory within the T13 budget of section 14.2, with the before and after report. `check_asm.sh` passes. |
+| AC-T30 | Selection engine (D-T36), `test_training.c`. (1) `training_prepare()` with stored levels 0, 1, 17, 62 and 65535 gives phase SELECT and selected = earned. An unknown mode (2, 255) acts as RECEIVING. Prepare does no IAP erase and no IAP write. In SELECT, `training_poll()` gives NONE at any tick, `training_add_char()` gives IGNORED and `training_undo_char()` gives false. (2) From earned E = 19: 19 down steps reach 0 and each returns true. The next down step returns false and changes nothing. Then 19 up steps reach 19, and the next up step returns false. With E = 0 both directions return false. With E = 65535 an up step at 65535 returns false. In GAP, ITEM, RESULT and IDLE a step returns false and keeps the selection. In END a step acts. (3) `training_start()` from SELECT and from END runs at the selected level: `training_level()`, the kind, the item count and the threshold of that level (index 0: 50 items, threshold 45. Index 2: 10 words, threshold 8). (4) `training_new_shown_level()` equals `koch_shown_level(training_selected_level())`. `koch_shown_level()` gives 1 for 0, 65534 for 65533, and 65535 for 65534 and 65535. |
+| AC-T31 | Finish and replay (D-T36), `test_training.c`. (1) Pass at the earned level E: outcome PASS, one save, stored level E + 1, selected E + 1. (2) Earned 19, pass at index 4: outcome PASS_REPLAY, no IAP erase, no IAP write, record bytes unchanged, earned 19, selected 5, and up steps reach 19. (3) Fail at index 4 with earned 19, and fail at the earned level: outcome FAIL, no IAP write, selected = session level. (4) Pass at 65535 with earned 65535: PASS_TOP, no write, selected 65535. (5) Pass at E with a failed save: PASS_NOT_SAVED, earned E + 1 in RAM, selected E + 1. (6) Pass at E - 1: PASS_REPLAY, selected = E. (7) Random walk of at least 1000 sessions: prepare, steps, start, pass or fail. After every call, 0 <= selected <= earned. The stored record changes only after a pass at the earned level. |
+| AC-T32 | Receiving with the selector, through the menu. (1) The entry shows the start screen of `ui-ux.md` (task D4). No player start, no keyboard drawing. Tap mode is off: a `prev` hold gives one step at the press and steps at 400 ms and every 80 ms after it. The `enter` press that opened the mode gives no start at its release, and a hold of it gives nothing. (2) `prev` and `next`, press and repeat, step the level and redraw only the rows of `training_screen_draw_select()`. All other LCD pages stay bit-identical. At a limit a press or a repeat redraws nothing. Long `prev`, long `next` and long `enter` do nothing. (3) `enter` and a tip closure start a session at the selected level: the header level and the session kind follow the selection. In ITEM, tap mode is on (a `prev` tap selects its run at the release). (4) At END, tap mode is off. The preselection follows AC-T31. `prev` and `next` step with repeats. `enter` starts the next session at the selected level. A short `menu/back` leaves at the press. (5) A `menu/back` press leaves from SELECT and from END. The long event of the same hold then does nothing on the main menu. After every leave, tap mode is off, the player is stopped, and the main menu shows the cursor on `Receiving`. (6) Hold a button through the END event. It gives no event. After a release and a new press, it acts. (7) A start from SELECT leaves page 0 clean. A start from END redraws it. |
+| AC-T33 | Sending with the selector, through the menu. (1) The entry shows the start screen. The fake keyer does not start, and `enter` stays enabled. (2) Steps as AC-T32 (2). (3) `enter` and a tip closure start the keyer once with the stored values and a session at the selected level. `enter` is disabled during the session. (4) At END: steps, `enter` starts the next session, `menu/back` leaves. (5) A leave from SELECT or END calls no `keyer_stop()` and does not change the `enter` state. A long `menu/back` leave from GAP, ITEM or RESULT stops the keyer once and gives P3.2 back. (6) AC-T21 still holds: the fake keyer and the fake player never run at the same time. |
+| AC-T34 | Main menu level (D-T41). The `Receiving` row shows `L<n>` of the stored level at `RX Speed`. The `Sending` row shows it at `TX Speed`. Column and video follow `ui-ux.md` (task D4), inverted on the selected row. Stored levels 0, 11, 65534 and 65535 show `L1`, `L12`, `L65535` and `L65535`. After a `RX Speed` change, the main menu shows the level of the new speed. After a pass at the earned level and a leave, the menu shows the new level. After a replay pass it does not change. `Free Input` and `Settings` rows are bit-identical to the baseline. |
+| AC-T35 | UI vectors. The vectors of task D4 pass: V-01, V-19, V-105 to V-108, V-121, V-136 and V-137 to V-151. V-90 to V-136 use the new `RX()` and `TX()` entry through the start screen. QA golden LCD dumps cover three screens. Start screen: both modes, L1, a character level, a word level, a final level, the limits with and without `<` and `>`. End screen with the selector: each outcome, PASS_REPLAY included. Main menu rows. |
+| AC-T36 | Change D-T35 to D-T41: memory within the T14 budget of section 14.2, with the before and after report and the named deepest chain. `check_asm.sh` passes. No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c` or `firmware/drivers/`. |
 | AC-T26 | `firmware/test.sh` and `firmware/build.sh` pass. All host tests pass under ASan and UBSan. No regression: existing tests change only as section 15.3 allows. |
 
 ## 17. Tasks
@@ -1480,6 +1669,33 @@ the last event before a WORD_GAP is always the CHAR_GAP of that space, or OVERFL
 | Q4 | `qa-embedded` | Independent verification of AC-T6, AC-T18 and AC-T29. Mutation cases: the kind ignored, the kinds swapped, 0.8 rounded down, an unknown kind on the word rule, the old rule at final levels. | T13 |
 | W4 | `technical-writer` | User manual: the pass rule (`docs/user_manual.md` line ~415: 45 of 50 characters, 8 of 10 words, 80 of 100 words, 80 % rounded up for words), and every other 90 % statement for words. | `architector` approval |
 
+### 17.4 Change D-T35 to D-T41: level selection
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D4 | `ui-ux-embedded-designer` | Done, review `approved` (D-T42). `ui-ux.md` gets a new section after 5.15 for the start screen and the end screen with the selector. It gives the rows, the columns, the selector line and the `<` and `>` markers. It also gives the description texts, the `Start` band, the header in SELECT and END, and the PASS_REPLAY text. Main menu level column (5.2, 5.3). Control rows in 6.1, 6.8 and 6.9 (tap mode off on both selector screens, repeats). Revision of 5.15 (tap mode on the end screen, the level row) and of U-11. New UX decisions from UX-53. Revised and new V-vectors in 9.4, with the global rule for the entry (the start screen comes first). Device checks. All within SL-1 to SL-7 (section 5.11) and D-T41. | - |
+| T14 | `c-embedded-developer` | Part A (can start now): `koch_shown_level()` in `koch.h` and `koch.c` (D-T37). `modes/training.h` and `src/modes/training.c` as section 5.10 and 11 (D-T36). In `receiving.c` and `sending.c`, only the call sites change: `training_prepare()` then `training_start()` at the places of the old `training_start()`. So the mode behavior stays as today and all existing scenario tests pass. Tests: AC-T30 and AC-T31 in `test_training.c`, `koch_shown_level()` cases in `test_koch.c`. Part B: the scope of section 17.4.1. Tests: AC-T32 to AC-T35 in `test_receiving.c`, `test_sending.c` and `test_menu_training.c`. Memory report (AC-T36), with the repeat cost of D-T39 named. No change in the ISR files, `buttons.c`, `keyer.c`, `player.c` or `firmware/drivers/`. | Part A: -. Part B: D4, Part A |
+| Q5 | `qa-embedded` | Independent verification of AC-T30 to AC-T36 and AC-T26. Golden LCD dumps of AC-T35. Mutation and fault cases for the engine: a replay pass that saves or that advances the RAM level. `<` in place of `!=` in the finish test. Preselect = level after a pass, or level + 1 after a fail. A step that wraps, that passes the earned level, or that acts in GAP or ITEM. PASS_TOP not saturated. Cases for the modes: tap mode left on at END (no repeat), or off in ITEM. A stray event after the END switch. A held button across a phase switch. The keyer started at `sending_enter()`. `keyer_stop()` called by `sending_leave()` in SELECT. Cases for the menu: the level read at the effective speed or at the speed of the other mode. | T14 |
+| W5 | `technical-writer` | Ready (T14 `approved`). `docs/user_manual.md`: remove "You cannot choose a level". Describe the start screen, the selector with auto-repeat and the description line. Describe the replay rule: a pass below the earned level keeps the stored level. Describe the preselection after a session, the end screen and the level in the main menu. Check every text that says a session starts at the mode entry. `docs/release_notes.md`: one entry for the change. | `architector` approval of T14 |
+
+T14 Part A runs. T14 Part B can start (D4 `approved`, D-T42). It builds on Part A. If Part A changes an interface
+of section 5, Part B stops and reports to `architector`.
+
+#### 17.4.1 Scope of T14 Part B
+
+| Area | Files | Content |
+| --- | --- | --- |
+| Shared screens | `inc/modes/training_screen.h`, `src/modes/training_screen.c` | `training_select_action_t` and `TRAINING_SELECT_*`. `training_screen_draw_start()`: rows 1-3 and 6 blank, selector row 4, description row 5, `Start` band row 7 (`ui-ux.md` 5.16.1). `training_screen_draw_select()`: rows 4 and 5 in full, and row 0 in SELECT only (SL-4, D-T42 (4)). `training_screen_select_input()` (D-T38, `ui-ux.md` 5.16.4). Selector line: `<`, two blanks, `L<s> of <e>`, two blanks, `>`, from column `floor((19 - len) / 2)`, markers by index (5.16.2). Description (5.16.3, SL-2). Header in SELECT (SL-6). End screen rows of SL-7, with one `Start` band helper for both screens. The texts `Next`, `New level L`, `Repeat level L` and `Top level L` go away. |
+| Receiving | `src/modes/receiving.c` | Section 12.2 and D-T39: entry with `training_prepare()`, no tap mode call. `rx_start_session()` turns tap mode on. The END event turns it off. SELECT and END events go to `training_screen_select_input()`, also repeats. START from SELECT redraws rows 1-7 only, START from END also row 0. `receiving_render()` for SELECT and END. |
+| Sending | `src/modes/sending.c` | Section 12.3 and D-T40: entry with `training_prepare()`, no keyer, no `buttons_set_enter_enabled()`. `tx_start_session()` unchanged apart from `training_start()`. SELECT and END events go to `training_screen_select_input()`. The same START redraw rule. `sending_render()` for SELECT and END. `sending_leave()` stops the keyer only in GAP, ITEM and RESULT. |
+| Main menu | `src/menu/menu_render.c` | Section 12.5 and D-T41: `L<n>` right-aligned with its last character in column 22, in the label color, built in `value_text`. The compile-time mode check. |
+| Test support | `Tests/support/training_harness.h` and helpers | `RX()`, `TX()`, `EARN()` and `OPEN()` of `ui-ux.md` 9.4: the entry passes the start screen with an `enter` press. Probes `LVL`, `DESC`, `STARTBTN`, `DIRTY`. |
+| Tests | `test_receiving.c`, `test_sending.c`, `test_menu_training.c`, `test_menu.c` (V-01, V-19) | V-01, V-19, V-105 to V-108, V-121, V-136, V-137 to V-151. All of V-90 to V-136 through the new entry. The 15.3 changes. AC-T32 to AC-T35. |
+| Report | - | AC-T36: the 14.2 table before and after, the flash per changed file, the repeat cost of D-T39, the deepest chain by name, `check_asm.sh` result. |
+
+Not in Part B: any change of `training.h`, `training.c`, `koch.h` or `koch.c` beyond Part A, the ISR files,
+`buttons.c`, `keyer.c`, `player.c` and `firmware/drivers/`. A need for such a change goes to `architector` first.
+
 ## 18. Device checks (unverified until the user tests on the device)
 
 | ID | Check |
@@ -1492,6 +1708,7 @@ the last event before a WORD_GAP is always the CHAR_GAP of that space, or OVERFL
 | DC-T5 | Progress survives a power cycle. `Reset Statistics` gives level 1 after a power cycle. |
 | DC-T6 | The main loop keeps up: no keyer queue overflow during the Sending redraw at 50 WPM. |
 | DC-T8 | `ui-ux.md` D-34. Sending word session with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM: words keyed with the normal 3-unit space pass. A pause of about 6 units after a character gives `Wrong: pause too long`, a pause of about 4 units does not. At the retry, rows 5 and 7 are blank. |
+| DC-T9 | D-T35 to D-T41. In both modes: the selector steps feel right with auto-repeat (400 ms, then every 80 ms), from L1 to an earned level above L50. `enter` and the paddle tip start a session from the start screen and from the end screen. Record whether a plug insertion on a selector screen starts a session (R-T10). The main menu shows the level next to `Receiving` and `Sending`. |
 
 ## 19. Risks
 
@@ -1504,6 +1721,8 @@ the last event before a WORD_GAP is always the CHAR_GAP of that space, or OVERFL
 | R-T6: tap mode adds the press duration to every Receiving answer. | U-11 and DC-T4. |
 | R-T7: the paddle tip shares P3.2 with `enter`. In Receiving, a short closure selects the `enter` run. A plug insertion can do the same (D-T27). When that run has one character and the pick fills the last slot, the check comes at once and uses an attempt. Long `prev` cannot undo a check. | Accepted by the user. A narrowing or a pick in an earlier slot can be undone with long `prev`. The user manual (W2) tells the user to insert the plug before opening Receiving. DC-T7. |
 | R-T8: the four labels do not fit one row for every run (LC-6). | D1 runs the script check over all Koch prefixes. LC-2 allows a second row. |
+| R-T10: on the start screen and the end screen, tap mode is off, so `enter` acts at the press. A tip closure or a plug insertion there starts a session (D-T39, D-T40). | A session that the user leaves changes no level. A long `menu/back` leaves in every phase. W5 tells the user to insert the plug before opening a mode. DC-T9. |
+| R-T11: at 12.5 steps per second, a far level takes time. From L1 to L150 takes about 12 s. | The selector opens at the earned level, so a replay is usually a few steps down. D-T35 (6) keeps the fallback (long `prev` or `next` steps by 10) for an `architector` decision after DC-T9. |
 | R-T9: a slow or uneven fist gets word-space errors at equal character and effective speeds (5 units leave 2 units above the normal space). | User decision (5 units, D-T30). The user can lower `TX Eff. Speed`. W3 tells the user. DC-T8. |
 
 ## 20. Answered questions
@@ -1519,6 +1738,8 @@ No open question remains for this contract.
 
 All dependencies are resolved. T12 Part B can start. Fixes F-1 to F-3 of D2 change only wording and add V-135.
 
+Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 Part B can start.
+
 | ID | Item | Resolution | Source in `ui-ux.md` |
 | --- | --- | --- | --- |
 | U-1 | `TRAINING_START_MS` | 1000 ms | 5.14, 6.10 |
@@ -1530,7 +1751,7 @@ All dependencies are resolved. T12 Part B can start. Fixes F-1 to F-3 of D2 chan
 | U-7 | Header | Tag, speed from column 3, level from column 9, item right-aligned to column 24. No short form. In a gap the header shows the next item number (`training_shown_item_number()`). | 5.11.1 |
 | U-8 | Receiving layout | Block and bar marks, slot x `68 - 8n + 16k`, key bar segments at y 55 (D-T29), label fields and label texts. | 5.11.1, 5.11.2, 5.12, 5.12.1 |
 | U-9 | Sending layout | Item line, bar under the next word character, status `Wrong: <text>`, code row 7, answer code row 5. `TX_CODE_MAX_MARKS` = 12. | 5.13, 5.13.3 |
-| U-10 | End screen | Score, `Passed` or `Not passed, need t`, `New level`, `Repeat level` or `Top level` (D-T17), `Not saved`, focused `Next`. | 5.15 |
+| U-10 | End screen | Revised by U-28 (D-T42). Before: score, `Passed` or `Not passed, need t`, `New level`, `Repeat level` or `Top level` (D-T17), `Not saved`, focused `Next`. | 5.15 |
 | U-11 | Tap mode | Adopted for the whole Receiving screen, end screen included. | 6.8 |
 | U-12 | Long `prev` | One step: step out one level, else undo the last pick, else nothing. | 6.8 |
 | U-13 | Replay on RETRY | At once, with empty slots. | 5.12.2 |
@@ -1545,6 +1766,12 @@ All dependencies are resolved. T12 Part B can start. Fixes F-1 to F-3 of D2 chan
 | U-22 | Word keyboard | No prosign (D-T4, `keyboard_reset(training_alphabet_count())`). | 5.12.1, V-102 |
 | U-23 | Four-run keyboard, tap `enter`, long `enter` replay, labels (D-T27, D-T28) | Resolved by D1 (UX-51) and D-T29. | 3.1, 5.12, 5.15, 6.1, 6.2, 6.4, 6.6, 6.8, 9.4 |
 | U-24 | Sending retry screen (D-T30) | Rows 5 and 7 off, `Try N of 3` kept, bar at the first character (WS-6). Resolved by D2 (UX-52). | 5.13.1, 5.13.3, 5.14 |
+| U-26 | Start screen layout (D-T35, D-T38) | Resolved by D4 (UX-53): selector in row 4, description in row 5, rows 1-3 and 6 blank, `Start` band in row 7 (cells 9-15, x 47-81). Meets SL-1 to SL-5. | 5.16.1 |
+| U-27 | Header in SELECT and END (SL-6) | Resolved by D4: in SELECT the level field shows the selected level and the item field shows `1/<n>`, `n` = `koch_item_count(training_selected_level())`. A step redraws row 0. In END the header of the session that ended stays, also while the selection changes. A start from SELECT leaves row 0 as it is (section 12.2). | 5.11.1, 5.16.1, 5.16.4 |
+| U-28 | End screen with the selector, PASS_REPLAY text (SL-7) | Resolved by D4 (UX-56). Row 1: `Not saved`. Row 2: the score. Row 3: `Passed, new level` (PASS, PASS_NOT_SAVED), `Passed` (PASS_REPLAY, PASS_TOP) or `Not passed, need <t>` (FAIL). Row 4: the selector. Row 5: the description. Row 7: the `Start` band. | 5.15 |
+| U-29 | Description texts (SL-2, SL-3) | Resolved by D4 (UX-54): `K and M`, `New char <full text>` in the `Prosigns` style (longest 15 cells), `Words of <len>` also for the final word phase. | 5.16.3 |
+| U-30 | Controls on the selector screens (D-T38, D-T39, D-T40) | Resolved by D4 (UX-55), matches D-T38 to D-T40. `next` up, `prev` down, press and repeat, no wrap. `enter` and the tip start at the press. `menu/back` leaves at the press. Long events do nothing. | 6.1, 6.8, 6.9, 5.16.4 |
+| U-31 | Main menu level column (D-T41) | Resolved by D4 (UX-57): right-aligned, last character in column 22, the video of a value. | 5.2, 5.16.6 |
 | U-25 | Sending word-space result (D-T30, D-T31) | `Wrong: pause too long`, bar under the next character, row 5 at FAILED the code of that character, row 7 kept (WS-1 to WS-5). Resolved by D2 (UX-52). The arming condition text waits for fix F-1. | 5.13.1, 5.13.2, 5.14, 9.4 |
 
 ## 22. Final review (2026-10-06)
@@ -1615,3 +1842,37 @@ Verdict T13: `approved`. Verdict W4: `approved`. QA verdict (Q4): `approved` (ho
 
 Open, not blocking: the rounding rule for the final levels is an assumption that the coordinator confirms with the
 user. Device checks from earlier changes stay open.
+
+### 22.4 Final review of D-T35 to D-T43, task T14 (2026-10-07)
+
+Verdict T14: `approved` on 2026-10-07, after fix F1. The first pass gave `changes_requested` for F1. QA verdict
+(Q5): `approved` (host level), also for F1.
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 75 of 75 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| `build.sh` | Passes. Run again by `architector`. `check_asm.sh` reports no violation. |
+| Memory | Flash 26 781 -> 27 570 B (+789, target +800, hard limit +1200). xdata 1812 -> 1814 B (+2, target +2). DSEG, overlay and bit bytes unchanged. Stack starts at 0x41, 191 B free. Summed-push bound 66 B, ISR frame 18 B, margin 107 B. |
+| ISR and protected files | No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c` or `firmware/drivers/`. |
+| Engine | `training_prepare()`, `training_start(void)`, `training_select_step()`, `training_selected_level()`, `training_earned_level()` and the finish rule match section 5.10, 11.2 and 11.4. The finish test is `!=`. `koch_shown_level()` replaces `training_shown_of()` (D-T37). The fail branch leaves the selected level as it is (D-T43 (3)). |
+| Screens | `training_screen_select_input()` ignores long events and acts on repeats of `prev` and `next` only. The selector line and the description match `ui-ux.md` 5.16.2 and 5.16.3. A step redraws rows 4 and 5, and row 0 in SELECT only. The end screen has the rows of SL-7 and one `Start` band. The old end screen texts are gone. |
+| Modes | Receiving: tap mode on in `rx_start_session()` and off at the END event. Sending: no keyer at the entry, and `sending_leave()` stops it only in GAP, ITEM and RESULT. A start from SELECT does not redraw row 0. |
+| Main menu | `L<n>` right-aligned to column 22, in the label video, from the speed of the mode. The compile-time checks of D-T41 are present. |
+| Tests | AC-T30 to AC-T35. QA: `test_qa_training_select.c`, `test_qa_receiving_level_select.c` (pixel goldens), 36 mutants, 34 killed, M33 and M34 equivalent. |
+
+Change request for `c-embedded-developer`:
+
+| ID | Change |
+| --- | --- |
+| F1 | `src/modes/sending.c`, END branch of `sending_poll()`: call `buttons_set_tap_mode(false)` (D-T43 (1)). Test in `test_sending.c`, the Sending form of V-144: a `TX(...)` session, `next` pressed 100 ms after the last keyed character and held for 2000 ms across END. At the end screen: no step, no repeat and no long event act, `DIRTY()`. After the release, a new `M` steps once. The same with `prev`. Run `test.sh` and `build.sh`. Report the flash: up to +820 B is accepted for this change. No other change. |
+
+F1 result. `sending_poll()` END branch: `keyer_stop()`, `buttons_set_enter_enabled(true)`,
+`buttons_set_tap_mode(false)`, then the end screen. `test_v144_held_through_end` in `test_sending.c` covers `next`
+and `prev`: the hold through END gives no step and no dirty page, and a new press steps once (pages 4 and 5). QA
+killed the mutants "call removed" and "tap mode true". The three order mutants are equivalent: the three calls
+commute, and no `buttons_poll()` runs between them. Run again by `architector`: `test.sh` 75 of 75, `build.sh`
+passes with no `check_asm.sh` violation. Flash 27 576 B (+795, inside the +820 B allowance of F1). xdata 1814 B.
+Stack 191 B free, margin 107 B. No protected file changed.
+
+T14 is closed. W5 (`technical-writer`) can start with the scope of section 17.4. Open, not blocking: device check DC-T9 (`ui-ux.md` D-35 to D-37). `ui-ux.md` V-143 can say "no playback
+starts" in its next edit (D-T43 (2), owner `ui-ux-embedded-designer`).

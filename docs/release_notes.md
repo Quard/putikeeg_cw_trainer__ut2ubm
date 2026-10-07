@@ -3,6 +3,74 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
+## Unreleased: level selection in Receiving and Sending
+
+Changes since commit `5916c0f` (Koch training modes Receiving and Sending).
+
+> **Not tested on the device.** This version passed the host tests, the build checks, the QA review and the
+> architecture review. Nobody tested it on the device yet. See
+> [Not checked on the device: level selection](#not-checked-on-the-device-level-selection).
+
+### New
+
+- **Start screen.** `Receiving` and `Sending` open on a start screen. No session starts until you press `enter`.
+  The screen shows the level selector `<  L20 of 20` and a description line. The first number is the level that
+  you choose. The second number is your earned level, the level that the device stores for the mode at the current
+  speed. The start screen always shows your earned level first.
+- **Choose a level.** `prev` goes one level down and `next` goes one level up, from L1 up to your earned level. A
+  hold repeats the step: the first repeat after 0.4 s, then 12.5 levels per second. The level stops at L1 and at
+  your earned level. It does not wrap. `<` and `>` show which steps are possible.
+- **Description line.** Under the selector, a short text tells what the level teaches: `K and M` for L1,
+  `New char J` for a character level, and `Words of 4` for a word level. The new character shows in the style of
+  the `Prosigns` setting, for example `New char <BT/=>`.
+- **Replay a lower level.** A pass below your earned level keeps the stored level. The device saves nothing.
+  Example: your earned level is L20. You pass L5. The next session preselects L6, and the store keeps L20.
+- **Level in the main menu.** `Receiving` shows your earned level at the current `RX Speed`, for example `L12`.
+  `Sending` shows it at the current `TX Speed`.
+
+### Changed
+
+- **Opening a mode does not start a session.** Press `enter`, or close the tip contact, on the start screen to
+  start the session. To leave the start screen, press `menu/back`.
+- **New session end screen.** After a failed save, row 1 shows `Not saved`. Then come the score and one result
+  text: `Passed, new level` after a pass at your earned level, `Passed` after a replay pass or a pass at L65535, or
+  `Not passed, need <t>`. Below the result, the end screen shows the same selector as the start screen, and `Start`.
+  The texts `New level`, `Repeat level`, `Top level` and `Next` are gone.
+- **Preselection after a session.** After a pass, the selector shows the next level. After a fail, it shows the
+  same level. You can change it before you start the next session.
+- **Buttons on the session end screen.** `prev` and `next` change the level. In both modes, every button acts at
+  the push. In Receiving, the end screen buttons are no longer taps. A short press of `menu/back` opens the main
+  menu.
+- **A held button does not change the selection.** The end screen ignores a button that you hold from the session.
+  Release the button, and then press it again.
+
+### Saved levels
+
+The stored levels and their format do not change. A replay pass writes nothing. Only a pass at your earned level
+saves, as before.
+
+### Known limits
+
+- **Insert the plug before you open `Receiving` or `Sending`.** On the start screen and the session end screen, a
+  closure of the tip contact starts a session at once. A plug insertion can do the same. Hold `menu/back` for about
+  0.8 s to leave such a session. Your level does not change.
+- A far level takes time to reach: from L1 to L150 takes about 12 s.
+- The level that you choose is not stored. When you open the mode again, the selector shows your earned level.
+
+### Not checked on the device: level selection
+
+The firmware design and the host tests give the behavior above. These items need a check on the device:
+
+- The feel of the selector with auto-repeat, on the start screen and the end screen, in both modes, up to an earned
+  level above L50. The last level must show within 0.1 s after the release.
+- The start of a session with the `enter` button and with the tip contact (dit lever and straight key). A held
+  contact must give no pick in Receiving, and no element and no tone in Sending.
+- A plug insertion while the start screen or the end screen shows. It can start a session.
+- The legibility of the selector, the description line and the level in the main menu.
+
+The device checks are in `references/internal/training_spec.md` section 18 (DC-T9) and
+`references/internal/ui-ux.md` section 11 (D-35 to D-37).
+
 ## Unreleased: Prosigns setting
 
 Changes since commit `ee4eedd` (paddle keyer and Free Input).

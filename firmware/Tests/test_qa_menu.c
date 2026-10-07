@@ -16,6 +16,7 @@
 #include "lcd/lcd_fb.h"
 #include "menu/menu.h"
 #include "menu_internal.h"
+#include "modes/training.h"
 #include "settings/settings.h"
 #include "support/test_assert.h"
 
@@ -146,6 +147,9 @@ static void test_random_walk_invariants(void) {
       const size_t stops_before = fake_keyer_stop_count();
       const bool is_training_screen = (screen == MENU_SCREEN_RECEIVING) || (screen == MENU_SCREEN_SENDING);
       const bool is_mode_screen = is_training_screen || (screen == MENU_SCREEN_FREE_INPUT);
+      /* The start screen and the end screen act on short events (ui-ux.md 5.16.4, D-T35). */
+      const bool is_selector_screen = is_training_screen && ((training_phase() == TRAINING_PHASE_SELECT) ||
+                                                             (training_phase() == TRAINING_PHASE_END));
       const menu_item_t MEM_CODE* item = item_under_cursor();
       const size_t stats_before = fake_stats_reset_count();
       const size_t erases_before = fake_iap_erase_count(0U);
@@ -176,6 +180,10 @@ static void test_random_walk_invariants(void) {
         snapshot(after);
         TEST_ASSERT_EQUAL(0, memcmp(before, after, LCD_WIDTH));
       } else {
+        if (is_selector_screen) {
+          /* A start from the start screen or the end screen draws the session straight into the framebuffer. */
+          snapshot(before);
+        }
         menu_render();
         snapshot(after);
         if (!TEST_ASSERT_EQUAL(0, memcmp(before, after, FB_SIZE))) {
@@ -184,7 +192,7 @@ static void test_random_walk_invariants(void) {
       }
 
       /* UX-24 and ui-ux.md 6.1: a long event outside a mode screen, and a short event in one, change nothing. */
-      if ((is_long && !is_mode_screen) || (!is_long && is_mode_screen) ||
+      if ((is_long && !is_mode_screen) || (!is_long && is_mode_screen && !is_selector_screen) ||
           (is_long && is_training_screen && (code != BUTTON_EVENT_MENU))) {
         ++ignored_longs;
         TEST_ASSERT_EQUAL(screen, menu_screen());
@@ -207,8 +215,9 @@ static void test_random_walk_invariants(void) {
           TEST_ASSERT_EQUAL(stops_before, fake_keyer_stop_count());
         }
       }
-      if ((screen != menu_screen()) &&
-          ((menu_screen() == MENU_SCREEN_FREE_INPUT) || (menu_screen() == MENU_SCREEN_SENDING))) {
+      /* Sending starts the keyer with a session, from its start screen or end screen (D-T40). */
+      if (((screen != menu_screen()) && (menu_screen() == MENU_SCREEN_FREE_INPUT)) ||
+          ((screen == MENU_SCREEN_SENDING) && is_selector_screen && (event == BUTTON_EVENT_ENTER))) {
         if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
           ++free_input_entries;
         }
@@ -220,8 +229,10 @@ static void test_random_walk_invariants(void) {
       } else {
         TEST_ASSERT_EQUAL(starts_before, fake_keyer_start_count());
       }
-      /* The keyer runs exactly while Free Input or Sending is open (Sending stops it only at its end screen). */
-      TEST_ASSERT_EQUAL((menu_screen() == MENU_SCREEN_FREE_INPUT) || (menu_screen() == MENU_SCREEN_SENDING),
+      /* The keyer runs exactly while Free Input is open or a Sending session runs (D-T40). */
+      TEST_ASSERT_EQUAL((menu_screen() == MENU_SCREEN_FREE_INPUT) ||
+                            ((menu_screen() == MENU_SCREEN_SENDING) && (training_phase() >= TRAINING_PHASE_GAP) &&
+                             (training_phase() <= TRAINING_PHASE_RESULT)),
                         fake_keyer_is_running());
       if ((menu_screen() == MENU_SCREEN_FREE_INPUT) && ((rng_next() % 2U) == 0U)) {
         feed_free_input();

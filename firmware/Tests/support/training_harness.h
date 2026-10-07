@@ -149,8 +149,8 @@ static inline void harness_at(uint16_t t, button_event_t event) {
   harness_event(event);
 }
 
-/* Moves the main menu cursor to @p row and starts the mode with enter at HARNESS_T0. */
-static inline void harness_open_mode(uint8_t row) {
+/* OPEN(m) of ui-ux.md section 9.4: moves the main menu cursor to @p row and opens the mode. The start screen shows. */
+static inline void harness_open_start_screen(uint8_t row) {
   uint8_t index;
 
   for (index = 0U; index < row; ++index) {
@@ -158,6 +158,15 @@ static inline void harness_open_mode(uint8_t row) {
   }
   menu_render();
   harness_set_time(HARNESS_T0);
+  harness_event(ENTER_EVENT);
+}
+
+/*
+ * RX() and TX() of ui-ux.md section 9.4: opens the mode at HARNESS_T0, then the enter press on the start screen starts
+ * the session at the earned level, also at HARNESS_T0.
+ */
+static inline void harness_open_mode(uint8_t row) {
+  harness_open_start_screen(row);
   harness_event(ENTER_EVENT);
 }
 
@@ -307,10 +316,87 @@ static inline bool keys(const char* a, const char* b, const char* c, const char*
   return key_bars() && labels_are(labels);
 }
 
-/* NEXTBTN */
-static inline bool next_button(void) {
-  const row_text_t text = {10, "Next", true};
-  return row_matches(7, 47, 76, &text, 1U) && !pixel(46, 60) && !pixel(77, 60);
+/* STARTBTN: the band x 47-81 on y 57-63 with "Start" inverted in columns 10-14; y 56 and the rest of row 7 off. */
+static inline bool start_button(void) {
+  const row_text_t text = {10, "Start", true};
+  return row_matches(7, 47, 81, &text, 1U) && !pixel(46, 60) && !pixel(82, 60);
+}
+
+/*
+ * LVL(s, e): row 4 holds the selector line of ui-ux.md section 5.16.2. The markers follow the indexes: '<' when
+ * @p has_prev, '>' when @p has_next (they differ from s > 1 and s < e only at the D-T5 saturation).
+ */
+static inline bool lvl_markers(unsigned shown, unsigned earned, bool has_prev, bool has_next) {
+  char text[24];
+  row_text_t texts[3];
+  size_t count = 1U;
+  int length;
+  int column;
+
+  (void)snprintf(text, sizeof(text), "L%u of %u", shown, earned);
+  length = (int)strlen(text);
+  column = (19 - length) / 2;
+  texts[0].column = column + 3;
+  texts[0].text = text;
+  texts[0].is_inverted = false;
+  if (has_prev) {
+    texts[count].column = column;
+    texts[count].text = "<";
+    texts[count].is_inverted = false;
+    ++count;
+  }
+  if (has_next) {
+    texts[count].column = column + length + 5;
+    texts[count].text = ">";
+    texts[count].is_inverted = false;
+    ++count;
+  }
+  return row_matches(4, HARNESS_NO_BAND, 0, texts, count);
+}
+
+static inline bool lvl(unsigned shown, unsigned earned) {
+  return lvl_markers(shown, earned, shown > 1U, shown < earned);
+}
+
+/*
+ * A main menu row (ui-ux.md section 5.16.6): @p label in column 0 and, when @p level is not NULL, the level
+ * right-aligned to column 22, both inverted inside a full-width band on the selected row.
+ */
+static inline bool menu_row_is(int r, const char* label, const char* level, bool is_selected) {
+  row_text_t texts[2];
+  size_t count = 1U;
+  texts[0].column = 0;
+  texts[0].text = label;
+  texts[0].is_inverted = is_selected;
+  if (level != NULL) {
+    texts[1].column = 23 - (int)strlen(level);
+    texts[1].text = level;
+    texts[1].is_inverted = is_selected;
+    count = 2U;
+  }
+  return row_matches(r, is_selected ? 0 : HARNESS_NO_BAND, 127, texts, count);
+}
+
+/* DESC(s) */
+static inline bool desc(const char* text) { return centered(5, text); }
+
+/* DIRTY(p, ...): exactly the pages of @p mask are dirty. */
+static inline bool dirty_is(uint8_t mask) {
+  if (lcd_fb_dirty_mask() != mask) {
+    fprintf(stderr, "dirty pages 0x%02X, expected 0x%02X\n", (unsigned)lcd_fb_dirty_mask(), (unsigned)mask);
+    return false;
+  }
+  return true;
+}
+
+#define PAGE(p) ((uint8_t)(1U << (p)))
+
+/* Clears every dirty flag, so a later DIRTY() sees only the pages of the next event. */
+static inline void harness_clear_dirty(void) {
+  uint8_t page;
+  for (page = 0U; page < LCD_PAGE_COUNT; ++page) {
+    lcd_fb_clear_dirty(page);
+  }
 }
 
 #define ITEM_PART_BIG 0U
@@ -432,8 +518,9 @@ static inline bool margins_off(void) {
 }
 
 /*
- * End screen of ui-ux.md section 5.15 for @p score of @p count with the pass threshold @p threshold. The session
- * started at shown level @p shown_level. A pass erases page 1 once and writes the record once; a fail writes nothing.
+ * End screen of ui-ux.md section 5.15 for @p score of @p count with the pass threshold @p threshold, after a session
+ * at the earned level with shown level @p shown_level. A pass erases page 1 once, writes the record once and
+ * preselects the next level; a fail writes nothing and preselects the same level.
  */
 static inline bool end_screen_is(unsigned score, unsigned count, unsigned threshold, unsigned shown_level) {
   const bool is_passed = score >= threshold;
@@ -441,19 +528,16 @@ static inline bool end_screen_is(unsigned score, unsigned count, unsigned thresh
   bool is_ok;
 
   (void)snprintf(text, sizeof(text), "Score %u/%u", score, count);
-  is_ok = centered(2, text);
+  is_ok = centered(2, text) && blank_row(1) && blank_row(6);
   if (is_passed) {
-    (void)snprintf(text, sizeof(text), "New level L%u", shown_level + 1U);
-    is_ok = is_ok && centered(3, "Passed") && centered(4, text) && (fake_iap_erase_count(1U) == 1U) &&
-            (fake_iap_program_count(0x0200U) == 1U);
+    is_ok = is_ok && centered(3, "Passed, new level") && lvl(shown_level + 1U, shown_level + 1U) &&
+            (fake_iap_erase_count(1U) == 1U) && (fake_iap_program_count(0x0200U) == 1U);
   } else {
-    char result[32];
-    (void)snprintf(result, sizeof(result), "Not passed, need %u", threshold);
-    (void)snprintf(text, sizeof(text), "Repeat level L%u", shown_level);
-    is_ok = is_ok && centered(3, result) && centered(4, text) && (fake_iap_command_count(3U) == 0U) &&
+    (void)snprintf(text, sizeof(text), "Not passed, need %u", threshold);
+    is_ok = is_ok && centered(3, text) && lvl(shown_level, shown_level) && (fake_iap_command_count(3U) == 0U) &&
             (fake_iap_command_count(2U) == 0U);
   }
-  return is_ok && next_button() && margins_off();
+  return is_ok && start_button() && margins_off();
 }
 
 /* Index of the last fake player call of @p kind, or -1. */

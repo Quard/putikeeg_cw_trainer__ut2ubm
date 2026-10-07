@@ -57,7 +57,7 @@ static void tx_start_session(void) {
   sending_is_dropping = false;
   tx_is_word_gap_armed = false;
   tx_pattern = MORSE_PATTERN_EMPTY;
-  training_start(TRAINING_MODE_SENDING, tx_wpm, tx_max_word_len);
+  training_start();
 }
 
 /* Draws one mark at tx_mark_x in row @p row and moves tx_mark_x past it and the gap. */
@@ -210,16 +210,21 @@ void sending_enter(void) {
   }
   tx_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
-  tx_start_session();
+  /* The keyer starts with the session, so P3.2 stays enter on the start screen (D-T40). */
+  training_prepare(TRAINING_MODE_SENDING, tx_wpm, tx_max_word_len);
 }
 
 void sending_render(void) {
-  training_screen_draw_header();
-  if (training_phase() == TRAINING_PHASE_END) {
+  const training_phase_t phase = training_phase();
+
+  if (phase == TRAINING_PHASE_SELECT) {
+    training_screen_draw_start();
+  } else if (phase == TRAINING_PHASE_END) {
     training_screen_draw_end();
   } else {
     tx_draw_input();
   }
+  training_screen_draw_header();
 }
 
 void sending_poll(void) {
@@ -245,34 +250,45 @@ void sending_poll(void) {
   } else if (event == TRAINING_EVENT_END) {
     keyer_stop();
     buttons_set_enter_enabled(true);
+    /* Drops a press held across END, so its repeats cannot step the selector (D-T43). */
+    buttons_set_tap_mode(false);
     training_screen_draw_header();
     training_screen_draw_end();
   }
 }
 
+/* Only the start screen and the end screen act (ui-ux.md sections 5.16.4 and 6.9). */
 bool sending_handle(button_event_t event) {
-  const uint8_t code = BUTTON_EVENT_CODE(event);
+  const training_phase_t phase = training_phase();
+  training_select_action_t action;
 
-  /* Only the end screen acts, and only on short presses (ui-ux.md section 6.9). */
-  if ((training_phase() != TRAINING_PHASE_END) ||
-      ((event & (BUTTON_EVENT_LONG_FLAG | BUTTON_EVENT_REPEAT_FLAG)) != 0U)) {
+  if ((phase != TRAINING_PHASE_SELECT) && (phase != TRAINING_PHASE_END)) {
     return false;
   }
-  if (code == BUTTON_EVENT_MENU) {
+  action = training_screen_select_input(event);
+  if (action == TRAINING_SELECT_LEAVE) {
     return true;
   }
-  if (code == BUTTON_EVENT_ENTER) {
+  if (action == TRAINING_SELECT_START) {
     rng_mix(tick_now());
     tx_start_session();
     training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
-    sending_render();
+    /* The start screen header already shows the start pause of the selected level (D-T42 (4)). */
+    if (phase == TRAINING_PHASE_END) {
+      training_screen_draw_header();
+    }
+    tx_draw_input();
   }
   return false;
 }
 
+_Static_assert((TRAINING_PHASE_ITEM == (TRAINING_PHASE_GAP + 1U)) &&
+                   (TRAINING_PHASE_RESULT == (TRAINING_PHASE_GAP + 2U)),
+               "GAP, ITEM and RESULT must be one range");
+
 void sending_leave(void) {
-  /* The end screen already stopped the keyer and gave P3.2 back. */
-  if (training_phase() != TRAINING_PHASE_END) {
+  /* The keyer runs only in GAP, ITEM and RESULT (D-T40). */
+  if ((uint8_t)(training_phase() - TRAINING_PHASE_GAP) <= (uint8_t)(TRAINING_PHASE_RESULT - TRAINING_PHASE_GAP)) {
     keyer_stop();
     buttons_set_enter_enabled(true);
   }

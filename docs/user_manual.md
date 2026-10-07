@@ -18,7 +18,7 @@ This version has the menu, the settings, the display controls, the [Free Input](
   the decoded text. The keyer has three key types: `Straight`, `Iambic A` and `Iambic B`.
 - In `Receiving`, the device plays Morse code and you pick the characters with the buttons. In `Sending`, the
   device shows characters and words and you key them. Both modes teach the characters in Koch order, one level at
-  a time.
+  a time. Before each session, you choose the level. You can repeat each level up to the level that you reached.
 - The device makes three sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
   Tone preview. When you edit `Tone` in
   `Settings > CW`, the device plays the edited tone for about 0.3 s. Each change of the value plays the new tone
@@ -42,18 +42,22 @@ The device has four control buttons and an `on/off` button.
 Notes:
 
 - **`enter` is shared with the paddle socket.** The tip contact of the key/paddle socket is connected to `enter`.
-  In the menu and in Receiving, a paddle dit contact or a straight key acts as `enter`. In the menu, a key that
-  stays closed gives only one `enter`. The other buttons continue to work. In Free Input, the keyer uses this
-  contact. Then `enter` keys like the tip contact (see
+  In the menu and in Receiving, a paddle dit contact or a straight key acts as `enter`. This is also true on the
+  [start screen](#choose-a-level) and the [session end screen](#session-end-screen) of Sending. In the menu, a key
+  that stays closed gives only one `enter`. The other buttons continue to work. In Free Input and in a Sending
+  session, the keyer uses this contact. Then `enter` keys like the tip contact (see
   [The enter button in Free Input](#the-enter-button-in-free-input)).
 - If you insert a plug into the paddle socket while the menu shows, the device can see one `enter`. Then it can
-  open an item or start editing. Press `menu/back` to go back. Nothing changes. If it opens a mode screen, hold
-  `menu/back` to go back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). In Receiving, a
-  plug insertion can select the `enter` group of the keyboard (see
-  [Key or paddle in Receiving](#key-or-paddle-in-receiving)). This effect is not checked on the device.
+  open an item or start editing. Press `menu/back` to go back. Nothing changes. If it opens `Receiving` or
+  `Sending`, the start screen shows. Press `menu/back` to go back. If it opens Free Input, hold `menu/back` to go
+  back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). On the start screen and the session
+  end screen, a plug insertion can start a session (see [Choose a level](#choose-a-level)). In Receiving, a plug
+  insertion can select the `enter` group of the keyboard (see
+  [Key or paddle in Receiving](#key-or-paddle-in-receiving)). These effects are not checked on the device.
 - **Hold for auto-repeat.** To repeat the action of `prev` or `next`, hold the button. The first repeat comes
   after 0.4 s. After that, the action repeats every 0.08 s (12.5 steps per second). `enter` and `menu/back` do
-  not repeat. In the menu lists, a longer hold does nothing more.
+  not repeat. In the menu lists, a longer hold does nothing more. The level selector of the training modes also
+  repeats (see [Choose a level](#choose-a-level)).
 - **Wrap in lists.** A press of `next` on the last item moves the cursor to the first item. A press of `prev` on
   the first item moves it to the last item. When you hold the button, the cursor stops at the end of the list.
 - A button that is held while you switch on the device does nothing until you release it and press it again.
@@ -67,6 +71,8 @@ Notes:
 - A highlight band shows the selected item.
 - An item with `>` at the right edge opens a submenu.
 - A value item shows its value at the right side of the row.
+- In the main menu, `Receiving` and `Sending` show your level at the right side of the row, for example `L12` (see
+  [Level in the main menu](#level-in-the-main-menu)).
 
 ## Menu structure
 
@@ -125,14 +131,19 @@ Notes:
 - The screen shows no hint about these holds. The device gives no beep and no progress mark. The change of the
   screen is the only signal.
 - One hold gives one action. A longer hold does nothing more.
-- Only Receiving has a hold of `enter`. In Free Input and in Sending, `enter` keys like the tip contact.
+- Only Receiving has a hold of `enter`. In Free Input and in a Sending session, `enter` keys like the tip contact.
 - If you hold `prev` and `next` together in Free Input, the device clears the text and then draws a line.
 
 ### Receiving and Sending
 
-A session that you leave with a hold of `menu/back` is lost. Your level does not change. The session end screen is
-different: there a short press of `menu/back` also opens the main menu (see
-[Session end screen](#session-end-screen)).
+A session that you leave with a hold of `menu/back` is lost. Your level does not change.
+
+The table above is for a session. The start screen and the session end screen are different. There, each button
+acts at the push, and a hold gives no command (see [Choose a level](#choose-a-level)):
+
+- A press of `menu/back` opens the main menu.
+- `prev` and `next` change the level. A hold repeats the step.
+- `enter` starts a session.
 
 ## Free Input
 
@@ -371,6 +382,9 @@ the character speed that you set, and each passed session adds a new character.
 
 Each mode has its own level. The level sets the characters and the length of the session.
 
+When you open `Receiving` or `Sending`, no session starts. The [start screen](#choose-a-level) shows first. On it,
+you choose the level and start the session.
+
 ### Levels and sessions
 
 A session is a set of items. An item is one character or one word. The device teaches 43 characters in this order:
@@ -415,15 +429,134 @@ Rules for a pass:
 - To pass a character session, you need 90 % of the items: 45 of 50 characters.
 - To pass a word session, you need 80 % of the words, rounded up: 8 of 10 words, 80 of 100 words. This rule
   applies to every word session, also to the final word sessions.
-- A pass moves you to the next level. A fail repeats the level with new random items.
-- You cannot choose a level. `Reset Statistics` sets all levels back to L1 (see
-  [Reset Statistics](#reset-statistics)).
+- A pass at your [earned level](#choose-a-level) moves you to the next level. A fail does not change your level.
+- You can choose each level from L1 up to your earned level (see [Choose a level](#choose-a-level)).
+- `Reset Statistics` sets all levels back to L1 (see [Reset Statistics](#reset-statistics)).
+
+### Choose a level
+
+Your **earned level** is the level that the device stores for the mode at the current speed (see
+[Progress](#progress)). It is the highest level that you can choose. To get a higher level, pass a session at your
+earned level.
+
+#### The start screen
+
+When you open `Receiving` or `Sending` from the main menu, the start screen shows. No session runs, and the device
+makes no sound. The start screen always shows your earned level first.
+
+Example: Receiving, earned level L20, `RX Speed` 20 WPM and `RX Eff. Speed` 15 WPM:
+
+```text
+RX 20/15 L20         1/50
+
+
+
+     <  L20 of 20
+       New char J
+
+          Start
+```
+
+| Row | Example | Meaning |
+| --- | --- | --- |
+| Header | `RX 20/15 L20         1/50` | The header of the session that you can start. The level is the level that you chose. The item field shows `1/` and the number of items of that level. |
+| Selector | `<  L20 of 20` | The level that you chose, and your earned level. `<` and `>` show which steps are possible. |
+| Description | `New char J` | What the level that you chose teaches. |
+| `Start` | `Start` | The highlight is always on `Start`. `enter` starts the session. |
+
+The selector line:
+
+- `L5 of 20` means: you chose L5, and your earned level is L20.
+- `<` shows that `prev` can go one level down. At L1, `<` does not show.
+- `>` shows that `next` can go one level up. At your earned level, `>` does not show.
+- With an earned level of L1, the line is `L1 of 1`, with no `<` and no `>`.
+
+The description line:
+
+| Level that you chose | Description | Meaning |
+| --- | --- | --- |
+| L1 | `K and M` | The first two characters, K and M. |
+| A character level from L2 | `New char` and the character, for example `New char J` | The new character of this level. |
+| A word level, also the final word levels from L64 | `Words of` and a number, for example `Words of 4` | Each word of the session has this number of characters. |
+
+The new character shows in the style of the [Prosigns setting](#prosigns-setting). For example, BT shows as
+`New char <BT/=>` with `Both`, `New char <BT>` with `Prosign` and `New char =` with `Punctuation`. The word length
+comes from the level and from `Max Word Length` (see [Levels and sessions](#levels-and-sessions)).
+
+#### Buttons on the start screen
+
+| Button | Action |
+| --- | --- |
+| `prev` | One level down. At L1, it does nothing. |
+| `next` | One level up. At your earned level, it does nothing. |
+| `enter` | Starts the session at the level that you chose. A closure of the tip contact does the same. |
+| `menu/back` | Opens the main menu, with the cursor on the mode. |
+
+- Each button acts at the push.
+- Hold `prev` or `next` to step quickly. The first repeat comes after 0.4 s. Then a step comes every 0.08 s (12.5
+  levels per second). From L1, a hold of `next` reaches L20 in about 1.8 s. From L1 to L150 takes about 12 s.
+- The level stops at L1 and at your earned level. It does not wrap.
+- A step gives no sound. The new number on the screen is the only signal.
+- A hold of `menu/back` or `enter` does nothing more than the push.
+- The ring contact does nothing.
+- The start screen has no timeout.
+
+The level that you choose is not stored. When you leave the mode and open it again, the start screen shows your
+earned level again.
+
+> **Insert the plug before you open a training mode.** On the start and end screens, the tip is `enter`. A
+> closure of the tip contact acts at once. A plug insertion can close the tip contact for a short time. Then a
+> session can start without a press. If this happens, hold `menu/back` for about 0.8 s to leave the session. A
+> session that you leave does not change your level.
+
+#### Replay a lower level
+
+A session below your earned level is a replay. A replay never changes your earned level and never saves anything.
+The rules:
+
+- A pass below your earned level keeps the stored level.
+- A pass at your earned level moves your earned level up by one and saves it.
+- A fail does not change your level.
+
+Example: your earned level is L20. You choose L5 and pass. The session end screen shows `Passed` and
+`<  L6 of 20  >`. If you press `enter`, the next session is L6. Your earned level stays L20, and the selector still
+goes up to L20.
+
+#### The level after a session
+
+After a session, the session end screen shows the same selector (see [Session end screen](#session-end-screen)).
+It shows the next level first:
+
+- After a pass, the next level: the level of the session + 1.
+- After a fail, the same level again.
+
+After a pass at your earned level, the next level is your new earned level, for example `L14 of 14`.
+
+### Level in the main menu
+
+In the main menu, `Receiving` and `Sending` show your earned level at the right side of the row:
+
+```text
+CW Trainer
+Receiving           L12
+Sending              L1
+Free Input
+Settings                >
+```
+
+- `Receiving` shows the level at the current `RX Speed`. `Sending` shows the level at the current `TX Speed`. The
+  effective speeds have no effect.
+- The level changes after a pass at your earned level and after `Reset Statistics`. It can also change after a
+  change of `RX Speed` or `TX Speed`. A replay does not change it.
+- Each speed has its own level. So after a change of `RX Speed`, `Receiving` can show `L1`, although you trained at
+  another speed. Set the speed back, and your level shows again.
 
 ### Settings for training
 
-At the start of a mode, the device reads its settings once. A new session from the session end screen keeps the
-same settings. To change a setting, hold `menu/back` to leave the mode. Change the setting, and leave `Settings` to
-save it. Then open the mode again.
+When you open a mode, the device reads its settings once. The start screen and each session use these settings. A
+new session from the session end screen keeps the same settings. To change a setting, leave the mode: press
+`menu/back` on the start screen or the session end screen, or hold it during a session. Change the setting, and leave
+`Settings` to save it. Then open the mode again.
 
 | Setting | In `Receiving` | In `Sending` |
 | --- | --- | --- |
@@ -434,7 +567,7 @@ save it. Then open the mode again.
 | `TX Eff. Speed` | No effect. | Shows in the header. It sets the pause limit between the characters of a word (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
 | `Key Type`, `Paddle` | No effect. | The keyer, as in Free Input (see [Key types](#key-types) and [Paddle setting](#paddle-setting)). |
 | `Show CW Code` | No effect. | Shows the dots and dashes that you key (see [Sending](#sending)). |
-| `Prosigns` | How BT, SK and AR show in the items and in the keyboard labels. | How BT, SK and AR show in the items and in the `Wrong:` text. |
+| `Prosigns` | How BT, SK and AR show in the items, in the keyboard labels and in the description line of the selector. | How BT, SK and AR show in the items, in the `Wrong:` text and in the description line of the selector. |
 | `Max Word Length` | The longest word. | The longest word. |
 
 The `Prosigns` setting gives these texts. For example, BT shows as `=`, `<BT>` or `<BT/=>`. SK always shows as
@@ -453,7 +586,7 @@ RX 20/15 L12         7/50
 | --- | --- | --- |
 | Mode | `RX` | `RX` in Receiving, `TX` in Sending. |
 | Speeds | `20/15` | The character speed and the effective speed, in WPM. Receiving shows `RX Speed` and `RX Eff. Speed`. Sending shows `TX Speed` and `TX Eff. Speed`. |
-| Level | `L12` | The level of this session. |
+| Level | `L12` | The level of this session. On the start screen, the level that you chose. |
 | Item | `7/50` | The number of the current item and the number of items in the session. |
 
 Below the header:
@@ -476,19 +609,23 @@ In Receiving, you listen to an item and pick its characters with the four button
 
 #### Start, answer and leave
 
-1. In the main menu, select `Receiving` and press `enter`. This press picks nothing and replays nothing, also if
-   you hold it.
-2. Wait 1 s. The device plays the first item at `RX Speed` and `RX Eff. Speed`.
-3. Look at the slots in the middle of the screen. Each character of the item has one slot. A block marks the slot
+1. If you use a key or paddle, insert its plug now (see
+   [Key or paddle in Receiving](#key-or-paddle-in-receiving)).
+2. In the main menu, select `Receiving` and press `enter`. The start screen shows. No session starts yet.
+3. Choose the level with `prev` and `next` (see [Choose a level](#choose-a-level)).
+4. Press `enter`, or close the tip contact. The session starts. This press picks nothing and replays nothing. A
+   hold of this press also picks nothing and replays nothing.
+5. Wait 1 s. The device plays the first item at `RX Speed` and `RX Eff. Speed`.
+6. Look at the slots in the middle of the screen. Each character of the item has one slot. A block marks the slot
    that your next pick fills. A short bar marks each other empty slot.
-4. Pick the characters with the keyboard (see [The group keyboard](#the-group-keyboard)). You can pick while the
+7. Pick the characters with the keyboard (see [The group keyboard](#the-group-keyboard)). You can pick while the
    item plays. Each pick shows at once.
-5. Fill the last slot. The device checks the whole answer at once. If the item still plays, the playback stops.
-6. Read the result in the status line (see [Results and attempts](#results-and-attempts)). The next item comes
+8. Fill the last slot. The device checks the whole answer at once. If the item still plays, the playback stops.
+9. Read the result in the status line (see [Results and attempts](#results-and-attempts)). The next item comes
    after the result.
-7. To leave, hold `menu/back` for about 0.8 s.
+10. To leave, hold `menu/back` for about 0.8 s.
 
-In Receiving, a short press is a tap. You must release the button before about 0.8 s. When you release the
+In a Receiving session, a short press is a tap. You must release the button before about 0.8 s. When you release the
 button, the tap acts. The push alone does nothing. A tap of `enter` selects the right group of the keyboard. It
 does not replay the item.
 
@@ -505,8 +642,9 @@ To hear the item again, hold `enter` for about 0.8 s while the item shows:
 The tip contact of the key/paddle socket is connected to `enter`. So in Receiving, the dit lever (with
 `Paddle` = `Normal`) or a straight key acts as `enter`:
 
-- A short closure is a tap of `enter`. It selects the right group.
-- A closure of about 0.8 s is a hold of `enter`. It plays the item again.
+- On the start screen and the session end screen, a closure starts a session at once, like a press of `enter`.
+- In a session, a short closure is a tap of `enter`. It selects the right group.
+- In a session, a closure of about 0.8 s is a hold of `enter`. It plays the item again.
 
 The ring contact does nothing. The paddle gives no sidetone in Receiving.
 
@@ -514,7 +652,8 @@ The ring contact does nothing. The paddle gives no sidetone in Receiving.
 > During Receiving, this acts as a tap of `enter`. So it can select the right group. If that group has two or more
 > characters, the labels change. Hold `prev` to go back. If that group has one character, the device picks it.
 > Hold `prev` to undo the pick. But if the pick fills the last slot, the device checks the answer at once. This
-> uses an attempt, and you cannot undo it. On the session end screen, a plug insertion can start the next session.
+> uses an attempt, and you cannot undo it. On the start screen and the session end screen, a plug insertion can
+> start a session.
 
 #### The group keyboard
 
@@ -612,18 +751,22 @@ In Sending, you read an item and key it. The device decodes each character and c
 4. Insert the plug of the key or paddle into the key/paddle socket.
 
 > **Insert the plug before you open Sending.** A plug that you insert during a session can close a contact. Then
-> the keyer can send a tone, extra elements and a wrong character. A wrong character uses an attempt.
+> the keyer can send a tone, extra elements and a wrong character. A wrong character uses an attempt. On the start
+> screen and the session end screen, a plug insertion can start a session.
 
 #### Start, key and leave
 
-1. In the main menu, select `Sending` and press `enter`. This press gives no element and no tone. If a contact
-   stays closed, the keyer ignores it until it opens.
-2. Wait 1 s. The first item shows in large characters.
-3. Key the item. You hear the sidetone. After a pause of 2 dits, the device decodes the character and checks it.
-4. In a word, a short bar shows under the character that you key next. After each correct character, the bar moves
+1. In the main menu, select `Sending` and press `enter`. The start screen shows. No session starts yet, and the
+   keyer does not run. On this screen, the tip contact and the `enter` button act as `enter`.
+2. Choose the level with `prev` and `next` (see [Choose a level](#choose-a-level)).
+3. Press `enter`, or close the tip contact. The session starts, and the keyer starts. This press gives no element
+   and no tone. If a contact stays closed, the keyer ignores it until it opens.
+4. Wait 1 s. The first item shows in large characters.
+5. Key the item. You hear the sidetone. After a pause of 2 dits, the device decodes the character and checks it.
+6. In a word, a short bar shows under the character that you key next. After each correct character, the bar moves
    to the next character. The status line shows nothing.
-5. After the last correct character, the status line shows `Correct`. Then the next item comes.
-6. To leave, hold `menu/back` for about 0.8 s.
+7. After the last correct character, the status line shows `Correct`. Then the next item comes.
+8. To leave, hold `menu/back` for about 0.8 s.
 
 Notes:
 
@@ -723,56 +866,76 @@ result.
 
 ### Session end screen
 
-After the last item, the session end screen shows. The header stays. A pass looks like this:
+After the last item, the session end screen shows. The header of the session stays. The screen shows your result
+and the level selector. A pass at your earned level looks like this:
 
 ```text
-       Score 46/50
-         Passed
-      New level L13
+RX 20/15 L13        50/50
 
-          Next
+       Score 46/50
+    Passed, new level
+     <  L14 of 14
+       New char W
+
+          Start
 ```
 
 A fail looks like this:
 
 ```text
+RX 20/15 L13        50/50
+
        Score 43/50
    Not passed, need 45
-    Repeat level L12
+     <  L13 of 13
+       New char O
 
-          Next
+          Start
 ```
 
-| Text | Meaning |
-| --- | --- |
-| `Score 46/50` | Items correct on the first attempt, and the number of items. |
-| `Passed` | You passed the session. |
-| `Not passed, need 45` | You did not pass. The number is the score that you need. |
-| `New level L13` | After a pass: the level of your next session. |
-| `Repeat level L12` | After a fail: the next session repeats this level. |
-| `Top level L65535` | After a pass at the highest level. The level does not change. |
-| `Not saved` | After a pass: the device did not store the new level (see [Progress](#progress)). |
+A pass below your earned level (a replay) looks like this. Your earned level is L20:
 
-Controls:
+```text
+RX 20/15 L5         50/50
 
-- Press `enter` to start the next session at the level on the screen. The tip contact of the key/paddle socket also
+       Score 47/50
+         Passed
+     <  L6 of 20  >
+       Words of 2
+
+          Start
+```
+
+| Row | Text | Meaning |
+| --- | --- | --- |
+| 1 | `Not saved` | After a pass at your earned level: the device did not store the new level (see [Progress](#progress)). Else the row is blank. |
+| 2 | `Score 46/50` | Items correct on the first attempt, and the number of items. |
+| 3 | `Passed, new level` | You passed at your earned level. Your earned level went up by one. |
+| 3 | `Passed` | You passed below your earned level, or at the top level L65535. Your earned level does not change. |
+| 3 | `Not passed, need 45` | You did not pass. The number is the score that you need. Your level does not change. |
+| 4 | `<  L14 of 14` | The level selector. It shows the level of the next session first: the next level after a pass, the same level after a fail (see [The level after a session](#the-level-after-a-session)). |
+| 5 | `New char W` | The description of the level that the selector shows (see [Choose a level](#choose-a-level)). |
+| 7 | `Start` | The highlight is always on `Start`. |
+
+- Row 3 tells a pass at your earned level from a replay. After a pass at your earned level, both numbers of the
+  selector are equal, for example `L14 of 14`. After a replay, the second number stays your earned level, for
+  example `L6 of 20`.
+- At the top level L65535, a pass shows `Passed`, and the selector shows `L65535 of 65535`.
+- The header shows the session that ended. A change of the level does not change the header.
+
+Controls: the same as on the start screen (see [Buttons on the start screen](#buttons-on-the-start-screen)).
+
+- Press `prev` or `next` to choose the level. A hold repeats the step.
+- Press `enter` to start the next session at the level that the selector shows. A closure of the tip contact also
   starts it. The session uses the settings from the mode start.
-- Press or hold `menu/back` to go to the main menu. The cursor is on the mode.
-- `prev` and `next` do nothing.
-- The screen has no timeout.
-
-In Receiving, the buttons of the session end screen work as taps. A tap acts at the release:
-
-- Tap `enter` to start the next session. A short closure of the tip contact does the same.
-- Tap `menu/back` to open the main menu. A hold of `menu/back` opens the main menu after about 0.8 s.
-- A hold of `enter`, or a tip closure of about 0.8 s, does nothing. The release after the hold also does nothing.
-  Tap `enter` again.
+- Press `menu/back` to go to the main menu. The cursor is on the mode. The level that you chose is lost.
+- Each button acts at the push, in both modes. A hold of `menu/back` or `enter` does nothing more than the push.
+- The end screen ignores a button or a contact that you hold from the session. Release it, and then press it
+  again. So a press from the last item does not change the level or start a session.
+- In Sending, the keyer stops at the session end screen. The ring contact does nothing on this screen. The press
+  that starts the next session gives no element and no tone.
 - A plug insertion can start the next session.
-
-In Sending, `enter` and `menu/back` act at the push. The keyer stops at the session end screen. If you hold the
-tip contact (the dit lever with `Paddle` = `Normal`, or a straight key) at that moment, it starts nothing. Release
-it, and then close it again or press `enter`. The ring contact does nothing on this screen. The press that starts
-the next session gives no element and no tone.
+- The screen has no timeout.
 
 ### Progress
 
@@ -782,13 +945,14 @@ The device stores one level for each mode and each character speed from 5 to 50 
 - The effective speeds do not select a level.
 - A speed that you never trained starts at L1.
 
-Example: you are at L12 in Receiving at `RX Speed` 20 WPM. You set `RX Speed` to 25 WPM. Receiving now starts at the
-level that you have at 25 WPM, for example L1. When you set `RX Speed` back to 20 WPM, Receiving starts at L12
-again.
+Example: you are at L12 in Receiving at `RX Speed` 20 WPM. You set `RX Speed` to 25 WPM. The main menu and the
+start screen now show the level that you have at 25 WPM, for example L1. When you set `RX Speed` back to 20 WPM,
+they show L12 again.
 
 When the device saves the level:
 
-- The device saves only after a passed session. It saves before the session end screen shows.
+- The device saves only after a pass at your earned level. It saves before the session end screen shows.
+- A pass below your earned level (a replay) does not change the stored level. The device does not save.
 - A failed session, a session that you leave, and a power loss during a session do not change the stored level.
 - If the stored levels are damaged, every level is L1. This is also true at the first start. The device shows no
   message.
@@ -821,6 +985,9 @@ this on the device yet.
 | In Sending, many characters are wrong or show as `*`. | Your speed is different from `TX Speed`. The decoder does not adapt. | Set `TX Speed` near your keying speed. |
 | In Sending, `Wrong: pause too long` shows while you key at a normal rhythm. | Your pause between two characters of a word is too long. The limit is 5 units, only 2 units more than the normal pause. | Set a lower `TX Eff. Speed`. A lower value gives a longer pause limit (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
 | The level is L1, but you trained before. | You changed `RX Speed` or `TX Speed`. Each speed has its own level. | Set the speed back. |
+| A session starts without a press on the start screen or the session end screen. | You inserted the plug while the screen showed. On these screens, a closure of the tip contact starts a session at once. | Hold `menu/back` for about 0.8 s to leave the session. Your level does not change. Insert the plug before you open the mode. |
+| `next` does not go above a level. | The selector stops at your earned level. | Pass a session at your earned level. Then the next level is available. |
+| You passed, but your level in the main menu did not change. | You passed below your earned level. A replay does not change the stored level. The end screen showed `Passed`, not `Passed, new level`. | Nothing. To move up, choose your earned level and pass. |
 | All levels are L1. | A reset, a failed save, or a power loss during a save. | Train the levels again. |
 
 ### Not checked on the device
@@ -833,7 +1000,7 @@ These parts of the training modes passed host tests only. Nobody checked them on
 - The feel of a tap that acts at the release.
 - A hold of `enter` plays the item again with no group change and no pick first.
 - Short tip closures and tip closures of 0.8 s, with the dit lever of a paddle and with a straight key.
-- A plug insertion in Receiving, during an item and on the session end screen.
+- A plug insertion in Receiving during an item.
 - The blank moment of 0.3 s in Sending. The display can be too slow to show it.
 - The pause limit in Sending words, with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM. Words
   with the normal 3-unit pause must pass. A pause of about 6 units must give `Wrong: pause too long`. A pause of
@@ -843,6 +1010,17 @@ These parts of the training modes passed host tests only. Nobody checked them on
 - The time on the screen of each result.
 - A held lever at the session end and at the start of the next session.
 - A stored level after a power cycle, and L1 after `Reset Statistics` and a power cycle.
+- The feel of the level selector in both modes, on the start screen and on the session end screen. This includes
+  single presses of `prev` and `next`, and holds over 20 levels or more, up to an earned level above L50. The number
+  must follow a hold at about 12.5 levels per second, and the last level must show within 0.1 s after the release.
+  You must be able to stop on a level that you want.
+- The start of a session from the start screen and from the session end screen. Use the `enter` button, the dit
+  lever of a paddle and a straight key, in both modes. One closure must start one session. A contact that you hold
+  after the start must give no pick and no replay in Receiving, and no element and no tone in Sending.
+- A plug insertion while the start screen or the session end screen shows. It can start a session.
+- The legibility of the selector, of `<` and `>`, of the description line (for example `New char .` and
+  `New char <AR/+>`), and of the level in the main menu on the selected row.
+- The level next to `Receiving` and `Sending` in the main menu.
 
 ## Change a setting
 

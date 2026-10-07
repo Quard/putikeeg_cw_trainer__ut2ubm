@@ -7,8 +7,10 @@
 #include "fake_button_pins.h"
 #include "fake_delay.h"
 #include "fake_iap.h"
+#include "fake_keyer.h"
 #include "fake_koch_item.h"
 #include "fake_menu_outputs.h"
+#include "fake_player.h"
 #include "fake_tick.h"
 #include "fixtures/font_golden.h"
 #include "gfx/gfx.h"
@@ -308,12 +310,14 @@ static bool centered_row_is(int r, const char* text) {
   return row_matches(r, NO_BAND, 0, &row_text, 1U);
 }
 
+/* Main menu with no stored progress: Receiving and Sending show L1 (ui-ux.md UX-57, V-01). */
 static bool main_menu_is(int selected) {
   static const char* const labels[4] = {"Receiving", "Sending", "Free Input", "Settings"};
+  static const char* const levels[3] = {"L1", "L1", NULL};
   int i;
   bool is_ok = title_is("CW Trainer");
   for (i = 0; i < 3; ++i) {
-    is_ok = is_ok && list_row_is(i + 1, labels[i], NULL, i == selected);
+    is_ok = is_ok && list_row_is(i + 1, labels[i], levels[i], i == selected);
   }
   is_ok = is_ok && submenu_row_is(4, labels[3], selected == 3);
   for (i = 5; i < 8; ++i) {
@@ -665,10 +669,20 @@ static void test_v18_menu_at_root(void) {
 }
 
 /* D-T8: Receiving and Sending open their training screens. The start pause ignores the short and long events. */
+/*
+ * V-19 for the mode at main menu @p index: enter opens the start screen, enter on it starts the session, and a long
+ * menu/back in the start pause goes back to the main menu.
+ */
 static void check_training_screen(int index, uint8_t screen, const char* header) {
   int r;
   start_empty();
+  fake_player_reset();
+  fake_keyer_reset();
   send_times(NEXT, (unsigned)index);
+  send(ENTER);
+  TEST_ASSERT_EQUAL(screen, menu_screen());
+  TEST_ASSERT(title_is(header));
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
   send(ENTER);
   TEST_ASSERT_EQUAL(screen, menu_screen());
   TEST_ASSERT(title_is(header));
@@ -688,6 +702,10 @@ static void check_training_screen(int index, uint8_t screen, const char* header)
   send(LONG(MENU));
   TEST_ASSERT(main_menu_is(index));
   TEST_ASSERT(probe_sel(index + 1));
+  TEST_ASSERT_EQUAL(0U, fake_player_start_count());
+  TEST_ASSERT_EQUAL((screen == MENU_SCREEN_SENDING) ? 1U : 0U, fake_keyer_start_count());
+  TEST_ASSERT_EQUAL((screen == MENU_SCREEN_SENDING) ? 1U : 0U, fake_keyer_stop_count());
+  TEST_ASSERT_EQUAL(0U, eeprom_writes());
 }
 
 static void test_v19_training_screens(void) {
