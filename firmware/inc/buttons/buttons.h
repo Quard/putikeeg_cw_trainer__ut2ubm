@@ -2,8 +2,9 @@
 #define BUTTONS_BUTTONS_H
 
 /*
- * Debounced press events of the four buttons, auto-repeat on prev and next and long presses of menu/back, prev and
- * next (references/internal/menu_subsystem_spec.md section 4.5, references/internal/keyer_spec.md section 6.12).
+ * Debounced press events of the four buttons, auto-repeat on prev and next, long presses of menu/back, prev and
+ * next, and in tap mode a long press of enter (references/internal/menu_subsystem_spec.md section 4.5,
+ * references/internal/keyer_spec.md section 6.12, references/internal/training_spec.md D-T28).
  * Call from the main loop only; not reentrant.
  */
 
@@ -32,13 +33,24 @@ void buttons_init(void);
 bool buttons_is_recovery_start(void);
 
 /**
- * Returns at most one event: a pending press in the order MENU, ENTER, PREV, NEXT, else a due long press of MENU,
- * PREV or NEXT with BUTTON_EVENT_LONG_FLAG, else a due repeat of prev or next with BUTTON_EVENT_REPEAT_FLAG, else
- * BUTTON_EVENT_NONE. Calls tick_now() exactly once.
+ * Returns at most one event: a pending press in the order MENU, ENTER, PREV, NEXT, else a due long press in the
+ * order MENU, ENTER (in tap mode only), PREV, NEXT with BUTTON_EVENT_LONG_FLAG, else a due repeat of prev or next
+ * with BUTTON_EVENT_REPEAT_FLAG, else BUTTON_EVENT_NONE. Calls tick_now() exactly once.
  */
 button_event_t buttons_poll(void);
 
-/** Gives P3.2 to the menu (true) or takes it away (false). Main loop only. */
+/**
+ * Gives P3.2 to the menu (true) or takes it away (false). Both values drop the pending press and the long-pending
+ * state of ENTER. With true, a contact closed at the call gives no event until it opens and closes again.
+ */
 void buttons_set_enter_enabled(bool is_enabled);
+
+/**
+ * Tap mode on: MENU, PREV, NEXT and ENTER give no event at the press. A release before BUTTONS_LONG_PRESS_MS gives
+ * the press event then. A hold of BUTTONS_LONG_PRESS_MS gives only the long event. No repeat events. The call drops
+ * the pending presses, the long-pending state and the repeat of all four buttons, so a hold that started before the
+ * call gives no event. buttons_init() sets tap mode off.
+ */
+void buttons_set_tap_mode(bool is_enabled);
 
 #endif /* BUTTONS_BUTTONS_H */

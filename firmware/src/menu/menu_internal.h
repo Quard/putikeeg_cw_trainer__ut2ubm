@@ -55,7 +55,6 @@ typedef struct {
 
 extern const menu_node_t MEM_CODE menu_nodes[MENU_NODE_COUNT];
 extern const menu_message_t MEM_CODE menu_messages[MENU_MESSAGE_COUNT];
-extern const char MEM_CODE menu_text_not_ready[];
 extern const char MEM_CODE menu_text_reset_question[];
 extern const char MEM_CODE menu_text_no[];
 extern const char MEM_CODE menu_text_yes[];

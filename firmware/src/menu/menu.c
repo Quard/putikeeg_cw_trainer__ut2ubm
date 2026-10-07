@@ -4,10 +4,18 @@
 #include "lcd/lcd.h"
 #include "menu_internal.h"
 #include "modes/free_input.h"
+#include "modes/receiving.h"
+#include "modes/sending.h"
 #include "settings/settings.h"
 #include "sidetone/sidetone.h"
 #include "stats/stats.h"
 #include "tick/tick.h"
+
+/* menu_handle() takes every screen from MENU_SCREEN_FREE_INPUT on as a mode screen. */
+#if (MENU_SCREEN_RECEIVING <= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_SENDING <= MENU_SCREEN_FREE_INPUT) || \
+    (MENU_SCREEN_MESSAGE >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_DIALOG >= MENU_SCREEN_FREE_INPUT)
+#error "The mode screens must have the highest screen numbers"
+#endif
 
 MEM_XDATA uint8_t menu_stack_nodes[MENU_STACK_DEPTH];
 MEM_XDATA uint8_t menu_stack_cursors[MENU_STACK_DEPTH];
@@ -101,8 +109,12 @@ static void menu_enter_item(void) {
     if (item->target == MENU_MODE_FREE_INPUT) {
       menu_show_screen(MENU_SCREEN_FREE_INPUT);
       free_input_enter();
+    } else if (item->target == MENU_MODE_RECEIVING) {
+      menu_show_screen(MENU_SCREEN_RECEIVING);
+      receiving_enter();
     } else {
-      menu_show_screen(MENU_SCREEN_PLACEHOLDER);
+      menu_show_screen(MENU_SCREEN_SENDING);
+      sending_enter();
     }
   } else if (item->kind == MENU_KIND_ACTION) {
     menu_current_choice = MENU_DIALOG_NO;
@@ -186,29 +198,46 @@ static void menu_handle_dialog(void) {
       menu_is_redraw_pending = true;
     }
   } else if ((handle_code == BUTTON_EVENT_ENTER) && (menu_current_choice == MENU_DIALOG_YES)) {
-    stats_reset();
-    menu_show_message(MENU_MESSAGE_STATS_RESET);
+    menu_show_message(stats_reset() ? MENU_MESSAGE_STATS_RESET : MENU_MESSAGE_NOT_SAVED);
   } else {
     menu_show_screen(MENU_SCREEN_LIST);
   }
 }
 
-/* Mode screens act only on long presses (ui-ux.md sections 6.1 and 6.6). */
-static void menu_handle_mode_screen(void) {
-  if (!handle_is_long) {
-    return;
+/* Stops the mode of a mode screen. Draws nothing. */
+static void menu_leave_mode(void) {
+  if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+    free_input_leave();
+  } else if (menu_current_screen == MENU_SCREEN_RECEIVING) {
+    receiving_leave();
+  } else if (menu_current_screen == MENU_SCREEN_SENDING) {
+    sending_leave();
   }
-  if (handle_code == BUTTON_EVENT_MENU) {
-    if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
-      free_input_leave();
-    }
-    menu_show_screen(MENU_SCREEN_LIST);
-  } else if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+}
+
+/*
+ * A long menu/back leaves every mode screen. Free Input acts only on long presses (ui-ux.md sections 6.1 and 6.6).
+ * Receiving and Sending get every other event (training_spec.md section 12.1).
+ */
+static void menu_handle_mode_screen(button_event_t event) {
+  bool is_leaving = false;
+
+  if (handle_is_long && (handle_code == BUTTON_EVENT_MENU)) {
+    is_leaving = true;
+  } else if (menu_current_screen == MENU_SCREEN_RECEIVING) {
+    is_leaving = receiving_handle(event);
+  } else if (menu_current_screen == MENU_SCREEN_SENDING) {
+    is_leaving = sending_handle(event);
+  } else if (handle_is_long) {
     if (handle_code == BUTTON_EVENT_PREV) {
       free_input_clear();
     } else if (handle_code == BUTTON_EVENT_NEXT) {
       free_input_delimiter();
     }
+  }
+  if (is_leaving) {
+    menu_leave_mode();
+    menu_show_screen(MENU_SCREEN_LIST);
   }
 }
 
@@ -245,17 +274,23 @@ void menu_handle(button_event_t event) {
   if (handle_code == BUTTON_EVENT_NONE) {
     return;
   }
-  if ((menu_current_screen == MENU_SCREEN_PLACEHOLDER) || (menu_current_screen == MENU_SCREEN_FREE_INPUT)) {
-    menu_handle_mode_screen();
+  if (menu_current_screen >= MENU_SCREEN_FREE_INPUT) {
+    menu_handle_mode_screen(event);
   } else {
     menu_handle_other_screen();
   }
 }
 
 void menu_poll(void) {
-  /* After the frame: a character never comes before the title bar. */
-  if ((menu_current_screen == MENU_SCREEN_FREE_INPUT) && !menu_is_redraw_pending) {
-    free_input_poll();
+  /* After the frame: the mode never draws before its frame is drawn. */
+  if (!menu_is_redraw_pending) {
+    if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
+      free_input_poll();
+    } else if (menu_current_screen == MENU_SCREEN_RECEIVING) {
+      receiving_poll();
+    } else if (menu_current_screen == MENU_SCREEN_SENDING) {
+      sending_poll();
+    }
   }
   if (!menu_is_preview_running) {
     return;
@@ -283,9 +318,7 @@ void menu_show_message(uint8_t message_id) {
     return;
   }
   menu_leave_tone_edit();
-  if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
-    free_input_leave();
-  }
+  menu_leave_mode();
   menu_current_message = message_id;
   menu_show_screen(MENU_SCREEN_MESSAGE);
 }

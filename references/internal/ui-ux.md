@@ -17,20 +17,23 @@ Status of the content:
 - Product: Putikeeg CW Trainer, board CW_MINI_V2.0D, custom firmware.
 - UI scope in this version:
   - The menu tree, the Settings editor, the `Paddle` setting and the `Prosigns` setting (section 5.10).
-  - Placeholder screens for Receiving and Sending.
+  - The Koch training modes Receiving and Sending (sections 5.11 to 5.15, 6.8 and 6.9): the header, the group
+    keyboard, the result feedback, the transitions between items and the session end screen.
   - The Free Input mode (section 5.9) and the keyer for the three key types (section 6.7).
   - Long presses (section 6.6) and the other button input.
-  - The Reset Statistics dialog.
+  - The Reset Statistics dialog. It sets the training level of every mode and speed back to level 1.
   - The live effect of contrast and backlight, and the Tone preview (section 6.5).
-- Out of scope in this version: the Receiving and Sending modes, statistics, any sound other than the Tone preview
-  and the keyer sidetone in Free Input.
+- Out of scope in this version: statistics other than the training levels, a manual level choice, any sound other
+  than the Tone preview, the keyer sidetone (Free Input and Sending) and the CW playback in Receiving.
 - Users: amateur radio operators who learn or practise Morse code. They know the terms WPM, RX, TX, Iambic A/B and
   Farnsworth (effective) speed.
 - Environment: a handheld device or a device on a desk, indoor light, viewing distance about 30-60 cm
   (unverified). Long practice sessions.
-- Frequent tasks: key text in Free Input and read the decoded result (most frequent, long sessions), start a mode
-  from the main menu (frequent), change a speed, the key type or the tone (sometimes), change contrast or backlight
-  (rare), reset statistics (rare).
+- Frequent tasks:
+  - Most frequent, long practice: a Receiving or Sending session of 10 to 100 items, many sessions in a row.
+  - Frequent: key text in Free Input and read the decoded result. Start a mode from the main menu.
+  - Sometimes: change a speed, the key type or the tone.
+  - Rare: change contrast or backlight. Reset statistics.
 
 ## 2. Sources
 
@@ -44,6 +47,10 @@ Status of the content:
 | `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
 | `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. Section 17: the prosign display setting (decoder codes, `morse_format()`, flags bits 2-3, record layout version 2). It refers to sections 5.9, 5.10, 6.6 and 6.7 of this file. |
 | `references/internal/paddle_keyer_research.md`, `paddle_keyer_howtoimplement_research.md` | Iambic A/B behaviour, squeeze release, entry mask, straight-key mode. |
+| Plan "Koch training modes Receiving and Sending" (approved by the user, 2026-10) | User decisions for the training modes: session sizes, pass rule, level model, Koch order, word length, attempts, Receiving input, progress key, button order on the case. |
+| `references/internal/training_spec.md` (owner `architector`) | Interface contract of the training modes: Koch tables, level model, item generation, player, progress record, session engine. This file gives the visible and audible behaviour. If the two differ, report it to `architector`. |
+| `firmware/inc/buttons/buttons.h` | Button events: press, repeat (`prev`, `next`), long (`menu/back`, `prev`, `next`, and `enter` in tap mode only, `training_spec.md` D-T28). There is no release event. In tap mode, the press event comes at the release. |
+| `firmware/inc/cw/keyer.h`, `firmware/inc/cw/morse.h` | Keyer events (DIT and DAH at the end of a mark, CHAR_GAP, WORD_GAP, OVERFLOW). Prosign codes and `morse_format()` texts. |
 
 ## 3. Inventories
 
@@ -51,16 +58,18 @@ Status of the content:
 
 | ID | Control | Pin | Behaviour | Notes |
 | --- | --- | --- | --- | --- |
-| C-1 | `next` button | P0.0 | Active low, no external pull-up. | Physical position on the case is not documented (unverified). |
-| C-2 | `prev` button | P0.1 | Active low, no external pull-up. | Same as C-1. |
-| C-3 | `menu/back` button | P0.2 | Active low, no external pull-up. | |
-| C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | In the menu, a paddle dit contact or a straight key also presses `enter`. In Free Input, the keyer owns the pin and the `enter` button keys like the tip contact (section 6.7). Inserting a plug can short the tip for a short time (unverified). |
+| C-1 | `next` button | P0.0 | Active low, no external pull-up. | Third of the four buttons from the left, between `prev` and `enter` (user fact 2026-10-06, below). |
+| C-2 | `prev` button | P0.1 | Active low, no external pull-up. | Second of the four buttons from the left (user fact, below). |
+| C-3 | `menu/back` button | P0.2 | Active low, no external pull-up. | Left button of the four (user fact, below). |
+| C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | In the menu and in Receiving, a paddle dit contact or a straight key also presses `enter`. In Free Input and in the input states of Sending, the keyer owns the pin. The `enter` button then keys like the tip contact (sections 6.7 and 5.13). Inserting a plug can short the tip for a short time (unverified). Right button of the four, right of `next` (user fact 2026-10-06, below). In Receiving, a tap of `enter` or a short tip closure selects the right run, and a hold of 800 ms replays (section 6.8). |
 | C-5 | Paddle ring | P5.5 | Dah contact (with `Paddle` = `Normal`). Active low, internal pull-up (plan). | The menu ignores it. Only the keyer in Free Input reads it. A mono plug shorts the ring to the sleeve (research Step 3). |
 | C-6 | `on/off` button | none | Not read by the MCU (no pin in the wiring table). | Unverified: the effect of the button on the MCU power is not known. |
 | C-7 | Volume potentiometer | analog | Not read by the MCU. Sets the sidetone loudness in the analog path (`components_and_wiring.md`). | The firmware has no volume control. At the lowest setting the Tone preview can be silent. |
 
-Semantic assumption (unverified, D-8 in section 11): `prev` means up, left and decrease. `next` means down, right
-and increase. If the buttons on the case are in a different order, this file needs a review.
+Button order (user facts 2026-10 and 2026-10-06, closes D-8): from left to right on the case, the buttons are
+`menu/back`, `prev`, `next`, `enter`. So `prev` is left of `next`, and `enter` is right of `next`. The meaning
+`prev` = up, left and decrease, and `next` = down, right and increase, agrees with the case. The four group labels of
+the Receiving keyboard follow this order: one label above each button (section 5.12.1).
 
 ### 3.2 Outputs
 
@@ -68,7 +77,7 @@ and increase. If the buttons on the case are in a different order, this file nee
 | --- | --- | --- | --- |
 | O-1 | LCD, 128 x 64, monochrome, probably ST7567 | 8 text rows x 25 columns with the 5 x 8 font | Contrast 0-63 (`lcd_set_contrast`), default 0x20 = 32. The full-screen transfer time is not measured yet. |
 | O-2 | LCD backlight, HX4004A on P0.3 | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
-| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Used for the Tone preview (section 6.5) and for the keyer sidetone in Free Input (section 6.7). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
+| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Uses: the Tone preview (section 6.5), the keyer sidetone in Free Input and Sending (section 6.7), the CW playback in Receiving (section 5.12). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
 
 ### 3.3 Font facts (decoded from `u8g2_fonts.h`)
 
@@ -96,6 +105,40 @@ Decoding every glyph with the same arithmetic as the driver gives:
 - Use only ASCII 0x20-0x7E in UI strings (decision UX-11). The glyph search compares a `char` with a byte. A
   character above 0x7F depends on the signedness of `char`.
 
+#### 3.3.1 Large font `u8g2_font_spleen8x16_mf` (`FONTS_ID_8X16`)
+
+Decoded with `firmware/Tests/tools/gen_font_golden.py`, which uses the arithmetic of the C decoder
+(`firmware/src/gfx/font_u8g2.c`: the glyph top is the bbox height plus the bbox y offset, minus the glyph height,
+minus the glyph y offset). Facts of
+the bitmap. Their look on the glass is unverified until D-26.
+
+| Field | Value |
+| --- | --- |
+| Glyph count | 192 |
+| Bounding box mode | 2 (monospace), pitch 8 for every glyph 0x20-0x7E |
+| Bounding box | 8 x 15 (not 16), x offset 0, y offset -3. Rows from the cell top to the baseline: 12 |
+| Ascent of `A`, descent of `g` | 10, -3 |
+
+A glyph drawn with `gfx_draw_text()` at the cell top `y` uses these cell rows (`y + row`):
+
+| Cell rows | Glyphs (0x21-0x7E) |
+| --- | --- |
+| 2-11 | Capitals except `Q`, digits, `! # % & < > ?` |
+| 2-13 | `Q` (the tail ends in row 13) |
+| 1-12 | `( ) / [ \ ] { } $ \|` |
+| 5-9 | `+` |
+| 5-8 | `=` |
+| 7 | `-` |
+| 10-11 | `.` |
+| 10-12 | `,` |
+| 14 | `_` |
+
+- Cell rows 0 and 15 are blank for every glyph. Rows 12-15 are blank for every glyph of the Koch set except `Q`
+  (rows 12-13) and `( ) / ,` (row 12).
+- Ink is in cell columns 0-6. Column 7 is blank, except for `*` and `T`.
+- A line of 16 cells fills the 128 px width with no margin. The training screens use at most 15 cells per line, so
+  the margin columns x 0, 1 and 127 stay off (section 5.11).
+
 ## 4. Global display conventions
 
 ### 4.1 Grid (decision UX-1)
@@ -105,6 +148,8 @@ Decoding every glyph with the same arithmetic as the driver gives:
   x 0, 1 or 127. Tests use these margin columns as font-independent probes.
 - Row 0 is the title bar. Rows 1-7 are content. Every text row and its highlight stay inside one LCD page, so a
   cursor move dirties two pages and a value change dirties one page.
+- Exception: the item line of the training screens uses the 8 x 16 font in pixel positions, not on this grid. It
+  fills pages 3 and 4 (section 5.11.2).
 - Text never wraps. A string that is too long is cut at column 24. All strings in this file fit. A cut is a defect.
   The only exception is the decoded text in Free Input, which wraps per character (section 5.9).
 
@@ -253,6 +298,9 @@ The rule applies to later lists:
 
 ### 5.6 Placeholder screen (decision plan + UX-6, UX-31)
 
+No menu item opens a placeholder in this version: `Receiving` and `Sending` open the training modes (sections 5.11
+to 5.15). The layout and rules below stay as the pattern for a later mode that is not ready.
+
 ```
 0  |Receiving                | title bar, inverted
 3  |        Not ready        | column 8
@@ -297,6 +345,18 @@ Shown after a display recovery start (section 8.1):
 Message screen rules: body text in rows 2-3 (one line: row 3), each line centered. `OK` in row 5, always focused.
 `enter` or `menu/back` closes the screen. The same layout is used for any later one-button message (for example a
 save error, see question Q-4).
+
+If the reset is not stored (`stats_reset()` returns false, `training_spec.md` D-T11 and U-17), `Yes` in the
+dialog shows the `Not saved` message of F-7:
+
+```
+0  |Settings                 | title bar, inverted
+3  |        Not saved        | column 8
+5  |           OK            | columns 11-12, highlight x 52-71 (cells 10-13), always focused
+```
+
+`enter` or `menu/back` closes it to the list that is open below it. After the reset, that is Settings with the
+cursor on `Reset Statistics`. After a failed settings save (F-7), it is the main menu with the cursor on `Settings`.
 
 ### 5.9 Free Input screen (decision UX-25 to UX-30, UX-38)
 
@@ -571,31 +631,632 @@ Columns 8 and 9 stay blank.
 
 From `Both`, two `prev` presses reach `Punctuation`. A third `prev` changes nothing. `next` goes back.
 
+### 5.11 Training screens: common layout (decision UX-39 to UX-41)
+
+Receiving and Sending use the same frame. The user decisions of the plan (session sizes, pass rule, level model,
+attempts) are in section 5.15 and in `training_spec.md`.
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |RX 20/15 L12         7/50| header, inverted (UX-39)
+1  |       Try 2 of 3        | status line, normal video, centered
+2  |                         | blank
+3  |                         | item line: 8 x 16 font, cell top y = 24, pages 3 and 4 (UX-41)
+4  |                         |
+5  |                         | Sending: the code of the answer (section 5.13). Receiving: blank
+6  |_____ _____ ____ ________| Receiving: four key bars at y = 55. Sending: blank
+7  |A-K    L-V  W-6    7-<AR>| Receiving: group labels (section 5.12.1). Sending: keyed code (section 5.13)
+```
+
+| Area | Pixels | Font and video | Content |
+| --- | --- | --- | --- |
+| Header | y 0-7, x 0-127 | 5 x 8, inverted | Section 5.11.1. |
+| Status line | row 1, y 8-15 | 5 x 8, normal | One text of section 5.14, centered: start column = floor((25 - length) / 2). With no text, the row is blank. |
+| Item line | y 24-39 | 8 x 16, normal, plus the block and bar marks | Section 5.11.2. |
+| Answer code | row 5, y 40-47 | marks (section 5.13) | Sending only. |
+| Key bars | y 55, four segments: x 2-26, 30-54, 58-82, 87-126 | 1 px lines | Receiving only. One segment above each label field (section 5.12.1, UX-51). All other pixels of row 6 are off. |
+| Bottom row | row 7, y 56-63 | 5 x 8, normal, or marks | Receiving: group labels. Sending: keyed code. |
+
+- Rows 2 and 6 hold no text. Each area stays inside its own LCD pages, so a status change dirties page 1 only, and an
+  item change dirties pages 3 and 4 only.
+- The training screens have no highlight band. The block mark (section 5.11.2) is the only focus mark. The session
+  end screen has one highlight band, on `Next` (section 5.15).
+- Pixels with x = 0, 1 and 127 are off in rows 1-7, as in Free Input. The key bars and the marks start at x 2.
+- The mockups show the labels and the key bars on the 25-column grid. This is illustrative. The labels are placed in
+  pixels (section 5.12.1).
+
+#### 5.11.1 Header (decision UX-39)
+
+| Field | Cells | Text |
+| --- | --- | --- |
+| Mode tag | 0-1 | `RX` in Receiving, `TX` in Sending (the abbreviations of UX-3). |
+| Speed | from column 3, left-aligned, 3 to 5 cells | `<speed>/<effective speed>`: `RX Speed` and `RX Eff. Speed` in Receiving, `TX Speed` and `TX Eff. Speed` in Sending. Both numbers always show, for example `20/20`. |
+| Level | from column 9, left-aligned, 2 to 6 cells | `L` and the level number, no leading zeros. The level number is the level index plus 1, at most 65535 (`training_spec.md` D-T5). |
+| Item | right-aligned, last character in column 24, 3 to 7 cells | `<i>/<n>`. `i` is the 1-based number of the current item. `n` is the item count of the session: 50 for characters, 10 to 100 for words. No leading zeros. |
+
+Examples:
+
+```
+    0123456789012345678901234
+0  |RX 32/32 L1          1/50|   first session at the default RX speeds
+0  |TX 5/5   L12         7/50|   the speed field is 3 cells wide, the level stays in column 9
+0  |RX 50/50 L65535   100/100|   worst case: 25 cells, columns 15-17 stay blank
+```
+
+- The worst case `RX 50/50 L65535   100/100` fills all 25 columns. At least 3 blank cells (columns 15-17) stay
+  between the level and the item. No short form is necessary.
+- Video: inverted over x 0-127, y 0-7, the same as the title bar (UX-2). The header takes the place of the title.
+- The tag, the speeds and the level do not change during a session. The item number changes at the start of the
+  blank moment between two items (section 5.14). The rule: in a gap (the start pause or a blank moment), the header
+  shows the number of the next item. At other times it shows the number of the item on the screen. So the start pause shows `1/<n>`.
+  The session end screen keeps the header of the session that ended, with `i` = `n`.
+
+#### 5.11.2 Item line (decision UX-41)
+
+Font: `FONTS_ID_8X16` (section 3.3.1), cell top `TRAINING_ITEM_Y` = 24. Glyph ink is in y 25-38, capitals in y 26-35.
+
+Position of the text:
+
+- Character item: one character text of `m` cells (1, 4 or 6, by the `Prosigns` setting). Its x is `64 - 4m`:
+  60 for `K`, 48 for `<SK>` or `<AR>`, 40 for `<AR/+>`. The text is centered.
+- Word item of `n` characters (2 to 8): every character is one cell (UX-48). Character `k` (0-based) is at
+  `x = 68 - 8n + 16k`. One blank cell separates two characters, and the word is centered.
+
+| n | x of the characters |
+| --- | --- |
+| 1 | 60 |
+| 2 | 52, 68 |
+| 3 | 44, 60, 76 |
+| 4 | 36, 52, 68, 84 |
+| 5 | 28, 44, 60, 76, 92 |
+| 6 | 20, 36, 52, 68, 84, 100 |
+| 7 | 12, 28, 44, 60, 76, 92, 108 |
+| 8 | 4, 20, 36, 52, 68, 84, 100, 116 |
+
+Marks (all on pixels, normal video):
+
+| Mark | Pixels | Meaning |
+| --- | --- | --- |
+| Block | x to x + 6, y 26-39 (7 x 14 px) | Receiving: the slot that the next pick fills. |
+| Bar | x to x + 6, y 38-39 (7 x 2 px) | Receiving: an empty slot that is not the next one. Sending: the character that the user keys next, in a word item only. |
+
+- `x` is the slot x of the table above (60 for a character item).
+- The bar is under the glyph rows. Only the tail of `Q` (y 37) is next to it. D-26 checks that `Q` stays readable.
+- All other pixels of y 24-39 are off.
+
+### 5.12 Receiving screen (decision UX-42 to UX-44, UX-48, UX-51)
+
+Purpose: the device plays an item in CW. The user picks the characters with the four buttons. The device checks
+the answer.
+
+Character session, all 43 characters learned, `Prosigns` = `Both`, before the first pick. The item is AR:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |RX 20/15 L62        12/50| header, inverted
+1  |                         | status: blank in the first attempt
+2  |                         |
+3  |            #            | item line: block at x 60 (the slot of the answer)
+4  |            #            |
+5  |                         |
+6  |_____ _____ ____ ________| four key bars, y 55
+7  |A-K    L-V  W-6    7-<AR>| labels: menu/back, prev, next, enter
+```
+
+The same item after `enter` (into `7-<AR>`), then after `enter` again (into `<SK><AR>`):
+
+```
+7  |789    .,? /<BT> <SK><AR>|   'enter' narrows to SK and AR
+7  |<SK>  <AR>               |   two runs of one character: 'prev' picks AR, the slot shows <AR/+>
+```
+
+Exact label x (the mockups above are on the grid and are illustrative):
+
+| Screen | `menu/back` | `prev` | `next` | `enter` |
+| --- | --- | --- | --- | --- |
+| Whole set | `A-K` at x 2 | `L-V` at x 35 | `W-6` at x 63 | `7-<AR>` at x 97 |
+| After `enter` | `789` at x 2 | `.,?` at x 35 | `/<BT>` at x 58 | `<SK><AR>` at x 87 |
+| After `enter`, `enter` | `<SK>` at x 2 | `<AR>` at x 32 | blank | blank |
+
+Word session, 5 characters, two picks done (`K`, `M`):
+
+```
+    0         1         2
+    0123456789012345678901234
+3  |    K  M  #  _  _        |   K at x 28, M at x 44, block at x 60, bars at x 76 and 92 (illustrative)
+4  |                         |
+```
+
+The mockups are illustrative. The item line is in pixels, not on the 25-column grid.
+
+#### 5.12.1 Group keyboard (decision UX-42, UX-51)
+
+Keyboard set: the characters that the session can ask for, in keyboard order: `A` to `Z`, `0` to `9`, `.` `,` `?`
+`/`, then BT, SK, AR (plan). A character session uses all learned characters. A word session uses the learned
+characters without BT, SK and AR (UX-48).
+
+Current group: a run of the keyboard set. At the start of each pick it is the whole set. The four buttons split the
+current group into four runs, in keyboard order. Each run belongs to the button under it, from left to right
+(user decision 2026-10-06, `training_spec.md` D-T27 and section 8):
+
+- `c` = size of the current group. Integer division.
+- Run `k` has `s_k = (c + 3 - k) / 4` characters: `k` = 0 for `menu/back`, 1 for `prev`, 2 for `next`, 3 for
+  `enter`.
+- The runs differ by at most 1 character. The larger runs are on the left. Empty runs are on the right.
+
+| `c` | 2 | 3 | 4 | 5 | 9 | 13 | 16 | 17 | 40 | 43 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Runs | 1/1/0/0 | 1/1/1/0 | 1/1/1/1 | 2/1/1/1 | 3/2/2/2 | 4/3/3/3 | 4/4/4/4 | 5/4/4/4 | 10/10/10/10 | 11/11/11/10 |
+
+A tap of a group button (tap mode: it acts at the release, section 6.8):
+
+| Run size | Effect |
+| --- | --- |
+| 0 | Nothing: no change, no redraw. The label is blank. The key bar stays. |
+| 1 | Pick: the character goes into the slot of the block. The current group becomes the whole set again. The pick that fills the last slot starts the check at once. |
+| 2 or more | Narrow: the run becomes the current group. The labels change. |
+
+Presses per pick (every character, every Koch prefix, script check below):
+
+| Keyboard set | Presses per pick |
+| --- | --- |
+| 2 to 4 characters | 1. Every run holds at most one character. |
+| 5 to 16 characters | 1 or 2, at most 2. |
+| 17 to 43 characters | 2 or 3, at most 3. With 43 characters (11 -> 3 -> 1) and with the 40-character word keyboard (10 -> 3 -> 1), every pick takes exactly 3 presses. |
+
+Empty runs: with 2 characters, `next` and `enter` select nothing. With 3 characters, `enter` selects nothing. From 4
+characters on, every button has a run at the start of a pick.
+
+Label fields in row 7 (y 56-63, 5 x 8 font, normal video). `n` = cells of the label. Integer division:
+
+| Run | Button | Field (pixel x) | Width | Text x |
+| --- | --- | --- | --- | --- |
+| 0 | `menu/back` (left) | 2-26 | 5 cells | Left-aligned: x = 2. |
+| 1 | `prev` | 30-54 | 5 cells | Centered: x = 30 + (5 * (5 - n)) / 2. |
+| 2 | `next` | 58-82 | 5 cells | Centered: x = 58 + (5 * (5 - n)) / 2. |
+| 3 | `enter` (right) | 87-126 | 8 cells | Right-aligned: x = 127 - 5n. The last cell ends at x 126. |
+
+- Pixels x 27-29, 55-57 and 83-86 of row 7 stay off. With the blank glyph column, two labels have at least 4 blank
+  pixels between their ink. Letters inside a label have 1.
+- The key bar above each field has the x range of its field (section 5.11). The four bars show four keys, also when a
+  label is blank or long.
+- The positions are compile-time constants (`training_spec.md` LC-3). A label redraw writes row 7 only (LC-7). The
+  key bars are drawn with the screen and do not change in a session.
+- The `enter` field is wider: the prosigns are at the end of the keyboard order, so only the right run can hold two
+  of them (`<BT><SK>`, `<SK><AR>`: 8 cells). The fields of the other three runs need at most 5 cells.
+
+Label text of a character (UX-51): the text of `morse_format()` in `MORSE_STYLE_PUNCTUATION` when `Prosigns` =
+`Punctuation`, else in `MORSE_STYLE_NAME`. A letter, a digit or a mark is itself. BT is `<BT>` or `=`, SK is
+`<SK>`, AR is `<AR>` or `+`. In `Both`, a label shows the first text of `<AR/+>`: `<AR>`. No new style and no
+label table (`training_spec.md` LC-4).
+
+| Run | Label |
+| --- | --- |
+| Empty | Blank. |
+| One character | Its label text: `K`, `.`, `<BT>`, `=`, `<SK>`, `<AR>`, `+`. |
+| Two or more characters, and the label texts written one after the other fit the field | List: the texts with no separator: `KM`, `AEFIJ`, `/<BT>`, `<SK><AR>`, `<SK>+`, `Z059.,/`. |
+| Two or more characters, and the list does not fit | Range: the text of the first character, `-`, the text of the last character: `A-K`, `4-/`, `7-<AR>`, `7-+`. |
+
+- `-` is not in the keyboard set, so a `-` in a label always means a range.
+- A range holds only the learned characters between its ends. For example, with 30 learned characters, `A-K` holds
+  A, E, F, G, H, I, J and K: B, C and D are not learned yet. The user hears only learned characters, so the label
+  is not misleading.
+- The list limit is the field width. So the `enter` field can show a list of 6 to 8 characters while the other
+  fields show ranges. Example, 28 learned characters: `A-J`, `K-Q`, `R-Y`, `Z059.,/`.
+- A prosign label never splits and never loses its brackets: `<` and `>` always bound a prosign name, as in Free
+  Input (UX-38).
+- The item line, the answer and the status texts keep the full text of the `Prosigns` setting. So in `Both`, the
+  label `<AR>` picks AR, and the slot shows `<AR/+>`.
+- The `Prosigns` setting is read once at the mode start, as in Free Input (UX-38).
+
+Fit check (task D1, script `label_check.py`, 2026-10-06): every Koch prefix of 2 to 43 learned characters, as a
+character session and as a word session (word sets have at most the first 40 Koch characters), for all three
+`Prosigns` values. Every range that the user can reach, at every depth. 12 096 labels checked. Result: pass.
+
+| Field | Longest label | Cells |
+| --- | --- | --- |
+| `menu/back` | `AEFIJ` (17 learned) | 5 of 5 |
+| `prev` | `KLMNO` (18 learned) | 5 of 5 |
+| `next` | `PRSTU` (19 learned), `/<BT>` (41 or 43 learned) | 5 of 5 |
+| `enter` | `<SK><AR>` (43), `<BT><SK>` (42), `3589.,?/` (32) | 8 of 8 |
+
+Also checked: no label pixel at x 0, 1 or 127, at least 4 blank pixels between two labels, at most 3 selects per
+pick (2 for 5 to 16 characters, 1 for 2 to 4), no prosign in a word set. The hard cases of `training_spec.md` LC-6:
+`7-<AR>` is 6 of 8 cells in the `enter` field. `<SK><AR>` is a list of 8 of 8 cells, so the range `<SK>-<AR>` (9)
+never shows. `<BT/=>` and `<AR/+>` (6) never show in a label. One row is enough: row 6 holds no label (LC-2).
+
+Labels with all 43 characters (character session). `Prosign` and `Both` give the same labels. `Punctuation` differs
+only where the table shows it in brackets:
+
+| Group (taps from the whole set) | `menu/back` | `prev` | `next` | `enter` |
+| --- | --- | --- | --- | --- |
+| Whole set | `A-K` | `L-V` | `W-6` | `7-<AR>` (`7-+`) |
+| `menu/back` | `ABC` | `DEF` | `GHI` | `JK` |
+| `prev` | `LMN` | `OPQ` | `RST` | `UV` |
+| `next` | `WXY` | `Z01` | `234` | `56` |
+| `enter` | `789` | `.,?` | `/<BT>` (`/=`) | `<SK><AR>` (`<SK>+`) |
+| `enter`, `next` | `/` | `<BT>` (`=`) | blank | blank |
+| `enter`, `enter` | `<SK>` | `<AR>` (`+`) | blank | blank |
+
+Labels of the word keyboard with 40 characters (word session, no prosign, the same for every `Prosigns` value):
+
+| Group | `menu/back` | `prev` | `next` | `enter` |
+| --- | --- | --- | --- | --- |
+| Whole set | `A-J` | `K-T` | `U-3` | `4-/` |
+| `menu/back` | `ABC` | `DEF` | `GH` | `IJ` |
+| `prev` | `KLM` | `NOP` | `QR` | `ST` |
+| `next` | `UVW` | `XYZ` | `01` | `23` |
+| `enter` | `456` | `789` | `.,` | `?/` |
+
+Prosign tail with 41 and 42 learned characters (character sessions):
+
+| Learned, group | `menu/back` | `prev` | `next` | `enter` |
+| --- | --- | --- | --- | --- |
+| 41, whole set | `A-K` | `L-U` | `V-4` | `5-<BT>` (`5-=`) |
+| 41, `enter` | `567` | `89.` | `,?` | `/<BT>` (`/=`) |
+| 41, `enter`, `enter` | `/` | `<BT>` (`=`) | blank | blank |
+| 42, whole set | `A-K` | `L-V` | `W-5` | `6-<SK>` |
+| 42, `enter` | `678` | `9.,` | `?/` | `<BT><SK>` (`=<SK>`) |
+| 42, `enter`, `enter` | `<BT>` (`=`) | `<SK>` | blank | blank |
+
+#### 5.12.2 Item flow
+
+States of a Receiving session. They follow the phases of the session engine (`training_spec.md` section 5.10).
+Section 6.8 gives the button rules of each state.
+
+| State (engine phase) | Screen | Sound | Ends when |
+| --- | --- | --- | --- |
+| Start pause (GAP) | Item line blank, labels of the whole set, status blank, header `1/<n>` | None | `TRAINING_START_MS` (1000 ms) after the session start. Then Item. |
+| Item, playing (ITEM) | Empty slots, block on the first slot, labels. Picks show at once. | The player plays the item at `RX Speed` and `RX Eff. Speed`, at the `Tone` pitch. | The player is idle: Item, waiting. The last slot filled: the check. A long `enter`: the playback starts again. |
+| Item, waiting (ITEM) | Picks, block, bars, labels | None | The last slot filled: the check. A long `enter` (or a tip closure of 800 ms): replay, then Item, playing. |
+| Result (RESULT) | Section 5.14 | Section 5.14 | Section 5.14 |
+| Blank moment (GAP) | Section 5.14 | None | `TRAINING_RECEIVING_GAP_MS` (500 ms). Then Item with the next item. |
+| End (END) | Section 5.15 | None | An `enter` tap or a `menu/back` tap, or a long `menu/back` (section 5.15). |
+
+Rules:
+
+- The check comes at the pick that fills the last slot, at the release of the button. It compares the whole answer
+  with the item. One check is one attempt. There are 3 attempts per item (plan).
+- At the check, a running playback stops (the tone falls in 8 ms). The player and the keyer are never on together.
+- Retry (attempt 2 or 3): the slots become empty, the block goes to the first slot, the status shows `Try 2 of 3`
+  or `Try 3 of 3`, and the item plays again. No start pause, no blank moment.
+- Replay: a long `enter` (a hold of 800 ms) in Item plays the item again from its start. The replay starts at
+  800 ms, while the button is still held. The release then does nothing. A running playback starts again from the
+  start. The picks, the current group and the labels stay. Replays are free: they use no attempt and do not change
+  the score. In the start pause, a result and the blank moment, a long `enter` does nothing.
+- An `enter` tap (released before 800 ms) in Item selects the right run (section 5.12.1). It never replays.
+- In Receiving, the paddle tip is `enter` (C-4). A short closure of the dit lever or a straight key (opened before
+  800 ms) is an `enter` tap: it selects the right run. A closure of 800 ms or longer is a long `enter`: it replays.
+  The ring does nothing. The keyer is off and the paddle gives no tone.
+- The `enter` press that opens Receiving from the menu gives nothing at its release and nothing after 800 ms. So
+  it never picks and never replays (`training_spec.md` 5.9).
+
+### 5.13 Sending screen (decision UX-45, UX-50, UX-52)
+
+Purpose: the device shows an item. The user keys it with the paddle or a straight key. The device checks each
+character at once. In a word item, it also checks the pause between two characters (UX-52).
+
+Character session, `Show CW Code` = `On`, the user keyed `-.` (N) for the item K:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |TX 20/20 L12         7/50| header, inverted
+1  |        Wrong: N         | status (section 5.14)
+2  |                         |
+3  |            K            | item line: K at x 60, no bar (character item)
+4  |            K            |
+5  |                         | blank (the answer code shows here after the 3rd wrong attempt)
+6  |                         |
+7  |-- -                     | keyed code: dash, dot (marks, illustrative)
+```
+
+Word session, 4 characters, the first two keyed correctly:
+
+```
+3  |      K  M  R  S         |   K at x 36, M at x 52, R at x 68, S at x 84 (illustrative)
+4  |            ==           |   bar under R (x 68-74, y 38-39): the next character to key
+```
+
+The same word, attempt 1. The user keyed K and M, then paused too long (UX-52):
+
+```
+    0         1         2
+    0123456789012345678901234
+1  |  Wrong: pause too long  | status, column 2, for TRAINING_WRONG_MS (1200 ms)
+3  |      K  M  R  S         |
+4  |            ==           | the bar stays under R: the pause came before R
+5  |                         | blank (after the 3rd attempt: the code of R here)
+7  |-- --                    | row 7 unchanged: the marks of M, the last keyed character
+```
+
+The same word at the retry (1200 ms after the check). The screen looks like a fresh item, but the status keeps the
+attempt number:
+
+```
+    0         1         2
+    0123456789012345678901234
+1  |       Try 2 of 3        | status
+3  |      K  M  R  S         |
+4  |      ==                 | bar back under K (D-T6)
+5  |                         | blank
+7  |                         | row 7 off (UX-52), with Show CW Code On and Off
+```
+
+#### 5.13.1 Item line and checks
+
+- Start pause: for `TRAINING_START_MS` (1000 ms) after the session start, the item line is blank. Keyer events in
+  this time are dropped (section 5.13.2). Then the first item appears.
+- The item line shows the whole item (section 5.11.2). Prosign texts follow the `Prosigns` setting,
+  read once at the mode start. A character item has no bar.
+- Word item: the bar is under the character that the user keys next. A correct character moves the bar to the next
+  character. The keyed characters keep their normal look.
+- The check: at each CHAR_GAP event, the decoded character (`morse_decode()`) is compared with the expected
+  character. The compare uses the character code, not the text. So `=` and `<BT/=>` are the same answer.
+- A correct character that is not the last one: no status text, no delay. The bar moves on.
+- The last character correct: the result `Correct` (section 5.14).
+- A wrong character, also `*` (a pattern that is not in the table, the 8-dit error sign): the attempt ends. The
+  result `Wrong` (section 5.14).
+- Pause too long (word item only, UX-52): a WORD_GAP in Item counts when it ends the space right after a correct
+  character that is not the last one of the item. It ends the attempt. The result is `Wrong: pause too long`
+  (section 5.14). It uses an attempt, as a wrong character does. The bar stays under the next character: the pause came before it.
+- Rule: a WORD_GAP in Item counts when it ends the space right after a correct character that is not the last one
+  of the item. A WORD_GAP does nothing in these cases: a character item, and a word item before the first correct
+  character of the attempt. It also does nothing in every state that is not Item (section 5.13.2), and after
+  OVERFLOW (a lost event is a device fault, D-T16). In the result delay, the blank moment, or the next attempt
+  before its first correct character, a WORD_GAP does nothing. At a low `TX Eff. Speed` the WORD_GAP can come late:
+  5 units take about 2669 ms at 20 / 5.
+- Retry (`training_spec.md` D-T6): the user keys the whole item again from its first character. The bar goes back
+  to the first character. This matches CW practice: after an error, the operator sends the word again. The retry
+  screen is in sections 5.13.3 and 5.14.
+- First-attempt correct: the item had no wrong character and no pause error.
+
+Pause limit (UX-52). After the last element, the space grows. At 5 Farnsworth units of `TX Eff. Speed`, the keyer
+gives WORD_GAP (`KEYER_WORD_GAP_UNITS`, `keyer_spec.md` section 6.7). Free Input inserts a word space at the same
+point. The limit counts from the end of the last element of a character to the start of the first element of the
+next character. Examples, from the keyer table (4 ticks per ms):
+
+| `TX Speed` / `TX Eff. Speed` | Normal space between characters | Pause limit |
+| --- | --- | --- |
+| 32 / 32 | 113 ms (3 units) | 188 ms |
+| 20 / 20 | 180 ms | 300 ms |
+| 13 / 13 | 277 ms | 461 ms |
+| 5 / 5 | 720 ms | 1200 ms |
+| 20 / 10 | 654 ms | 1090 ms |
+| 20 / 5 | 1601 ms | 2669 ms |
+
+The normal space between characters is 3 units. So the user has 2 units of margin before the limit. A user who needs
+more time lowers `TX Eff. Speed`.
+
+#### 5.13.2 Keyer events
+
+| Event | In an input state (ITEM) | During the start pause, a result delay or the blank moment (GAP, RESULT) |
+| --- | --- | --- |
+| DIT, DAH | Builds the character. With `Show CW Code` = `On`, a mark appears in row 7. | Dropped. The character that it starts is dropped (next row). |
+| CHAR_GAP | The check (section 5.13.1). If an element of this character was dropped, nothing: no check, no attempt. | Dropped. |
+| WORD_GAP | Word item: a WORD_GAP in Item counts when it ends the space right after a correct character that is not the last one of the item. Then the attempt ends, result `Wrong: pause too long` (UX-52). Nothing in all other cases: a character item, a word item before the first correct character of the attempt, and after OVERFLOW (a lost event is a device fault, D-T16). | Dropped. |
+| OVERFLOW | The character in progress is dropped: no check, no attempt, no status. | Dropped. |
+
+- Dropped-character rule: when a DIT or DAH is dropped, the mode also drops every event up to and including the
+  next CHAR_GAP. So a character that starts during a delay never counts, even after the delay ends. The user
+  then keys it again.
+- The keyer and its sidetone run during the delays. The user hears what they key, but it does not count.
+- A lost event is a fault of the device, not of the user. So OVERFLOW never uses an attempt (F-11 for Sending).
+- WORD_GAP comes once per space, after the CHAR_GAP of that space (`keyer_spec.md` 6.6). After OVERFLOW, a
+  WORD_GAP never counts (`training_spec.md` D-T31, D-T16):
+  - If the lost events held the CHAR_GAP, the drop flag is still set when the WORD_GAP comes. So the WORD_GAP is
+    dropped with the rest of the character.
+  - If the CHAR_GAP came after the OVERFLOW, the WORD_GAP of that space does nothing.
+
+#### 5.13.3 Code row (row 7, decision UX-50)
+
+`Show CW Code` = `On`: row 7 shows the marks of the character in progress. `Off`: row 7 stays blank.
+
+| Item | Value |
+| --- | --- |
+| Dot mark | 2 x 2 px |
+| Dash mark | 6 x 2 px |
+| Mark rows | `y = 8r + 3` and `8r + 4` (row 7: y 59-60, row 5: y 43-44) |
+| Gap between marks | 3 px |
+| Row 7 start | x = 2, left-aligned. Each new mark goes to the right of the last one. |
+| Row 5 start (answer) | Centered: x = floor((128 - w) / 2), w = the width of all marks and gaps. |
+| Limit | `TX_CODE_MAX_MARKS` = 12 marks. Later marks of the same character are not drawn. 12 dashes are 105 px. |
+
+- A mark appears at the DIT or DAH event, at the end of the element. The sidetone already gives the element at
+  once. The marks show what the keyer decoded.
+- Row 7 keeps the marks of a character until the first element of the next character. Then row 7 clears and the
+  new mark appears. So after a wrong character, the user sees what they keyed.
+- During the result delay (`Wrong: ...`, 1200 ms), row 7 does not change. The user reads the wrong code there.
+  After a pause error, row 7 keeps the marks of the last correct character.
+- The retry clears row 7 (UX-52, user decision 2026-10-07). At the retry moment, all pixels of row 7 go off, in
+  the same redraw as `Try 2 of 3` or `Try 3 of 3` and the bar move. The first element of the new attempt then
+  draws its mark from x 2. With `Show CW Code` = `Off`, row 7 is already off, and the retry gives no visible change
+  there.
+- An element that the mode drops (a character that started in the delay, section 5.13.2) draws no mark, also after
+  the retry.
+- The blank moment clears row 7.
+- The setting is read once at the mode start.
+
+#### 5.13.4 P3.2 and the keyer (decision UX-33, extended)
+
+- The keyer runs in all states of a Sending session: input, result delays and the blank moment. It stops at the
+  session end screen and at the exit.
+- Mode start and next-session start: the `enter` press that starts the session gives no element and no tone. A
+  contact closed at the start stays ignored until it opens (the entry mask of UX-33).
+- Session end screen: the keyer stops and P3.2 goes back to the menu. A contact held at that moment gives no
+  `enter` until it opens and closes again.
+- The keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` at the session start (section 6.7).
+
+### 5.14 Results and transitions (decision UX-46, UX-52)
+
+Status texts (row 1, centered, section 5.11):
+
+| Moment | Status text | Item line | Row 5 (Sending) | Row 7 (Sending) |
+| --- | --- | --- | --- | --- |
+| Attempt 1, input | Blank | Receiving: slots. Sending: the item. | Blank | Marks of the current or last character (5.13.3) |
+| Attempt 2 or 3, input (the retry) | `Try 2 of 3`, `Try 3 of 3` | Receiving: empty slots, block on the first slot. Sending: the item, bar under the first character of a word. | Blank | Off at the retry moment, then the marks of the new attempt |
+| Correct, any attempt | `Correct` | Unchanged: the picks or the item. | Blank | Unchanged |
+| Wrong, attempt 1 or 2, Receiving | `Wrong` | Unchanged: the wrong picks stay visible. | - | - |
+| Wrong character, attempt 1 or 2, Sending | `Wrong: ` and the full text of the keyed character (`Wrong: N`, `Wrong: *`, `Wrong: <AR/+>`) | Unchanged. In a word, the bar stays under the wrong position. | Blank | Unchanged: the marks of the wrong character |
+| Pause too long, attempt 1 or 2, Sending word (UX-52) | `Wrong: pause too long` | Unchanged. The bar stays under the next character, where the pause came. | Blank | Unchanged: the marks of the last correct character |
+| Wrong, attempt 3, Receiving | `Wrong. The answer is:` | The correct item, in the layout of section 5.11.2, no marks | - | - |
+| Wrong character, attempt 3, Sending | `Wrong: ` and the keyed text, as above | Unchanged | The code of the expected character, centered marks (section 5.13.3). Shown also with `Show CW Code` = `Off`. | Unchanged |
+| Pause too long, attempt 3, Sending word (UX-52) | `Wrong: pause too long` | Unchanged, bar under the next character | The code of the next character (the character under the bar), centered marks. Shown also with `Show CW Code` = `Off`. | Unchanged |
+
+Longest status texts: `Wrong. The answer is:` (21 cells), `Wrong: pause too long` (21 cells, start column 2) and
+`Wrong: <KN/(>` (13 cells). All fit the 25 cells.
+
+Status text of a pause error (UX-52). The prefix `Wrong: ` is the same as for a wrong character. So the user reads
+"the attempt failed" first, as in UX-46. A character text after `Wrong: ` is 1 to 6 cells and has no space. So
+`pause too long` (three words) never reads as a keyed character. The bar shows where the pause came.
+
+The retry moment (both modes, attempt 2 or 3). It comes `TRAINING_WRONG_MS` (1200 ms) after the check. One redraw
+does all of this:
+
+| Area | Receiving | Sending |
+| --- | --- | --- |
+| Header | Unchanged | Unchanged |
+| Status (row 1) | `Try 2 of 3` or `Try 3 of 3` | `Try 2 of 3` or `Try 3 of 3` |
+| Item line | All slots empty, block on the first slot | The item, unchanged glyphs. Word: bar under the first character. Character: no bar. |
+| Row 5 | - | Blank (it is already blank) |
+| Row 6 and 7 | Key bars and labels of the whole set | Row 7 off, for every `Show CW Code` value |
+| Sound | The item plays again | None. The keyer runs all the time. |
+
+Before the retry moment, during the 1200 ms, nothing of this changes. So the user reads the wrong code in row 7
+and the status text for the full delay. After the retry moment, the screen looks like a fresh item. Only
+`Try N of 3` tells the user that this is a retry. Receiving and Sending show the same status at a retry.
+
+Delays (UX-46). The names are the constants of `training_spec.md` section 5.10:
+
+| Constant | Value | From | To |
+| --- | --- | --- | --- |
+| `TRAINING_START_MS` | 1000 ms | The session start (mode entry or `Next`). | The first item. |
+| `TRAINING_CORRECT_MS` | 600 ms | The check: the pick that fills the last slot (Receiving), or the CHAR_GAP of the last character (Sending). | The blank moment. |
+| `TRAINING_WRONG_MS` | 1200 ms | The check, attempt 1 or 2. In Sending also the WORD_GAP of a pause error (UX-52). | The retry moment (table above). |
+| `TRAINING_FAILED_MS` | 2500 ms | Receiving: the end of the answer playback. Sending: the CHAR_GAP of the wrong character, or the WORD_GAP of a pause error. | The blank moment. |
+| `TRAINING_RECEIVING_GAP_MS` | 500 ms | The end of a result that ends the item. | The next item appears and plays. |
+| `TRAINING_SENDING_GAP_MS` | 300 ms | The end of a result that ends the item. | The next item appears. |
+
+The Receiving gap is longer: the next sound starts with the next item, and the ear needs a short rest after the
+result. In Sending, the eye only needs to see the blank.
+
+Answer playback (Receiving, attempt 3 wrong): the item plays once more while the answer shows. The answer delay
+counts from the end of that playback. So the user hears and sees the answer together. A word at a low speed can
+play for many seconds, so the result must wait for the player.
+
+Blank moment (both modes):
+
+1. At its start: rows 1-5 of the body go off (status, item line, row 5). Sending also clears row 7. Receiving keeps
+   the key bars and the labels of the whole set. The header shows the next item number.
+2. For the gap time (500 ms in Receiving, 300 ms in Sending) the item line stays blank.
+3. At its end: the next item appears. Receiving: empty slots with the block, and the playback starts at once.
+   Sending: the next item text.
+
+The blank moment comes before every next item, also before the same character again. So the user always sees a
+new item start.
+After the last item of a session, no blank moment comes: the session end screen follows the result at once.
+
+Example timelines (Receiving, character item):
+
+```text
+first attempt correct:  last pick 0 ... 'Correct' 0-600 ... blank 600-1100 ... next item and playback 1100
+first attempt wrong:    last pick 0 ... 'Wrong' 0-1200 ... retry 1200: 'Try 2 of 3', empty slots, playback
+third attempt wrong:    last pick 0 ... 'Wrong. The answer is:' + playback ... end of playback + 2500 ... blank 500
+```
+
+Example timelines (Sending, word item `KMRS` at 20/20, `Show CW Code` = `On`):
+
+```text
+pause error:  CHAR_GAP of M ... WORD_GAP 0 (180 ms later): 'Wrong: pause too long', bar under R, row 7 '-- --'
+              ... retry 1200: 'Try 2 of 3', bar under K, row 7 off
+wrong char:   CHAR_GAP of N 0: 'Wrong: N', bar under M, row 7 '-.' ... retry 1200: 'Try 2 of 3', bar under K, row 7 off
+```
+
+### 5.15 Session end screen (decision UX-47)
+
+The plan gives the rules (user decisions): a character session has 50 items and passes at 45 or more. A word
+session has 10 to 100 words and passes at 80 % of the count, rounded up (user decision 2026-10-07): 8 of 10, 80 of
+100. "Correct" for the score means correct on the first attempt. A pass advances the level by one and saves the progress. A fail repeats the level.
+
+Pass, progress saved:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |RX 20/15 L12        50/50| header of the session that ended
+1  |                         |
+2  |       Score 46/50       | column 7
+3  |         Passed          | column 9
+4  |      New level L13      | column 6
+5  |                         | 'Not saved' here when the save failed (column 8)
+6  |                         |
+7  |          Next           | 'Next' in columns 10-13, highlight x 47-76, y 57-63, always focused
+```
+
+Fail:
+
+```
+2  |       Score 43/50       |
+3  |   Not passed, need 45   | column 3
+4  |    Repeat level L12     | column 4
+```
+
+| Row | Text | Rule |
+| --- | --- | --- |
+| 2 | `Score <c>/<n>` | `c` = items correct on the first attempt, `n` = item count. |
+| 3 | `Passed`, or `Not passed, need <t>` | `t` = the pass threshold of the session (45 for 50 characters, 8 for 10 words, 80 for 100 words). |
+| 4 | Pass: `New level L<n+1>`. Fail: `Repeat level L<n>`. Pass at the highest level: `Top level L<n>`. | The level number as in the header. |
+| 5 | `Not saved`, or blank | Shows only after a failed progress save of a pass. |
+| 7 | `Next` | Highlight band cells 9-14 (x 47-76, y 57-63). Gap line y 56 off across the band (UX-2). |
+
+- All texts are centered (start column = floor((25 - length) / 2)). The longest are `Not passed, need 80` and
+  `Not passed, need 45` (19 cells, column 3). A threshold has at most 2 digits: the largest is 80 (100 words).
+- Body texts are normal video. `Next` is the only highlight: `enter` activates it, as `OK` on a message screen.
+- After `Not saved`, the new level stays in RAM until the power goes off (plan). The next session uses it.
+- Controls (section 6.1): `enter` or the paddle tip starts the next session at the shown level. A short or long
+  `menu/back` opens the main menu with the cursor on the mode item. `prev` and `next` do nothing.
+- Receiving keeps tap mode on the end screen (section 6.8). So the `enter` tap, a short tip closure and the
+  `menu/back` tap act at the release, not at the press. A long `enter` (or a tip closure of 800 ms) does nothing:
+  no next session, no sound, no redraw, also not at the release. The user taps `enter` again. A long `menu/back`
+  opens the main menu at 800 ms. In Sending, tap mode is off: `enter` and `menu/back` act at the press.
+- The screen has no timeout.
+
 ## 6. Control mapping
 
 ### 6.1 Per state (decision plan + UX-9, UX-23, UX-24)
 
 `press` = a debounced press event. `repeat` = an auto-repeat event (prev and next only, section 6.2). `long` = a
-long-press event (`menu/back`, `prev` and `next` only, section 6.6).
+long-press event (`menu/back`, `prev` and `next`, and `enter` in tap mode only, section 6.6). Tap mode is on only on
+the Receiving screen (section 6.8).
 
 Short presses and repeats:
 
 | State | `prev` press | `next` press | `prev`/`next` repeat | `enter` | `menu/back` |
 | --- | --- | --- | --- | --- | --- |
-| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Free Input) or the placeholder (Receiving, Sending). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
+| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
 | List, edit | Decrease the value by one step, or the previous choice. Stops at the limit. Applies at once. | Increase, or the next choice. Stops at the limit. Applies at once. | Same as press, stops at the limit | Leave edit mode, keep the value. Cursor stays on the row. | Leave edit mode, keep the value (same as `enter`). Does not leave the list. |
-| Placeholder | nothing | nothing | nothing | nothing | nothing |
+| Placeholder (no screen uses it in this version) | nothing | nothing | nothing | nothing | nothing |
 | Free Input | nothing | nothing | nothing | No event. The keyer owns P3.2: the `enter` button keys like the tip contact (section 6.7). | nothing |
+| Receiving: Item (playing or waiting) | Run 1 (second from the left), at the release (tap mode, section 6.8). | Run 2, at the release | none (tap mode) | Run 3 (the right run), at the release. Also a short tip closure. | Run 0 (the left run), at the release |
+| Receiving: start pause, result, blank moment | nothing | nothing | none (tap mode) | nothing | nothing |
+| Sending: all states but the end screen | nothing | nothing | nothing | No event. The keyer owns P3.2 (section 5.13.4). | nothing |
+| Session end screen (both modes) | nothing | nothing | nothing | Start the next session (section 5.15). The paddle tip does the same. In Receiving the tap acts at the release. | Main menu, cursor on the mode item. In Receiving the tap acts at the release. |
 | Dialog | Focus `No` (no wrap) | Focus `Yes` (no wrap) | Same as press | Activate the focused button. `No`: back to Settings. `Yes`: reset statistics, show the message screen. | Same as `No`. |
 | Message | nothing | nothing | nothing | `Statistics reset`: back to Settings, cursor on `Reset Statistics`. `Display Defaults`: the main menu, cursor on `Receiving`. | Same as `enter`. |
 
 Long presses:
 
-| State | Long `menu/back` | Long `prev` | Long `next` |
-| --- | --- | --- | --- |
-| List (browse or edit), dialog, message | nothing | nothing | nothing |
-| Placeholder | Back to the main menu, cursor on the mode item that opened it. | nothing | nothing |
-| Free Input | Stop the keyer (a sounding tone falls in 8 ms). Back to the main menu, cursor on `Free Input`. The text is lost. | Clear the text area (section 5.9). | Draw the delimiter (section 5.9). |
+| State | Long `menu/back` | Long `enter` | Long `prev` | Long `next` |
+| --- | --- | --- | --- | --- |
+| List (browse or edit), dialog, message | nothing | no event (tap mode off) | nothing | nothing |
+| Placeholder (no screen uses it in this version) | Back to the main menu, cursor on the mode item that opened it. | no event | nothing | nothing |
+| Free Input | Stop the keyer (a sounding tone falls in 8 ms). Back to the main menu, cursor on `Free Input`. The text is lost. | no event (the keyer owns P3.2) | Clear the text area (section 5.9). | Draw the delimiter (section 5.9). |
+| Receiving: Item | Stop the player. Drop the session. Main menu, cursor on `Receiving` (section 6.8). | Replay from the start (section 6.8). Also a tip closure of 800 ms. | Undo one step (section 6.8). | nothing |
+| Receiving: start pause, result, blank moment | Same as above. | nothing | nothing | nothing |
+| Sending: all states but the end screen | Stop the keyer. Drop the session. Main menu, cursor on `Sending` (section 6.9). | no event (the keyer owns P3.2) | nothing | nothing |
+| Session end screen | Receiving (tap mode): the long event opens the main menu, cursor on `Receiving`. Sending: the press of the same hold already opened the main menu, and the long event does nothing there. | Receiving: nothing, and nothing at the release. Sending: no event (tap mode off). | nothing | nothing |
 
 "nothing" means: no state change, no redraw, no dirty page, no sound. In a list, the short press already acted on the
 press edge. The long event of the same press must not act again (UX-24).
@@ -604,8 +1265,12 @@ Other rules:
 
 - "Applies at once": contrast goes to the LCD and the backlight level goes to the PWM at each step. The other
   values change only in memory until the save. In the menu, Tone is the only value with an audible effect: the Tone
-  preview (section 6.5). `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone` and `Prosigns` take effect at
-  the next start of Free Input (section 6.7). The other values have no effect in this version.
+  preview (section 6.5). The mode settings take effect at the next mode start:
+  - Free Input: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone`, `Prosigns` (section 6.7).
+  - Receiving: `RX Speed`, `RX Eff. Speed`, `Tone`, `Prosigns`, `Max Word Length` (section 5.12).
+  - Sending: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone`, `Prosigns`, `Show CW Code`,
+    `Max Word Length` (section 5.13).
+  - A new session from the end screen keeps the settings of the mode start. The settings cannot change in a mode.
 - Effective-speed rule (plan): an effective speed can never be higher than its base speed. Lowering a base speed
   below its effective speed lowers the effective speed in the same step. Raising a base speed never changes the
   effective speed.
@@ -613,10 +1278,13 @@ Other rules:
   the parent on the item that was opened.
 - After power-on the main menu shows with the cursor on `Receiving`. A display recovery start shows the
   `Display Defaults` message first (section 8.1).
-- There is no inactivity timeout anywhere in this version. Free Input stays open until a long `menu/back`. The
-  Tone preview timeout (section 6.5) is not a menu timeout: it ends the sound and changes no screen.
+- There is no inactivity timeout anywhere in this version. Free Input, a training session and the session end
+  screen stay open until the user leaves. The Tone preview timeout (section 6.5) is not a menu timeout: it ends the
+  sound and changes no screen. The training delays (section 6.10) are steps of a session, not timeouts.
 - Long presses act only in the mode screens (section 6.6). Lists, edit mode, the dialog and the message screen keep
   their short-press behaviour without a change.
+- Short presses act in the mode screens only in Receiving (the keyboard, UX-43) and on the session end screen
+  (UX-47). Free Input and the session states of Sending ignore them (UX-24).
 
 ### 6.2 Button timing (decision UX-12)
 
@@ -630,10 +1298,11 @@ Other rules:
 | Two of prev/next held | The repeat belongs to the one pressed last. Releasing it stops the repeat. The other one does not start repeating again until it is pressed again. When both presses debounce in the same poll, the repeat belongs to prev. | |
 | Button held at start-up | Gives no event until it is released and pressed again. | Protects against a closed key/paddle at power-on. After the display recovery gesture (section 8.1), the held `menu/back` does not close the message screen. |
 | Two press events due in the same poll | Order: `menu/back`, `enter`, `prev`, `next`. | Deterministic for tests. |
-| Long press (UX-23) | `BUTTONS_LONG_PRESS_MS` = **800 ms** after the press event, while the debounced state stays pressed. One long event per press. Buttons: `menu/back`, `prev`, `next`. The hold counts on the debounced state. Both of its edges lag the pin by 20 ms, so a pin hold and a debounced hold have the same length. Measured from the press event, the pin must still be closed at 780 ms. | `enter` has no long press: it is the paddle tip. A release bounce shorter than 20 ms does not end the hold (debounced state). |
+| Long press (UX-23) | `BUTTONS_LONG_PRESS_MS` = **800 ms** after the press event, while the debounced state stays pressed. One long event per press. Buttons: `menu/back`, `prev`, `next`, and `enter` in tap mode only (UX-51). The hold counts on the debounced state. Both of its edges lag the pin by 20 ms, so a pin hold and a debounced hold have the same length. Measured from the press event, the pin must still be closed at 780 ms. | With tap mode off, `enter` has no long press: it is the paddle tip, and its event comes at the press. In tap mode (Receiving), a tip closure of 800 ms is a long `enter`. A release bounce shorter than 20 ms does not end the hold (debounced state). |
 | Long press and repeat | A held `prev` or `next` gives its repeats and also one long event. Each screen uses only one of them: lists use repeats, mode screens use the long event. | The repeat at 800 ms (400 + 5 x 80) and the long event fall due together. |
-| Events due in the same poll | Order: press events, then long events (`menu/back`, `prev`, `next`), then a repeat. A later event is not lost: it comes on a later poll. | Deterministic for tests. |
+| Events due in the same poll | Order: press events (`menu/back`, `enter`, `prev`, `next`), then long events (`menu/back`, `enter`, `prev`, `next`), then a repeat. A later event is not lost: it comes on a later poll. | Deterministic for tests. Long `enter` comes only in tap mode (`training_spec.md` D-T28). |
 | Long press and start-up | A button held at start-up gives no long event until it is released and pressed again. | Same rule as the press event. |
+| Tap mode (Receiving only, UX-43, UX-51) | `buttons_set_tap_mode(true)`: all four buttons, `menu/back`, `enter` (button or paddle tip), `prev` and `next`, give their press event at the debounced release, and only for a release before `BUTTONS_LONG_PRESS_MS`. A hold gives only the long event (long `enter` = `BUTTON_EVENT_ENTER` with `BUTTON_EVENT_LONG_FLAG`). Nothing at the release of a hold. No repeat. A press that started before tap mode went on gives no event, also no long event (the `enter` that opens Receiving). | `training_spec.md` D-T7, D-T28. All other screens keep tap mode off. |
 | Timing tolerance | +/- 2 ms against the 1 ms tick | For host tests. |
 
 ### 6.3 Wrap and limits (decision UX-13)
@@ -654,6 +1323,16 @@ Other rules:
   edit mode. `menu/back` undoes that without a change. If it opens Free Input, a long `menu/back` closes it.
 - In Free Input, P3.2 belongs to the keyer, not to the menu (UX-33, section 6.7). One closure of P3.2 is never both
   `enter` and a key element.
+- In Receiving, the tip is `enter` in tap mode (section 6.8). A closure that opens before 800 ms is an `enter` tap:
+  in Item it selects the right run. A closure of 800 ms or longer is a long `enter`: in Item it replays the item.
+  The action comes at the release for a tap, and at 800 ms for a hold.
+- A plug insertion in Receiving can give one `enter` tap (F-20, D-5). In Item it selects the right run. If the run
+  has 2 or more characters, it narrows: a long `prev` steps out again. If the run has one character, it picks: a
+  long `prev` takes the pick back. If that pick fills the last slot, the check comes at once and can use an
+  attempt. No undo exists for a check. The user accepts this (`training_spec.md` D-T27, R-T7). The manual says:
+  insert the plug before you open Receiving.
+- On the Receiving end screen, a plug insertion can start the next session (the same as an `enter` tap).
+- In a Sending session, P3.2 belongs to the keyer. On the session end screen, it is `enter` again (section 5.13.4).
 
 ### 6.5 Tone preview (decision UX-20, user Q-3)
 
@@ -755,13 +1434,21 @@ decision first.
 User decision: in every mode screen, a long `menu/back` exits, a long `prev` clears the screen and a long `next`
 draws a delimiter. The placeholders use only the long `menu/back`.
 
+The training modes follow the same rule (plan, user): a long `menu/back` exits from every training screen. In
+Receiving, a long `prev` undoes one step of the answer (section 6.8). This is the clear of Receiving. Sending and the
+session end screen give long `prev` and long `next` no action. Receiving gives long `next` no action.
+
+Long `enter` (user decision 2026-10-06, UX-51): in Receiving, a long `enter` replays the item (section 6.8). It
+exists only in Receiving, because only Receiving turns tap mode on. A tip closure of 800 ms is a long `enter` too.
+On the other screens, `enter` keeps its event at the press and has no long event.
+
 | Item | Value |
 | --- | --- |
 | Threshold | 800 ms after the press event (section 6.2). The user holds the button about 0.8 s: the press event and the release both lag the pin by 20 ms. |
 | Moment of the action | At the threshold, while the button is still held. Not at the release. |
 | Count | One action per press. A longer hold does nothing more. |
-| Feedback | The result of the action is the only feedback: the main menu appears, the text area goes blank, or the delimiter line appears. There is no beep, no progress mark and no flash. |
-| Short press, repeat and `enter` in a mode screen | Ignored: no state change, no redraw, no sound (section 6.1). |
+| Feedback | The result of the action is the only feedback: the main menu appears, the text area goes blank, the delimiter line appears, the answer goes back one step, or the item plays again (Receiving, long `enter`). There is no beep, no progress mark and no flash. |
+| Short press, repeat and `enter` in a mode screen | Ignored: no state change, no redraw, no sound (section 6.1). Exceptions: the Receiving keyboard (section 6.8) and the session end screen (section 5.15). |
 
 How the user learns it: hold the button until the screen changes, then release. The screen changes during the hold.
 This tells the user the moment to let go.
@@ -779,8 +1466,8 @@ Special cases:
 
 ### 6.7 Keyer from the user's view (decision plan, UX-33 to UX-35, UX-37)
 
-The keyer runs only in Free Input. The mode start starts the keyer, and the mode end stops it. At the mode start the
-keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` once. Free Input also reads `Prosigns`
+The keyer runs only in Free Input and in a Sending session (section 5.13.4). The mode start starts the keyer, and
+the mode end stops it. In Sending, the session end screen also stops it. At the mode start the keyer reads `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone` once. Free Input also reads `Prosigns`
 once at the mode start (UX-38). The settings cannot change while the mode is open. `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` have no effect on Free Input.
 
 #### Key Type
@@ -800,6 +1487,8 @@ The exact state machine is in `keyer_spec.md` (owner `architector`).
 - Word space: when the pause reaches 5 units of the `TX Eff. Speed` spacing, a word space follows. If
   `TX Eff. Speed` equals `TX Speed`, this is 5 dits. A lower `TX Eff. Speed` needs a longer pause. The exact formula
   is in `keyer_spec.md`.
+- In a Sending word item, this word space is an error: the pause between two characters of a word must stay
+  shorter (section 5.13.1, UX-52). Free Input and Sending use the same threshold.
 - User decision: the thresholds come from the settings. The decoder does not adapt to the speed of the user.
 
 #### Sidetone
@@ -822,6 +1511,10 @@ has no effect.
 
 #### P3.2 ownership (decision UX-33)
 
+The same rules apply to a Sending session (section 5.13.4). There, "mode start" also means the start of a next
+session from the end screen, and "mode end" also means the session end screen. In Receiving, P3.2 stays with the
+menu: the tip is `enter` (a tap selects the right run, a hold of 800 ms replays).
+
 - Mode start: the `enter` press that opens Free Input gives no element and no tone. This is true for the `enter`
   button and for a dit lever that acts as `enter`. At the mode start, a closed contact stays ignored until it
   opens. After that it keys as normal. The ring contact follows the same rule, so a mono plug (ring shorted to
@@ -830,6 +1523,115 @@ has no effect.
 - Mode end: after the long `menu/back`, the menu gets P3.2 back. A contact that is held at that moment gives no
   `enter` until it opens and closes again. So a held lever never opens a menu item.
 - One closure of P3.2 is never both `enter` and a key element.
+
+### 6.8 Receiving buttons (decision UX-43, UX-51)
+
+Receiving uses short presses as keyboard keys. This is the one mode screen where short presses act. UX-43 refines
+UX-24 for Receiving. UX-51 gives the keyboard all four buttons (user decision 2026-10-06).
+
+Tap mode (`training_spec.md` D-T7, D-T28, `buttons_set_tap_mode()`): the Receiving screen turns it on for the whole
+session, the end screen included. In tap mode, all four buttons work as follows: `menu/back`, `prev`, `next` and
+`enter`. `enter` includes the paddle tip (P3.2):
+
+- A tap: a release before `BUTTONS_LONG_PRESS_MS` (800 ms after the press event). The press event comes at the
+  debounced release, 20 ms after the pin opens.
+- A hold: only the long event, at 800 ms. Nothing at the release.
+- No repeat events.
+- A press that started before tap mode went on gives no event. So the `enter` press that opens Receiving from the
+  menu gives no tap at its release and no long `enter` after 800 ms.
+- Long events due in the same poll come in the order `menu/back`, `enter`, `prev`, `next` (section 6.2).
+
+| Event | Start pause, blank moment, result | Item (playing or waiting) | End screen |
+| --- | --- | --- | --- |
+| `menu/back` tap | Nothing | Run 0, the left run (section 5.12.1) | Main menu, cursor on `Receiving` |
+| `prev` tap | Nothing | Run 1 | Nothing |
+| `next` tap | Nothing | Run 2 | Nothing |
+| `enter` tap (or a short tip closure) | Nothing | Run 3, the right run | Next session |
+| Long `menu/back` | Exit | Exit | Main menu, cursor on `Receiving` |
+| Long `enter` (or a tip closure of 800 ms) | Nothing | Replay: the item plays again from its start | Nothing |
+| Long `prev` | Nothing | Undo one step | Nothing |
+| Long `next` | Nothing | Nothing | Nothing |
+
+"Nothing" means: no state change, no redraw, no sound. An ignored event is not kept for later. A tap of an empty
+run (section 5.12.1) is also nothing.
+
+Why tap mode:
+
+- A long `prev` and a long `menu/back` never act as a group press first. Without it, the press of a hold narrows a
+  group or picks a character. A pick in the last slot then starts a check before the long event comes.
+- A long `enter` never selects the right run first. Without tap mode, the press of the hold selects the run, and
+  the replay comes only after it.
+- The check can come at once at the last pick. No wait for a possible long event is necessary.
+- The cost: a tap acts at the release, about 0.1 s later than at the press. Device check D-30 checks that a tap
+  still feels prompt.
+
+Replay (long `enter`):
+
+- At 800 ms of the hold, the item plays again from its start. A running playback starts again. The release does
+  nothing.
+- The picks, the current group, the labels and the block stay. Replays are free (section 5.12.2).
+- The replay is the only feedback: the screen does not change. The user lets go when the playback starts again.
+- A replay is possible in Item only: playing or waiting, in every attempt.
+
+Undo (long `prev`, `training_spec.md` section 12.2):
+
+1. The current group is a run inside the set: step out one level. The current group becomes the run that it came
+   from, and the labels of that level show.
+2. Else, at least one slot is filled: the last filled slot becomes empty. The block moves to it.
+3. Else: nothing.
+
+The undo does not change the playback. One long `prev` is one step. To step out of two levels, the user holds `prev`
+two times.
+
+Exit (long `menu/back`):
+
+- The player stops (a sounding tone falls in 8 ms). The session is dropped: the level does not change and the
+  EEPROM is not accessed.
+- The main menu shows with the cursor on `Receiving`. Tap mode goes off.
+
+### 6.9 Sending buttons (decision UX-24, UX-45)
+
+- Tap mode stays off in Sending.
+- In all states of a session except the end screen, short presses and repeats do nothing (UX-24). `enter` gives no
+  event: the keyer owns P3.2 and the `enter` button keys like the tip (section 5.13.4).
+- Long `menu/back`: the keyer stops (a sounding tone falls in 8 ms), the session is dropped, the main menu shows with
+  the cursor on `Sending`. The level does not change and the EEPROM is not accessed.
+- Long `prev` and long `next`: nothing. Sending has no clear and no delimiter.
+- End screen: `enter` or the tip starts the next session. A `menu/back` press opens the main menu, cursor on
+  `Sending`. `prev`, `next` and their long events do nothing.
+
+### 6.10 Training timing and layout constants (decision UX-39 to UX-52)
+
+Names for the interface contract (`training_spec.md` section 5.10, U-1 to U-6). All times count on the 1 ms tick
+with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one main-loop pass and the LCD transfer
+(unverified, D-29).
+
+| Name | Value | Use |
+| --- | --- | --- |
+| `BUTTONS_LONG_PRESS_MS` | 800 ms | Existing (UX-23). Long `menu/back`, long `prev` and long `enter` (Receiving) in the training screens. The tap limit in tap mode, also for a tip closure. |
+| `TRAINING_START_MS` | 1000 ms | From the session start (mode entry or `Next`) to the first item. Both modes. |
+| `TRAINING_CORRECT_MS` | 600 ms | `Correct` on the screen. |
+| `TRAINING_WRONG_MS` | 1200 ms | `Wrong` after attempt 1 or 2, then the retry. |
+| `TRAINING_FAILED_MS` | 2500 ms | The answer after attempt 3. Receiving: counts from the end of the answer playback. |
+| `TRAINING_RECEIVING_GAP_MS` | 500 ms | The blank moment before the next Receiving item. |
+| `TRAINING_SENDING_GAP_MS` | 300 ms | The blank moment before the next Sending item. |
+| `TX_CODE_MAX_MARKS` | 12 | Marks drawn per character in row 7. |
+| Pause limit in a Sending word | 5 Farnsworth units at `TX Eff. Speed` (`KEYER_WORD_GAP_UNITS`, existing) | The WORD_GAP event. No new constant (UX-52). |
+
+| Name | Value | Use |
+| --- | --- | --- |
+| Header columns | tag 0, speed 3, level 9, item ends at 24 | Section 5.11.1. |
+| Status row | 1 | 5 x 8, centered. |
+| `TRAINING_ITEM_Y` | 24 | Cell top of the item line, `FONTS_ID_8X16`. |
+| Character item x | `64 - 4m` | `m` = cells of the text, 1 to 6. |
+| Word item x | `68 - 8n + 16k` | `n` = 2 to 8 characters, `k` = 0 to `n - 1`. |
+| Block | x to x + 6, y 26-39 | Receiving, next slot. |
+| Bar | x to x + 6, y 38-39 | Receiving empty slot, Sending next character of a word. |
+| Answer code row | 5 | Sending, centered marks. |
+| Key bars | y 55, x 2-26, 30-54, 58-82, 87-126 | Receiving, one above each label field. |
+| Label fields | x 2-26 (5 cells, left), 30-54 (5, centered), 58-82 (5, centered), 87-126 (8, right) | Receiving, row 7, runs 0-3 = `menu/back`, `prev`, `next`, `enter` (section 5.12.1). |
+| Marks | dot 2 x 2, dash 6 x 2, rows `8r + 3` and `8r + 4`, gap 3 | Row 7 from x 2, row 5 centered. |
+| End screen | score row 2, result row 3, level row 4, `Not saved` row 5, `Next` row 7 (band x 47-76, y 57-63) | Section 5.15. |
 
 ## 7. Feedback
 
@@ -852,6 +1654,17 @@ has no effect.
 | Save on leaving Settings | Nothing extra. The main menu appears with the cursor on `Settings`. The erase and write take about 5-7 ms (datasheet: erase 4-6 ms, 15 bytes x 40 us), which the user does not notice. | UX-15 |
 | Save not needed | Same screen, no EEPROM access. A save needs two conditions: at least one edit step changed a value during this Settings visit, and the current values differ from the stored record. A value changed and changed back does not cause a write. A visit without an edit step does not cause a write, also after a display recovery start. | UX-15 |
 | Reset Statistics `Yes` | The message screen `Statistics reset` / `OK`. | UX-8 |
+| Receiving group tap | At the release of any of the four buttons (also a short tip closure for `enter`): the labels change (narrow), or the character appears in its slot and the block moves (pick). An empty run: nothing. | UX-42, UX-43, UX-51 |
+| Receiving last pick | The answer is complete, the block goes away, and the result shows at once. | UX-43 |
+| Receiving long `prev` | Nothing during the hold. At 800 ms the answer goes back one step. | UX-43 |
+| Receiving replay | At 800 ms of a long `enter` (or of a tip closure), the item plays again. The screen does not change. | UX-44, UX-51 |
+| Sending element | The sidetone at once. With `Show CW Code` = `On`, a dot or dash mark in row 7 at the end of the element. | UX-45, UX-50 |
+| Sending correct character in a word | The bar moves to the next character. No text, no delay. | UX-45 |
+| Result | `Correct` (600 ms), `Wrong`, `Wrong: N` or `Wrong: pause too long` (1200 ms), or the answer (2500 ms) in the status line. No sound, except the answer playback in Receiving. | UX-46, UX-52 |
+| Sending pause too long in a word | `Wrong: pause too long` in the status line. The bar stays under the next character. It uses an attempt. | UX-52 |
+| Retry | `Try 2 of 3` or `Try 3 of 3`. The item looks fresh: empty slots (Receiving), or the bar on the first character and row 7 off (Sending). | UX-46, UX-52 |
+| Next item | The item line goes blank (500 ms in Receiving, 300 ms in Sending), and the header item number changes. Then the next item appears. | UX-46 |
+| Session end | The end screen with the score, the result and the level. `Not saved` after a failed save. | UX-47 |
 | Response time | Target: the change is visible within 100 ms after the press event (unverified, D-6). A redraw can be slower than 80 ms during auto-repeat. Then the screen skips an intermediate value, but no step is lost. The value advances once per event, and the last value shows within 100 ms after release. | UX-16 |
 
 ## 8. Start-up, faults and recovery
@@ -873,6 +1686,14 @@ has no effect.
 | F-13 | No plug, or the key is not connected. | `Free Input` and a blank text area. No sound. | The keyer idles. The `enter` button still keys the tip. | Connect the key. |
 | F-14 | First power-on after the update from the earlier firmware: a valid record of layout version 1. | The main menu, no message. All earlier settings stay. `Prosigns` shows `Both`. Free Input shows AR, BT, KN and AS in the `Both` text. | The record loads. `Prosigns` takes its default. Nothing is written at start-up. The first save after an edit step writes the new layout (version 2) with all current values (`keyer_spec.md` section 17.4.2). | None needed. The user can choose another value in Settings. |
 | F-15 | Return to the earlier firmware after a save with this firmware. | The earlier firmware shows all its defaults, no message. | The earlier firmware does not accept layout version 2. It uses F-2. | The user sets the values again. The release notes say this (`technical-writer`). |
+| F-16 | Progress save fails after a passed session (read-back mismatch, CMD_FAIL or low supply). | The end screen shows `Not saved` in row 5. The new level shows in row 4. | The new level stays in RAM. The next session uses it (plan). | The next passed session tries the save again. If the user switches off first, the next start depends on the failed step. After a failed erase, it uses the earlier stored levels. After a failed write that followed the erase, it uses level 1 everywhere (F-17). |
+| F-17 | Empty, erased or bad progress record (wrong magic, version or CRC). | Level 1 in both modes at every speed. No message. | Each level starts at index 0 (`training_spec.md`). | None needed. Same reason as UX-17. |
+| F-18 | Power loss during a training session. | After power-on, the main menu. The session is gone. | The progress changes only at a passed session end. | Start the mode again. The level is the stored one. |
+| F-19 | Power loss during the progress save. | After power-on: level 1 everywhere (F-17), or the old levels. | The save erases page 1, then writes the record. | The user trains the levels again. The risk window is about 6 ms per passed session. |
+| F-20 | A plug is inserted or removed in Receiving. | Maybe one `enter` tap: in Item, the right run is selected (the labels narrow, or a character shows in its slot). In the last slot, the check can come and use an attempt. On the end screen, the next session can start. | A short tip closure is an `enter` tap (tap mode, section 6.4). A closure of 800 ms or longer is a long `enter` (a free replay). Unverified: D-5. | A long `prev` steps out of a narrowed group or takes a pick back. A check has no undo. Accepted by the user (`training_spec.md` D-T27, R-T7). The manual says: insert the plug before you open Receiving. |
+| F-21 | A plug is inserted or removed in Sending, or a mono plug closes the ring after the start. | As F-9 and F-10: a tone, extra elements, maybe a wrong character that uses an attempt. | The keyer sees a real contact. | Long `menu/back` and a new start. The manual says: insert the plug first. |
+| F-22 | Volume at its minimum in Receiving. | The screen works, but the playback is silent. | The player plays as usual. | Turn up the volume (C-7), then a long `enter` replays the item. |
+| F-23 | `Reset Statistics` `Yes`, and the progress save fails. | The message `Not saved` (section 5.8) in place of `Statistics reset`. | If the erase failed, the stored record keeps the old levels. If a write after the erase failed, no valid record remains, and after a power cycle every level is 1 (F-17). | `OK` goes back to Settings. The user can try the reset again. After a power cycle, the stored levels apply, or level 1 everywhere. |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
@@ -958,7 +1779,7 @@ debounced press and release.
 | V-16 | Open Settings, change nothing, go back to the main menu. Then change Tone 600 -> 610 -> 600 and go back. | No EEPROM erase or write in both cases. |
 | V-17 | Edit Tone 600 -> 620. Press menu/back once. | Still on `Settings > CW`, `SEL(1)`, `620 Hz`. No EEPROM access. |
 | V-18 | Main menu: press menu/back. | Framebuffer unchanged, no dirty page. |
-| V-19 | Main menu: enter on Receiving. Press prev, next, enter, menu/back. Long prev, long next. Then long menu/back. | Title `Receiving`, `TEXT(3,8,"Not ready")`, `PLAIN(1)`..`PLAIN(7)`. The short presses and the long prev and next change nothing: framebuffer unchanged, no dirty page. Long menu/back: main menu with `SEL(1)` on `Receiving`. Same for `Sending` (`SEL(2)` after back). |
+| V-19 | Main menu: enter on Receiving. Long menu/back during the start pause. Then enter on Sending. Long menu/back. | Receiving opens as V-90. After the long press: main menu with `SEL(1)` on `Receiving`. The fake player was never started. Sending opens as V-110. After the long press: main menu with `SEL(2)` on `Sending`, the keyer stopped once. No EEPROM erase or write. |
 | V-20 | Settings: enter on Reset Statistics. Enter. | Dialog: title `Reset Statistics`, `TEXT(3,4,"Reset statistics?")`, `BUTTON(37,56)` with `No` inverted, `Yes` normal. After enter: Settings, `SEL(6)` on `Reset Statistics`. `stats_reset()` not called. |
 | V-21 | Open the dialog. Next. Next. Enter. Enter. | `BUTTON(67,91)` after the first next. The second next changes nothing. First enter: `stats_reset()` called once. `TEXT(3,4,"Statistics reset")`, `BUTTON(52,71)` with `OK`. Second enter: Settings, `SEL(6)`. |
 | V-22 | Open the dialog. Next. Menu/back. | Same as No: Settings, `stats_reset()` not called. |
@@ -1011,8 +1832,7 @@ Probes and steps:
 | V-49 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: next`. `AT 10200: enter`. `AT 11000: enter`. | `ADD[tone(610), on(true)]` at 10100. `ADD[on(false)]` at 10200. `ADD[tone(610), on(true)]` at 11000: a new edit plays the stored current value. |
 | V-50 | `CWTONE(600)`. `AT 65400: enter`. `POLL 65401..65535`, then `POLL 0..163`. `AT 164: poll`. | `ADD[tone(600), on(true)]` at 65400. `ADD[]` up to 163. `ADD[on(false)]` at 164. |
 | V-51 | `CWTONE(600)`. `AT 10000: enter`. At 10100: `menu_handle(next)`, `menu_handle(REPEAT(next))`, then one `menu_poll()`. `POLL 10101..10399`. `AT 10400: poll`. | `ADD[tone(610), on(true), tone(620), on(true)]` at 10100. `ADD[]` up to 10399. `ADD[on(false)]` at 10400. |
-| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open the Receiving and Sending placeholders and give all four buttons short presses, and `menu/back`, `prev`
-and `next` long presses there. 3. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 4. Edit each value and choice item except Tone up to both limits, with presses and repeats. 5. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 6. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. |
+| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 3. Edit each value and choice item except Tone up to both limits, with presses and repeats. 4. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 5. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. The training modes have their own sound tests (section 9.4). |
 | V-53 | Recovery start as V-33, then reset the fake sidetone log. Release P0.2, close the message with `menu/back`. `POLL` for 1000 ms. | `SLOG` is empty. |
 
 ### 9.2 Free Input and long-press tests (sections 5.9, 6.6, 6.7)
@@ -1078,6 +1898,103 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | V-88 | Power-on, empty EEPROM. `FI`. AR. Test only: `settings_set(SETTINGS_ID_PROSIGN_STYLE, 0)`. AR. `LONG(menu)`. Then `FI` again. AR. Then `LONG(menu)`, set `Prosigns` = `Prosign` in Settings, leave Settings, `FI`, AR. | First mode: `TEXT(1,0,"<AR/+><AR/+>")`: the change during the mode has no effect. Second mode: `TEXT(1,0,"+")`. Third mode: `TEXT(1,0,"<AR>")`. (AC-P17) |
 | V-89 | Run V-54 to V-61 and V-63 to V-73 once for each value of `Prosigns` (a record with that value). | The same results as with the default for every value. These tests key no AR, BT, KN or AS. (AC-P20) |
 
+### 9.4 Training mode tests (sections 5.11 to 5.15, 6.8 to 6.10)
+
+These tests use the probes of sections 9 and 9.2, a fake player, the fake keyer event source and a fake training
+source. `architector` defines the fakes in `training_spec.md`. The tests check what the screen shows and which calls
+the modes make.
+
+Notation:
+
+- `RX(set, kind, items)`: power-on with an empty fake EEPROM. The fake training source gives the keyboard set `set`
+  (in keyboard order), the session kind (`chars` or `words`) and the items `items` in order. Move the cursor to
+  `Receiving`, press `enter` at t = 0. `set` = `ALL` means the 43 characters of the Koch set. `TX(...)` does the same
+  for `Sending`. The fake training source is `fake_koch_item`, and the keyboard set and the kind come from the level
+  that `progress_fixture_write()` sets (`training_spec.md` section 15.2).
+- `L`, `M`, `R`, `E`: a tap (press and release before 800 ms) of `menu/back`, `prev`, `next`, `enter`. In Receiving
+  they select the runs 0, 1, 2 and 3 from the left (section 5.12.1). The letters `L`, `M` and `R` keep their earlier
+  names: `M` is `prev` and `R` is `next`, so `R` is not the right run. `E` is the right run. In Receiving, tap mode
+  gives the event at the debounced release. `AT t: L` means that the event comes at t.
+- `LONG(X)`: as in section 9.2. `LONG(E)` holds `enter`. "Hold `X` from t" means: the press event of `X` comes at t,
+  and the long event at t + 800.
+- `TIP(t, d)`: P3.2 (the paddle tip and the `enter` button) low from t for d ms, then high. The press event comes at
+  t + 20. For d < 800, the tap comes at the release, t + d + 20. For d >= 800, the long `enter` comes at t + 820, and
+  nothing comes at the release (`training_spec.md` D-T22).
+- `AT t:` as in section 9.1. `t` is in ms after the event that starts the session.
+- `PLOG`: the ordered call log of the fake player: `play("K")`, `stop()`. `PIDLE(t)`: the fake player becomes idle at
+  `t`.
+- `HDR(s)`: `TITLE` holds and `TEXT(0,0,s,inv)`.
+- `STATUS(s)`: `TEXT(1, floor((25 - len(s)) / 2), s)`, and every other cell of row 1 is blank. `STATUS()`: all pixels
+  of row 1 are off.
+- `BIG(x, s)`: the cells from x, cell top y = 24, match a reference rendering of `s` in `FONTS_ID_8X16`, normal video.
+  For a word, use one `BIG` per character.
+- `BLOCK(x)`: pixels x to x + 6, y 26-39 are on. Pixels (x - 1, 30) and (x + 7, 30) are off.
+- `BAR(x)`: pixels x to x + 6, y 38-39 are on. Pixels (x - 1, 38) and (x + 7, 38) are off.
+- `ITEMLINE()`: only the listed `BIG`, `BLOCK` and `BAR` pixels are on in y 24-39.
+- `KEYS(a, b, c, d)`: the four labels of section 5.12.1 in row 7, cell top y 56, 5 x 8 font, normal video. Each
+  string matches a reference rendering from its pixel x: `a` at x 2, `b` at x 30 + floor(5 * (5 - len(b)) / 2), `c`
+  at x 58 + floor(5 * (5 - len(c)) / 2), `d` at x 127 - 5 * len(d). An empty string means no ink in that field. All
+  other pixels of row 7 are off. `KEYS` includes `KEYBARS`.
+- `KEYBARS`: pixels (x, 55) are on for x 2-26, 30-54, 58-82 and 87-126. Pixels (x, 55) are off for x 0, 1, 27-29,
+  55-57, 83-86 and 127. All other pixels of row 6 are off.
+- "Top labels" means `KEYS` of the whole set.
+- `MARKS(r, x0, p)`: for each element of the pattern `p`, from x0: a dot is 2 px wide, a dash 6 px, with a gap of
+  3 px. The marks are on in y `8r + 3` and `8r + 4`. All other pixels of row r are off.
+- `BODYOFF(a, b)`: all pixels of rows a to b are off.
+- `NEXTBTN`: `TEXT(7,10,"Next",inv)`. Pixels (47, y) and (76, y) are on for y 57-63. Pixels (46, 60) and (77, 60) are
+  off. Pixels with y = 56 are off for x 47-76.
+- Global rule for V-90 to V-136: in rows 1-7, the pixels with x = 0, 1 and 127 are off.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-90 | `RX("KM", chars, "K")`. `POLL 1..999`. `AT 1000: poll`. | `HDR("RX 32/32 L1          1/50")` from t = 0. Up to 999: `STATUS()`, `BODYOFF(2,5)`, `KEYS("K","M","","")`, `PLOG` empty. At 1000: `BLOCK(60)`, `ITEMLINE()`, `play("K")` at 32 WPM and 32 WPM. Tap mode is on. |
+| V-91 | Continue V-90. `PIDLE(1500)`. `AT 2000: L`. `POLL 2001..2599`. `AT 2600: poll`. `POLL 2601..3099`. `AT 3100: poll`. | At 2000: `BIG(60,"K")`, no block, `STATUS("Correct")`, `KEYS("K","M","","")`. Unchanged up to 2599. At 2600: `BODYOFF(1,5)`, `HDR("RX 32/32 L1          2/50")`, `KEYS` unchanged. At 3100: `BLOCK(60)` and `play()` of item 2. |
+| V-92 | `RX(ALL, chars, "M")`, `Prosigns` = `Both`. After the item starts: `M`, `L`, `M`. | Start: `KEYS("A-K","L-V","W-6","7-<AR>")`. After `M`: `KEYS("LMN","OPQ","RST","UV")`. After `L`: `KEYS("L","M","N","")`. After `M`: `BIG(60,"M")`, `STATUS("Correct")` at that event, top labels. Three taps for one pick. |
+| V-93 | For each `Prosigns` value, `RX(ALL, chars, ...)`, three test runs: `E`, `E`, `M`. `E`, `E`, `L`. `E`, `R`, `M`. | Start: `KEYS("A-K","L-V","W-6","7-<AR>")` for `Both` and `Prosign`, `KEYS("A-K","L-V","W-6","7-+")` for `Punctuation`. After the first `E`: `KEYS("789",".,?","/<BT>","<SK><AR>")` for `Both` and `Prosign` (`<SK><AR>` at x 87), `KEYS("789",".,?","/=","<SK>+")` for `Punctuation`. After the second `E`: `KEYS("<SK>","<AR>","","")`, `KEYS("<SK>","<AR>","","")`, `KEYS("<SK>","+","","")`. First run, `M`: `BIG(40,"<AR/+>")`, `BIG(48,"<AR>")`, `BIG(60,"+")`. Second run, `L`: `BIG(48,"<SK>")` for every value. Third run, after `R`: `KEYS("/","<BT>","","")` for `Both` and `Prosign`, `KEYS("/","=","","")` for `Punctuation`. Then `M`: `BIG(40,"<BT/=>")`, `BIG(48,"<BT>")`, `BIG(60,"=")`. |
+| V-94 | Run 1: `RX("KMRSUAPTLOWI.", words, "KMRS")`. After the item starts: `L`, `R`. `LONG(M)`. `L`. `LONG(M)`. `LONG(M)`. Run 2: `RX(ALL, chars, "M")`. After the item starts: `M`, `L`. `LONG(M)`. `LONG(M)`. `LONG(M)`. | Run 1. Start: `KEYS("AIKL","MOP","RST","UW.")`, `BLOCK(36)`, `BAR(52)`, `BAR(68)`, `BAR(84)`. After `L`: `KEYS("A","I","K","L")`. After `R`: `BIG(36,"K")`, `BLOCK(52)`, `BAR(68)`, `BAR(84)`, top labels. First `LONG(M)`: no change up to 800 ms, then `BLOCK(36)`, three bars, top labels. After `L`: `KEYS("A","I","K","L")`. Second `LONG(M)`: top labels, the slots unchanged. Third: nothing changes. Run 2. After `M`, `L`: `KEYS("L","M","N","")`. First `LONG(M)`: `KEYS("LMN","OPQ","RST","UV")`. Second: `KEYS("A-K","L-V","W-6","7-<AR>")`. Third: nothing changes. `BLOCK(60)` all the time. No check in both runs. |
+| V-95 | `RX("KMR", chars, "M")`. After the item starts, hold `prev` for 1000 ms and release. `POLL` up to 3000 ms after the press. Then `M`. | During and after the hold: `BLOCK(60)`, `STATUS()`, `KEYS("K","M","R","")`. No pick, no check, no attempt. After `M`: `BIG(60,"M")`, `STATUS("Correct")` at that event. The item counts as correct on the first attempt. |
+| V-96 | `RX(ALL, chars, ...)`. After the item starts, hold `next` for 2000 ms and release. Then hold `menu/back` with a debounced hold of 790 ms. | `next`: nothing changes, also at the release: no repeat, no tap, and the long `next` does nothing. `menu/back`: at its release, `KEYS("ABC","DEF","GHI","JK")`. Still Receiving. |
+| V-97 | `RX("KM", chars, "K")`. `AT 500: E` (start pause). Hold `enter` from 1200 (playing) for 1000 ms. `PIDLE(2600)`. Hold `enter` from 3000 (waiting) for 900 ms. `PIDLE(4400)`. P5.5 low at 4500 for 100 ms, then high. `AT 5000: L`. | `PLOG`: `play("K")` at 1000, at 2000 (a restart during the playback: the long `enter` of the hold from 1200) and at 3800. Nothing from the tap at 500, nothing at the releases (2200, 3900), nothing from P5.5. The `enter` run is empty (2 characters), and the long `enter` never selects it. The replays do not change the screen: `BLOCK(60)`, `KEYS("K","M","","")`, `STATUS()` up to 5000. At 5000: `BIG(60,"K")`, `STATUS("Correct")`. The mode makes no sidetone call itself. |
+| V-98 | `RX("KM", chars, "K")`. After the item starts and plays: `AT t: M`. | At t: `BIG(60,"M")`, `STATUS("Wrong")`. At t + 1200: `STATUS("Try 2 of 3")`, `BLOCK(60)`, `play("K")`. Header still `1/50`. |
+| V-99 | Continue V-98. `M` (attempt 2). Then `AT u: M` (attempt 3). `PIDLE(P)` for the answer playback. | Attempt 2: `STATUS("Wrong")`, after 1200 ms `STATUS("Try 3 of 3")`. At u: `STATUS("Wrong. The answer is:")`, `BIG(60,"K")`, no block, `play("K")`. At P + 2499: unchanged. At P + 2500: `BODYOFF(1,5)`, header `2/50`. At P + 3000: `BLOCK(60)`, `play()` of item 2. |
+| V-100 | `RX("KM", chars, "K", "K")`. Item 1: `M`, then after the retry `L`. | `STATUS("Wrong")`, then `STATUS("Try 2 of 3")`, then `STATUS("Correct")` at the `L` event. Then the blank moment and item 2 (V-91). The score does not count item 1. |
+| V-101 | `RX("KMRSUAPTLOWI.", words, "KMRS")`. Pick K, M, R, S. | After each pick: the glyph at 36, 52, 68, 84 in turn, the block on the next slot, bars on the others. At the event of the 4th pick: four glyphs, no block, no bar, `STATUS("Correct")`. |
+| V-102 | `RX(ALL, words, ...)`. | `KEYS("A-J","K-T","U-3","4-/")`: the word keyboard has 40 characters and no prosign (UX-48). After `E`: `KEYS("456","789",".,","?/")`. |
+| V-103 | `RX("KM", chars, "K", "K")`. Pick K (`L`) at t. During `Correct` and the blank moment, each before t + 1100: `L`, `M`, `R`, `E`, `LONG(M)`, `LONG(E)`. | No change of the screen from these events, and no player call. At t + 1100: item 2 with `BLOCK(60)` and one `play("K")`. No pick shows in item 2. |
+| V-104 | `RX("KM", chars, "K")`. Hold `menu/back` from 1200 (playing). New run: hold `menu/back` from 100 (start pause). | First run: no change from 1200 to 1999. At 2000: `stop()` in `PLOG`, main menu, `SEL(1)` on `Receiving`, tap mode off. Second run: main menu at 900, `PLOG` empty. No EEPROM erase or write in both runs. The stored level stays. |
+| V-105 | `RX("KM", chars, 50 items)`. Answer 45 items right on the first attempt. Answer 5 items wrong once, then right. Then `E`. | End screen right after the last `Correct` (no blank moment): `HDR("RX 32/32 L1         50/50")`, `TEXT(2,7,"Score 45/50")`, `TEXT(3,9,"Passed")`, `TEXT(4,6,"New level L2")`, `BLANK(5)`, `BLANK(6)`, `NEXTBTN`. One erase of page 1 and one record write. Nothing at the press of `E`. At its release: `HDR("RX 32/32 L2          1/50")` and the start pause of V-90. |
+| V-106 | As V-105 with 44 first-attempt correct items. | `TEXT(2,7,"Score 44/50")`, `TEXT(3,3,"Not passed, need 45")`, `TEXT(4,5,"Repeat level L1")`, `NEXTBTN`. No EEPROM erase or write. After `E`: header `L1`. |
+| V-107 | As V-105 with a fake IAP that fails the write. Then `E`. Then re-init from the fake EEPROM. | `TEXT(4,6,"New level L2")`, `TEXT(5,8,"Not saved")`. After `E`: header `L2`. After re-init: Receiving starts at `L1`. |
+| V-108 | End screen of V-105. `M`, `R`, a held `next`, `LONG(M)`, `LONG(R)`, `LONG(E)`, `TIP(t, 1000)`. Then `L`. Repeat with `TX(...)` and a `menu/back` press. Then a Sending end screen and P3.2 low 100 ms, then high. | The first events change nothing: no redraw, no player call, no new session. `LONG(E)` and the tip hold give nothing at 800 ms and nothing at the release. `L`: main menu, `SEL(1)` on `Receiving`. Sending: `SEL(2)` on `Sending`. P3.2: a new Sending session starts at the press (tap mode is off in Sending). |
+| V-109 | Fake progress: level index 65534 for Receiving at 50 WPM. RX Speed and RX Eff. Speed 50. A word session of 100 words. Answer 6 items. Repeat with index 65535. | `HDR("RX 50/50 L65535     1/100")`, then `HDR("RX 50/50 L65535     7/100")`. Columns 15-19 are blank. Index 65535 shows the same text (D-T5). |
+| V-110 | `TX("KM", chars, "K")` with P3.2 held low from the `enter` press for 2 s. | `HDR("TX 20/20 L1          1/50")`. Up to 999: `BODYOFF(1,7)`. At 1000: `BIG(60,"K")`, `ITEMLINE()` (no bar), `STATUS()`, `BODYOFF(5,7)`. The keyer starts once with `Iambic B`, `Normal`, 20 WPM, 20 WPM. No DIT event and no tone from the held contact. |
+| V-111 | `TX("KM", chars, "K", "K")`. After the item shows: `KEY("K")`, the CHAR_GAP at t. | At t: `STATUS("Correct")`, `BIG(60,"K")`. At t + 600: `BODYOFF(1,7)`, `HDR("TX 20/20 L1          2/50")`. At t + 899: still `BODYOFF(1,7)`. At t + 900: `BIG(60,"K")` (item 2, the same character). |
+| V-112 | `TX("KM", chars, "K")`, `Show CW Code` = `On`. After the item shows: `KEYP("-.")` with the CHAR_GAP at t. At t + 1300: `KEY("K")`. | After the first DAH: `MARKS(7,2,"-")`. At t: `STATUS("Wrong: N")`, `MARKS(7,2,"-.")`, `BIG(60,"K")`. At t + 1199: unchanged, also `MARKS(7,2,"-.")`. At t + 1200: `STATUS("Try 2 of 3")`, `BODYOFF(7,7)` (UX-52), `BIG(60,"K")`, `BODYOFF(5,5)`. At the first DAH of K: `MARKS(7,2,"-")`. At its CHAR_GAP: `STATUS("Correct")`, `MARKS(7,2,"-.-")`. |
+| V-113 | `TX("KM", chars, "K", "M")`. Three times `KEYP("-.")`, each after the retry starts. | At each of the two retries: `BODYOFF(7,7)`, then the marks of the new attempt from x 2. Third CHAR_GAP at t: `STATUS("Wrong: N")`, `MARKS(5,54,"-.-")`, `BIG(60,"K")`. At t + 2500: `BODYOFF(1,7)`, header `2/50`. At t + 2800: `BIG(60,"M")`. |
+| V-114 | As V-112 and V-113 with `Show CW Code` = `Off`. | Row 7 is off in every step. After the third wrong: `MARKS(5,54,"-.-")` all the same. |
+| V-115 | `TX("KM", chars, "K", "M")`. `KEY("K")` with the CHAR_GAP at t. DIT at t + 100, DIT at t + 400. DAH at t + 1000, CHAR_GAP at t + 1100. Then WORD_GAP. Then DIT, OVERFLOW, CHAR_GAP. Then `KEY("M")`. | Item 2 shows at t + 900. The DIT events in the delay, and the DAH and CHAR_GAP after it, give no check: `STATUS()`, no attempt used. WORD_GAP: nothing (a character item, UX-52). OVERFLOW: no check, no attempt, `STATUS()`. `KEY("M")`: `STATUS("Correct")`, and the score counts item 2 as first-attempt correct. |
+| V-116 | `TX("KMRSUAPTLOWI.", words, "KMRS")`, `Show CW Code` = `On` (the default). `KEY("K")`, `KEY("N")` with the CHAR_GAP at t. After the retry: `KEY("K")`, `KEY("M")`, `KEY("R")`, `KEY("S")`. | Start: the glyphs at 36, 52, 68, 84 and `BAR(36)`. After K: `BAR(52)`, `STATUS()`. After N: `STATUS("Wrong: N")`, `BAR(52)`, `MARKS(7,2,"-.")` up to t + 1199. Retry at t + 1200: `STATUS("Try 2 of 3")`, `BAR(36)` (D-T6: the whole word again), `BODYOFF(7,7)` (UX-52). After S: `STATUS("Correct")`, no bar. The score does not count the item. |
+| V-117 | `TX(ALL, chars, AR)` for each `Prosigns` value. `KEYP("-...-")` (BT). After the retry: `KEYP(".-.-.")`. | `Both`: `BIG(40,"<AR/+>")`, `STATUS("Wrong: <BT/=>")`. `Prosign`: `BIG(48,"<AR>")`, `STATUS("Wrong: <BT>")`. `Punctuation`: `BIG(60,"+")`, `STATUS("Wrong: =")`. Then `STATUS("Correct")` for every value. |
+| V-118 | `TX("KM", chars, 50 items)`, all correct. P3.2 low from 100 ms before the last CHAR_GAP, held 2 s after the end screen shows. Release. Press `enter`. | At the end screen: the keyer stops once, the menu `enter` is on. No ENTER event while P3.2 stays low. After the new press: a new session, the keyer starts once, no DIT event from that press. |
+| V-119 | `TX("KM", chars, "K")`. `L`, `M`, `R`, a held `next` (repeats), `LONG(M)`, `LONG(R)`. Then `LONG(L)`. | The first events change nothing: no redraw, no dirty page. `LONG(L)`: the keyer stops once, main menu, `SEL(2)` on `Sending`. No EEPROM erase or write. Tap mode is never on in Sending. |
+| V-120 | `RX(ALL, chars, ...)` with `Prosigns` = `Both`. Test only: `settings_set(SETTINGS_ID_PROSIGN_STYLE, 0)`. Then `LONG(L)` and a new `RX(...)`. | First session: `KEYS("A-K","L-V","W-6","7-<AR>")` stays. New session: `KEYS("A-K","L-V","W-6","7-+")`. |
+| V-121 | Render every training screen of this section, with the longest texts: `Wrong. The answer is:`, `Not passed, need 80`, `Wrong: <KN/(>`, an 8-character word, `<AR/+>`, 12 dash marks, and the labels `<SK><AR>`, `<BT><SK>`, `7-<AR>`, `AEFIJ`. Also render `Wrong: pause too long` (UX-52). | No 5 x 8 text reaches past column 24. Item line pixels are inside x 4-123. Marks are inside x 2-126. Every label is inside its field (section 5.12.1): row 7 pixels in x 27-29, 55-57 and 83-86 are off. `KEYBARS` on every Receiving screen except the end screen. Only ASCII 0x20-0x7E. No sidetone call comes from the training screens other than the player and the keyer. |
+| V-122 | `RX("KMRSUAPTLOWI.", words, "KMRS")`. After the item starts: `L`, `R`, `L`. Hold `enter` for 1000 ms while the item plays. `PIDLE(P)`. Then hold `enter` for 1000 ms (waiting). | Each hold: one `play("KMRS")` at 800 ms of the hold, a restart for the first hold. Nothing at each release. Through both holds: `BIG(36,"K")`, `BLOCK(52)`, `BAR(68)`, `BAR(84)`, `KEYS("A","I","K","L")`, `STATUS()`. The current group and the pick stay. No check, no attempt. |
+| V-123 | `RX("KMRS", chars, "S")`. `TIP(1500, 100)`. New run: `AT 1500: E`. | Start: `KEYS("K","M","R","S")`. Run 1: nothing at 1520 (the press). At 1620: `BIG(60,"S")`, `STATUS("Correct")`, and `PLOG` is `play("S")` at 1000, then `stop()` at 1620. No replay. Run 2: the same result at 1500. |
+| V-124 | `RX("KMRS", chars, "S")`. `TIP(1500, 800)`. `PIDLE(3000)`. `TIP(3500, 700)`. | At 2320: `play("S")` (a restart). Nothing else at 2320, and no pick. Up to 4219: `BLOCK(60)`, `KEYS("K","M","R","S")`, `STATUS()`. At 4220: `BIG(60,"S")`, `STATUS("Correct")`. |
+| V-125 | `RX("KMRS", chars, "S")` with `enter` (P3.2) low from the menu press at t = 0 up to 300. New run: P3.2 low from t = 0 up to 1500. Then `E` at 2000 in both runs. | Run 1: no event at the release. Run 2: no long `enter` at 800 and no event at the release. In both runs: `PLOG` has one `play("S")` at 1000 and no restart. `BLOCK(60)`, `KEYS("K","M","R","S")`, `STATUS()` up to 1999. At 2000: `BIG(60,"S")`, `STATUS("Correct")`. |
+| V-126 | `RX("KM", chars, "K", "K")`. Hold `enter` from 100 for 1000 ms (start pause). `AT t: L` (item 1, correct). Hold `enter` from t + 10 for 1000 ms (long event at t + 810, blank moment). Item 2: `AT u: M` (wrong). Hold `enter` from u + 100 for 1000 ms (long event at u + 900, result). | `PLOG`: `play("K")` at 1000, `stop()` at t, `play("K")` at t + 1100, `stop()` at u, `play("K")` at u + 1200 (the retry). No other call. No screen change from the holds: at t + 810 `BODYOFF(1,5)`, at u + 900 `STATUS("Wrong")`. The end screen case is in V-108. |
+| V-127 | `RX("KM", chars, "K")`. After the item starts: `E`, `R`. Then `L`. New run: `RX("KMR", chars, "K")`. After the item starts: `E`. Then `L`. | Run 1: `KEYS("K","M","","")`. `E` and `R` (empty runs) change nothing: no redraw, no dirty page, no player call. Run 2: `KEYS("K","M","R","")`. `E` changes nothing. In both runs, `L` then gives `BIG(60,"K")`, `STATUS("Correct")`. |
+| V-128 | `TX("KMRSUAPTLOWI.", words, "KMRS")`, `Show CW Code` = `On`. `KEY("K")`, `KEY("M")`. One WORD_GAP at t. `POLL` up to t + 1200. Then `KEY("KMRS")`. | After M: `BAR(68)`, `STATUS()`, `MARKS(7,2,"--")`. At t: `STATUS("Wrong: pause too long")` (start column 2), the glyphs at 36, 52, 68, 84 unchanged, `BAR(68)`, `BODYOFF(5,5)`, `MARKS(7,2,"--")`. At t + 1199: unchanged. At t + 1200: `STATUS("Try 2 of 3")`, `BAR(36)`, `ITEMLINE()`, `BODYOFF(5,5)`, `BODYOFF(7,7)`, header unchanged. After `KEY("KMRS")`: `STATUS("Correct")`. Attempt 1 is used: the score does not count the item. (UX-52) |
+| V-129 | Run 1: `TX("KMRSUAPTLOWI.", words, "KMRS")`. After the item shows: one WORD_GAP. Then `KEY("KMRS")`. Run 2: the same setup. `KEY("K")`, `KEY("N")` with the CHAR_GAP at t. One WORD_GAP at t + 1300 (after the retry, before the first character). Then `KEY("KMRS")`. | Run 1: the WORD_GAP changes nothing: no redraw, no dirty page, `STATUS()`, `BAR(36)`, no attempt. `KEY("KMRS")` gives `STATUS("Correct")`, and the score counts the item as first-attempt correct. Run 2: at t + 1200 `STATUS("Try 2 of 3")`, `BAR(36)`. The WORD_GAP at t + 1300 changes nothing. `KEY("KMRS")` gives `STATUS("Correct")`. One attempt is used, not two. (UX-52) |
+| V-130 | `TX("KMRSUAPTLOWI.", words, "KMRS", "KMRS")`. `KEY("KMRS")` with the last CHAR_GAP at t. One WORD_GAP at t + 180. | At t: `STATUS("Correct")`, no bar. At t + 180: unchanged, no attempt. At t + 600: `BODYOFF(1,7)`, header `2/<n>`. At t + 900: item 2 with `BAR(36)`, `STATUS()`. The score counts item 1 as first-attempt correct. (UX-52) |
+| V-131 | `TX("KMRSUAPTLOWI.", words, "KMRS", "UAPT")`, `Show CW Code` = `On`. Attempt 1: `KEY("K")`, one WORD_GAP. Attempt 2, after the retry: `KEY("K")`, one WORD_GAP. Attempt 3, after the retry: `KEY("KM")`, one WORD_GAP at t. One more WORD_GAP at t + 1000. Repeat with `Show CW Code` = `Off`. | Attempts 1 and 2: `STATUS("Wrong: pause too long")`, `BAR(52)`, `BODYOFF(5,5)`. Then `STATUS("Try 2 of 3")` and `STATUS("Try 3 of 3")`, each with `BAR(36)` and `BODYOFF(7,7)`. At t: `STATUS("Wrong: pause too long")`, `BAR(68)`, `MARKS(5,56,".-.")` (the code of R, the character under the bar), `MARKS(7,2,"--")`. The WORD_GAP at t + 1000 changes nothing. At t + 2499: unchanged. At t + 2500: `BODYOFF(1,7)`, header `2/<n>`. At t + 2800: item 2 `UAPT` with `BAR(36)`. The score does not count item 1. With `Off`: row 7 is off in every step, and `MARKS(5,56,".-.")` shows all the same. (UX-52) |
+| V-132 | `TX("KMRSUAPTLOWI.", words, "KMRS", "KMRS")`. One WORD_GAP at 500 (start pause). Item 1: `KEY("K")`, `KEY("N")` with the CHAR_GAP at t. One WORD_GAP at t + 180 (wrong delay). After the retry: `KEY("KMRS")` with the last CHAR_GAP at u. One WORD_GAP at u + 700 (blank moment). | At 500: no change. At 1000: item 1, `BAR(36)`, `STATUS()`. At t + 180: `STATUS("Wrong: N")` stays, no attempt. At t + 1200: `STATUS("Try 2 of 3")`, not `Try 3 of 3`. At u: `STATUS("Correct")`. At u + 700: `BODYOFF(1,7)` stays. At u + 900: item 2 with `BAR(36)` and `STATUS()`: attempt 1 of item 2. (UX-52) |
+| V-133 | Part A (mode, fake keyer): `TX("KMRSUAPTLOWI.", words, "KMRS")`. `KEY("K")`, then `KEY("M")` with no WORD_GAP between them (the space stayed below 5 units). Part B (keyer, the AC-K15 test setup of `keyer_spec.md`, real `keyer_service()`, fake pins): `TX Speed` 20, `TX Eff. Speed` 20. A mark, then a space that ends one call before `keyer_word_gap_ticks` (1200 calls), then the next mark. Again with a space that reaches 1200 calls. Repeat at 20 / 10 (4360 calls). | Part A: after K `BAR(52)`, after M `BAR(68)`, `STATUS()` all the time, no attempt. Part B: the short space gives one CHAR_GAP (at 480 calls at 20 / 20) and no WORD_GAP. The long space gives one CHAR_GAP and one WORD_GAP on the call where the space reaches `keyer_word_gap_ticks`. The same at 20 / 10. (UX-52) |
+| V-134 | Run 1: `TX("KM", chars, "K")`, `Show CW Code` = `On`. `KEYP("--")` (M) with the CHAR_GAP at t. DIT at t + 1100 (in the delay). DAH at t + 1300 (after the retry, the same dropped character). CHAR_GAP at t + 1500. Then `KEY("K")`. Run 2: the same with `Show CW Code` = `Off`. | Run 1: at t `STATUS("Wrong: M")`, `MARKS(7,2,"--")`. Up to t + 1199: `MARKS(7,2,"--")`, also after the dropped DIT. At t + 1200: `STATUS("Try 2 of 3")`, `BIG(60,"K")`, `BODYOFF(5,5)`, `BODYOFF(7,7)`. At t + 1300 and t + 1500: row 7 stays off, no check, `STATUS("Try 2 of 3")`. First DAH of K: `MARKS(7,2,"-")`. Its CHAR_GAP: `STATUS("Correct")`, `MARKS(7,2,"-.-")`. Run 2: the same status texts. Rows 5 and 7 are off in every step. (UX-52) |
+| V-135 | `TX("KMRSUAPTLOWI.", words, "KMRS")`. Run 1: `KEY("K")`, DIT, OVERFLOW, CHAR_GAP, WORD_GAP, then `KEY("MRS")`. Run 2: `KEY("K")`, DIT, OVERFLOW, WORD_GAP, then `KEY("M")` (dropped up to its CHAR_GAP), then `KEY("MRS")`. | Both runs: `STATUS()` and `BAR(52)` up to the M that counts. No attempt is used. Run 1: the WORD_GAP after the OVERFLOW does nothing. Run 2: the drop flag is still set, so the WORD_GAP is dropped with the character. Then `STATUS("Correct")`, and the score counts the item as first-attempt correct. (UX-52, D-T16, D-T31) |
+| V-136 | Fixture: a Receiving word session of 10 items. Answer 7 items right on the first attempt, the rest wrong three times. New run: 8 items right. Then a word session of 100 items with 79 right, and a new run with 80 right. Repeat the first two runs with `TX(...)`. | 7 of 10: `TEXT(2,7,"Score 7/10")`, `TEXT(3,3,"Not passed, need 8")`, no EEPROM erase or write. 8 of 10: `TEXT(3,9,"Passed")`, one erase of page 1 and one record write. 79 of 100: `TEXT(2,6,"Score 79/100")`, `TEXT(3,3,"Not passed, need 80")`. 80 of 100: `TEXT(3,9,"Passed")`. Sending gives the same texts. A character session still needs 45 (V-105, V-106). |
+
 ## 10. Durable decisions
 
 | ID | Decision | Reason | Rejected alternatives |
@@ -1087,7 +2004,7 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | UX-3 | Labels and value formats in section 5.3, fixed field width per item. `RX`/`TX` labels decided by the user. | Fits 25 columns with edit markers. Value does not jump while it changes. | Full words `Receive`/`Send` (do not fit with markers). `Recv`/`Send` short forms. |
 | UX-4 | Edit mode = highlight shrinks to the value field, `<`/`>` markers show the possible directions. | Two cues (shape and markers) for the mode. Markers also show the limits. | Blinking value (needs a timer, weak on slow LCD). `*` marker only (too small). |
 | UX-5 | Scroll window of 7, minimum movement, `i/n` in the title bar. | No extra pixels. Testable as text. | Scroll bar (needs a column). |
-| UX-6 | Placeholder: title + `Not ready`. Only a long menu/back works (UX-31). Free Input is no longer a placeholder. | Plan, user. | - |
+| UX-6 | Placeholder: title + `Not ready`. Only a long menu/back works (UX-31). No menu item opens it in this version: Free Input, Receiving and Sending are real modes. | Plan, user. | - |
 | UX-7 | Dialog `No`/`Yes`, focus `No` at every open, menu/back = `No`. | Plan. Also protects against a spurious `enter` from the paddle socket. | - |
 | UX-8 | `Statistics reset` / `OK` message after `Yes` (accepted by the user). | Gives a completion signal for an action that cannot be undone. | Silent return (the user cannot tell `Yes` from `No`). |
 | UX-9 | Control mapping in section 6.1. Menu/back at the root does nothing. In lists, short menu/back goes back. In mode screens, long menu/back exits. | One rule for back in each screen family. No hidden function at the root. | menu/back at the root toggles something (hidden mode). |
@@ -1104,22 +2021,36 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | UX-20 | Tone preview (section 6.5): the tone plays at the start of a Tone edit and after each change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. No other sound in the menu. | User decision (Q-3). The user hears the value that the display shows. The stop on leave ties the sound to the edit: `enter` means "done". Silence at a limit keeps UX-13. | A sound for the Tone row in browse mode (noise during a cursor move). Tone continues after leaving until the timeout (sound without a visible owner). A beep at a limit (a second limit signal next to the marker, and noise during a held repeat). A beep on save or on other items (no user request). |
 | UX-21 | `MENU_TONE_PREVIEW_MS` = 300 ms, counted from the hook that starts or restarts the tone. | 300 ms is one dah at 12 WPM, a familiar length for the user. It is long enough to judge the pitch after the 8 ms rise. Single presses about 0.5 s apart give one separate beep each. It is shorter than the 400 ms repeat delay, so a hold gives one beep, a short silence and then the chain. | 150 ms (short for a low tone, and the rise and fall take 16 ms of it). 1000 ms or continuous while in edit (tiring in long sessions, and the user cannot stop it without leaving the edit). |
 | UX-22 | A repeat event uses the same rule as a press. The retune dip (about 17-19 ms each 80 ms) during a held repeat is accepted. | The user hears the pitch move and can release by ear. The dip is shaped, not a click. No interface change. | Silence during repeats and one tone after the release. There is no release event. It needs a buttons change, or a new hook where `menu_poll()` starts the tone after a pause in the repeats. Sound on press events only (the user cannot hear the final value of a hold without one more step). Sound on every n-th repeat only (the sound lags the display). Glide without silence (needs an ARR change during a ramp, a sidetone interface change). Each alternative needs an `architector` decision. |
-| UX-23 | Long press: 800 ms after the press event, on `menu/back`, `prev` and `next`. One action per press, at the threshold while the button is held. No feedback other than the result of the action. | The user decided on long presses. 800 ms is twice the repeat delay, so a normal press or a short hold never triggers it. Exit and clear destroy the text, so the hold must be deliberate. The screen changes during the hold. This is the signal to release. | 500 ms (close to a slow press, risk of lost text). 1500 ms or more (slow for a frequent clear). Action at the release (the user cannot see that the hold is long enough). A beep (mixes with the sidetone during practice). A progress bar (pixels and code for a 0.8 s wait). A separate value per button (more to learn, no gain). |
-| UX-24 | In mode screens, short presses, repeats and `enter` do nothing. In lists, dialogs and message screens, long events do nothing. | The other hand rests near the buttons during keying: an accidental short press must not lose the text. Each screen family uses one gesture set, so one press never acts twice. | Short menu/back exits Free Input (the user asked for long). Short prev/next scroll the text (needs a text buffer). |
+| UX-23 | UX-51 adds a long `enter` in tap mode (Receiving only). Long press: 800 ms after the press event, on `menu/back`, `prev` and `next`. One action per press, at the threshold while the button is held. No feedback other than the result of the action. | The user decided on long presses. 800 ms is twice the repeat delay, so a normal press or a short hold never triggers it. Exit and clear destroy the text, so the hold must be deliberate. The screen changes during the hold. This is the signal to release. | 500 ms (close to a slow press, risk of lost text). 1500 ms or more (slow for a frequent clear). Action at the release (the user cannot see that the hold is long enough). A beep (mixes with the sidetone during practice). A progress bar (pixels and code for a 0.8 s wait). A separate value per button (more to learn, no gain). |
+| UX-24 | UX-43 and UX-47 refine this decision: the Receiving keyboard and the session end screen act on short presses. In mode screens, short presses, repeats and `enter` do nothing. In lists, dialogs and message screens, long events do nothing. | The other hand rests near the buttons during keying: an accidental short press must not lose the text. Each screen family uses one gesture set, so one press never acts twice. | Short menu/back exits Free Input (the user asked for long). Short prev/next scroll the text (needs a text buffer). |
 | UX-25 | Free Input screen: `FONTS_ID_5X8`, the grid of section 4.1, title bar `Free Input` in row 0, text in rows 1-7 (7 x 25 cells). No status, no cursor mark, no hint. | Same font, grid and title rule as every other screen. 175 visible characters keep about 30 words of context. One text row is one LCD page, so a scroll is a page copy. The settings are one menu level away, and the sound shows the speed and the key type at once. | `FONTS_ID_8X16` (16 x 3 with a title: 48 characters, a scroll every 16 characters, a second grid, a scroll moves 2 pages per line). No title (one more line, but the screen does not say which mode is open). Key type or speed in the title (code and strings for a value the user just set). A blinking or static cursor (code and a timer, small gain). |
 | UX-26 | Text rules of section 5.9. A character comes at the character gap. A word space is a blank cell. The wrap is per character and lazy. A scroll moves the text up by one line. A line never starts with a space. No text buffer. | Cheapest in RAM and flash: the framebuffer is the only store. The lazy wrap never shows an empty last line. Dropped edge spaces keep the left edge aligned. | Word wrap (needs a buffer of the current word). Clear a full screen (loses all context at once). Show the elements of the character in progress (code, and the sidetone already gives this feedback). |
 | UX-27 | Unknown glyph: `*`. One cell for any pattern that is not in the table, more than 6 elements, the 8-dit error sign, or a lost event. | User decision: one unknown glyph. `*` has no Morse code, so it never looks like a correct character. ASCII, no ink in cell column 4. | `?` (a valid Morse character). An inverted cell (heavy in running text, more code). `#` (touches its neighbours). Nothing (hides the error from the student). A separate glyph for the error sign (the user decided against it). |
 | UX-28 | UX-38 refines this decision: AR, BT, KN and AS follow the `Prosigns` setting, and the rule below is its value `Punctuation`. Prosigns: AR = `+`, BT = `=`, SK = `<SK>` (four cells, per-character wrap). Prosigns with the code of a punctuation mark show that mark (KN = `(`, AS = `&`). Others are `*`. | User decision (Q-9). SK has no punctuation mark. The brackets show a prosign, not the letters `S` and `K`. `<` and `>` are edit markers only in lists, and Free Input has no edit mode, so there is no conflict. Per-character wrap needs no extra rule. | `SK` (looks the same as `S` then `K`). Keep `<SK>` on one line (needs a look-ahead rule for one token). A rare ASCII sign such as `%` (the student must learn a code for it). `*` for SK (a correct prosign must not look like an error). |
 | UX-29 | Delimiter: a 1 px line at `y = 8r + 3`, x 2-126, in its own text row. The next character starts a new row. | Clear separation of practice blocks for about 30 bytes of code. A continuous line cannot look like keyed text. | A blank row (looks like unused space). A row of `-` glyphs (looks like keyed `-` characters). A dashed line (more code, no gain). |
 | UX-30 | Clear: rows 1-7 off, cursor home, the character in progress dropped. Title not redrawn. No question to the user. | Practice text has a low value, and the 800 ms hold protects it. Dropping the partial character gives a clean restart. | A Yes/No dialog (slow for a frequent action). Keep the partial character (its first elements are from before the clear). |
-| UX-31 | Receiving and Sending placeholders: `Not ready`, only a long menu/back exits. | User decision: long menu/back exits any mode. The placeholders follow the same rule as the real modes. The real modes later keep the same gesture. | Short menu/back in placeholders only (two exit rules for the same screen family). |
+| UX-31 | Receiving and Sending placeholders: `Not ready`, only a long menu/back exits. The training modes replace them and keep the long menu/back exit (UX-43, UX-45, UX-49). | User decision: long menu/back exits any mode. The placeholders follow the same rule as the real modes. The real modes later keep the same gesture. | Short menu/back in placeholders only (two exit rules for the same screen family). |
 | UX-32 | `Paddle` setting in CW, 7th item: choice `Normal`, `Reversed`, fw 8, default `Normal`. `Normal`: tip = dit, ring = dah. It applies at the next Free Input start. | User decision: a setting. `Normal`/`Reversed` say what changes better than `Off`/`On`. Fit rule: 6 <= 12. The CW list fills all 7 rows without a scroll. Old records read as `Normal`. | `Paddle Swap` with `Off`/`On` (less clear which side is the dit). `Swap Paddle` (a verb as a label). A swap gesture at the mode start (hidden function). |
-| UX-33 | P3.2 belongs to the keyer while Free Input is open, and to the menu at all other times. A contact closed at the mode start is ignored until it opens. A contact held at the mode end gives no `enter` until it opens and closes again. | The `enter` press that opens Free Input must not key a dit. A held lever at the exit must not open a menu item. A mono plug then works as a straight key. | Ignore the paddle for a fixed time after the start (a held contact still keys after the delay). Use a different button to open Free Input (the hardware has none free). |
-| UX-34 | The keyer and its sidetone run only in Free Input. In the menu the paddle gives no tone. | The tip acts as `enter` in the menu: a tone on each menu `enter` is noise. One clear place for practice. | A practice tone in the menu (noise, and conflicts with the Tone preview). |
+| UX-33 | UX-45 extends this decision to Sending (section 5.13.4). P3.2 belongs to the keyer while Free Input is open, and to the menu at all other times. A contact closed at the mode start is ignored until it opens. A contact held at the mode end gives no `enter` until it opens and closes again. | The `enter` press that opens Free Input must not key a dit. A held lever at the exit must not open a menu item. A mono plug then works as a straight key. | Ignore the paddle for a fixed time after the start (a held contact still keys after the delay). Use a different button to open Free Input (the hardware has none free). |
+| UX-34 | UX-45 refines this decision. The keyer and its sidetone run only in Free Input and in a Sending session (UX-45). In the menu the paddle gives no tone. | The tip acts as `enter` in the menu: a tone on each menu `enter` is noise. One clear place for practice. | A practice tone in the menu (noise, and conflicts with the Tone preview). |
 | UX-35 | Key Type semantics of section 6.7. The thresholds come from `TX Speed` and `TX Eff. Speed`. A straight-key mark of 2 dits or longer is a dah. | User decision: no adaptive decoding. The student practises at the speed of the settings. | Adaptive speed tracking (more code, and the student gets no feedback on the speed). |
 | UX-36 | No hint about the long `menu/back` on the placeholders or in Free Input. The user manual explains it. | User decision (Q-7). No string and no code. Free Input has no free row. | A `Hold menu to exit` line in row 5 of the placeholders. |
 | UX-37 | No stuck-key timeout. A contact that closes after the mode start keys until it opens or the user exits (F-9). The manual tells the user to insert the plug before opening Free Input. | User decision (Q-8). The state is harmless, and the recovery is one long `menu/back`. No keyer code. | Mute or mask a contact that stays closed for some seconds (keyer code, and a new rule for a real long mark). |
 | UX-38 | `Prosigns` setting (sections 5.9 and 5.10). Label `Prosigns`, `Settings` index 2 after `Show CW Code`, choice `Punctuation`, `Prosign`, `Both` in this order, fw 11, default `Both`. AR, BT, KN and AS show `+` `=` `(` `&`, or `<AR>` `<BT>` `<KN>` `<AS>`, or `<AR/+>` `<BT/=>` `<KN/(>` `<AS/&>`. SK is `<SK>` for every value. A record of the earlier firmware gives `Both` and keeps the other settings, with no message (F-14). A text of up to 6 cells wraps per cell (UX-26). The value applies at the next Free Input start. | User decisions: the values, their order, the default, SK unchanged, the item in Settings. Label: `Prosigns` names what the setting changes and fits (8 of 9). Position: next to `Show CW Code`, the other item about how characters show. The CW list is full, and Display holds screen hardware settings. A setting is read once per mode start, as `Paddle` (UX-32), because the settings cannot change while Free Input is open. Per-cell wrap keeps one wrap rule for all text. The brackets bound every prosign text, so the inner `/` of `Both` stays readable next to a keyed `/`. | Label `Prosign` (the same word as a value: the row reads `Prosign  Prosign`). `Prosign Style`, `Prosign As` (do not fit: 13 and 10 of 9). `AR Style` (names one prosign). Index 1 before `Show CW Code`, or after `Max Word Length` (splits the two character-display items). Keep a prosign text on one line (a look-ahead rule, and an empty cell run at a line end). A space inside the `Both` text (`<AR +>`: looks like a word space). A message after the update (UX-17). A live preview of the text in the menu (no free row, and it needs a second draw path). |
+| UX-39 | Training header in row 0, inverted: `RX`/`TX` in columns 0-1, `<speed>/<eff>` from column 3, `L<level>` from column 9, `<i>/<n>` right-aligned to column 24. The worst case `RX 50/50 L65535   100/100` fills 25 columns, so there is no short form. | The header takes the place of the title bar and keeps its look (UX-2). `RX`/`TX` name the mode and the speed settings with the user's terms (UX-3). Fixed start columns keep the fields still while the numbers change. `i/n` at the right edge matches the list position of section 5.1. | The mode name `Receiving` in the title (no room for the numbers). Leading zeros `07/50` (section 4.3 forbids them). One speed for two equal speeds (the format then changes with the settings). A normal-video header (weak separation from the status line). |
+| UX-40 | UX-51 splits the key bar line into four segments, one per label field. Training frame: the status line is row 1 and the item line is pages 3-4. Row 5 holds the Sending answer code. The key bar line is at y 55. Row 7 holds the labels or the keyed code. Rows 2 and 6 hold no text. No highlight band in a session. | Each area has its own LCD pages, so a change dirties few pages. The status text is above the item, so `Wrong. The answer is:` reads before the answer. The labels are at the bottom edge, next to the buttons. | Status below the item (the answer text reads after the answer). Labels as inverted key caps (four highlight bands break UX-2). |
+| UX-41 | Item line in `FONTS_ID_8X16` at cell top y 24. A character item is centered (`64 - 4m`). A word uses a 16 px pitch (`68 - 8n + 16k`). Receiving marks the next slot with a 7 x 14 block and empty slots with a 7 x 2 bar. Sending marks the next character of a word with the bar. | The item is the thing the user looks at, so it gets the large font. One blank cell between letters keeps the slots countable. The block is the input focus, the only focus mark on the screen (UX-2). The bar sits under the glyph rows of the Koch set. | `FONTS_ID_5X8` for the item (small for a glance at 30-60 cm). `_` glyphs for empty slots (1 px, weak). An inverted glyph for the Sending cursor (the large plain glyph reads best, and a character item needs no cursor). |
+| UX-42 | UX-51 replaces the three runs, their split rule, the label fields, the key bar line and the full text for one character. The narrowing presses, the list and range labels and the `-` range mark stay. Group keyboard: the set in keyboard order splits into three runs by the rule of `training_spec.md` section 8 (left `(c + 2) / 3`, middle `(c - left + 1) / 2`, right the rest). A run of 1 picks, of 2 or more narrows, of 0 does nothing. Labels in fields of 8, 7 and 8 cells. One character: its full text. More characters: a list of short texts, or a range `first-last` for a list that does not fit. Short texts of prosigns: `<BT>` `<SK>` `<AR>`, or the marks in `Punctuation`. A 1 px key bar line at y 55. | User decision: three groups in the case order, and narrowing presses. Equal runs give 3 or 4 presses for 43 characters. A list shows exactly what a run holds. A range uses the alphabet order the user knows. `-` is not in the Koch set. The field sizes fit every label (script check over all Koch prefixes and all three `Prosigns` values). The line marks row 7 as key labels, not content. | A fixed split by class (letters, digits, other: 4 presses for a letter, and empty groups in early levels). Labels in the full `Both` text in lists and ranges (up to 13 cells). A list with separators (does not fit). |
+| UX-43 | UX-51 extends this decision to `enter`: tap mode covers all four buttons, an `enter` tap selects the right run, and a long `enter` replays. Receiving buttons (section 6.8): tap mode for the whole Receiving screen (`training_spec.md` D-T7). A tap of `menu/back`, `prev` or `next` acts at its release. A hold gives only the long event. Repeats and long `next` do nothing. `enter` replays in Item, also during a playback. The check comes at once at the last pick. A long `prev` undoes one step: out of one group level, else the last pick. Refines UX-24 for Receiving. | The user decision gives long `prev` = undo. With an action at the press, the press of that hold first narrows or picks, and a pick in the last slot starts a check. Tap mode removes that, so a hold never acts as a tap. The check needs no wait. One step per hold is easy to predict. | Picks at the press with a restore at the long event. The screen then changes twice in one hold, and every check must wait 850 ms. Delay only `prev` picks (the middle button is slow). Step out to the whole set at once (two undo meanings). |
+| UX-44 | UX-51 refines this decision: the replay is a long `enter` (or a tip closure of 800 ms). Receiving flow: a 1000 ms start pause before the first item (`TRAINING_START_MS`). Picks work during the playback. The check stops a running playback. A retry clears the slots and plays the item again at once. After the third wrong attempt, the answer shows and plays once more. Replays are free, and a replay during a playback starts it again. | The start pause gives the user time to look at the screen after `enter`. Fast users copy while the item plays. The replay on a retry saves one press. Hearing and seeing the answer together supports the learning. A free replay matches the plan. A restart is the simplest rule for `enter`. | A pause before every item (slower sessions, and the blank moment already marks a new item). `enter` ignored during a playback (one more state rule, little gain). A replay costs an attempt (no user decision for it). |
+| UX-45 | Sending: each character is checked at its CHAR_GAP by code. A wrong character ends the attempt. The retry starts again at the first character of the item (`training_spec.md` D-T6). Events in the start pause, a delay or a gap are dropped, also the whole character that they start. WORD_GAP in Item: UX-52 (a pause error in a word item, else nothing). OVERFLOW drops the character without an attempt. Long `prev` and long `next` do nothing. P3.2 ownership as UX-33. | Plan: check at once. The whole-item retry matches CW practice: after an error, the operator sends the word again. One attempt rule for both modes. The drop rule never judges a character that the user started during a delay. A lost event is a device fault. A clear has no use in Sending. | Continue at the failed character (a second retry rule, different from Receiving). Judge a character that started in a delay (unfair, it misses its first elements). OVERFLOW as a wrong character (the user pays for a device fault). |
+| UX-46 | Result feedback in the status line: `Correct` (`TRAINING_CORRECT_MS` 600 ms), `Wrong` (Receiving), or `Wrong: <text>` or `Wrong: pause too long` (Sending, UX-52) (`TRAINING_WRONG_MS` 1200 ms), then `Try 2 of 3` or `Try 3 of 3` during the retry. At the retry moment the item looks fresh in both modes: Receiving empties the slots, Sending moves the bar to the first character and clears row 7 (UX-52). After the third wrong attempt (`TRAINING_FAILED_MS` 2500 ms): Receiving `Wrong. The answer is:` with the answer in the item line, Sending the code of the character as marks in row 5. A blank item line before every next item, also for the same character: `TRAINING_RECEIVING_GAP_MS` 500 ms, `TRAINING_SENDING_GAP_MS` 300 ms. `TRAINING_START_MS` 1000 ms before the first item. No result sound. | Short delays keep a 50-item session moving. A wrong result needs time to read. The answer needs time to learn. The blank moment shows every new item, also a repeat of the same item. The Receiving gap gives the ear a rest before the next sound. In Sending, the user needs to know what they keyed (`Wrong: N`), and the answer of Sending is the code. A result beep mixes with the CW. | A result tone (mixes with the sidetone and the playback). An inverted `Wrong` band (breaks UX-2, and the text is clear). A blank moment only for the same character (two transition looks). Delays as settings (more menu items, no user request). |
+| UX-47 | UX-51 refines this decision for Receiving: the `enter` tap acts at the release, and a long `enter` does nothing. Session end screen: `Score c/n`, `Passed` or `Not passed, need t`, `New level`, `Repeat level` or `Top level`, `Not saved` after a failed save, a focused `Next` in row 7. `enter` or the tip starts the next session. A short or long `menu/back` opens the main menu. No timeout. | The score, the threshold and the new level answer the questions after a session. `Next` follows the message-screen pattern (one focused button, `menu/back` leaves). The tip as `enter` lets the user start from the paddle. | A `Yes`/`No` dialog (two presses for a frequent action). Auto start of the next session (no rest, and a missed score). Only a long `menu/back` on the end screen (the session is over, and nothing is lost). |
+| UX-48 | User decision (Q-11). Word items and the word keyboard hold no prosign (BT, SK, AR). Prosigns appear only in character sessions. | A prosign text is 4 or 6 cells. A word of 8 slots with prosign texts needs up to 48 cells, which no line of the screen holds. In CW a prosign is sent as a word of its own. A smaller word keyboard needs fewer presses. | Prosigns in words with a 5 x 8 fallback line (two fonts, a reflow after a wrong prosign pick). Prosigns as one-cell marks in words (SK has no mark). |
+| UX-49 | A session left with a long `menu/back` is dropped with no question: the level and the EEPROM do not change. The settings are read once at the mode start, and a next session keeps them. | The 800 ms hold is the protection (UX-23). Progress changes only at a passed session end, so an exit cannot damage it. The settings cannot change inside a mode. | A `Leave session?` dialog (slow, and the loss is one session). A partial score. |
+| UX-50 | `Show CW Code` in Sending: row 7 shows a mark per element (dot 2 x 2 px, dash 6 x 2 px, gap 3 px) from x 2. The marks stay until the next character starts, the retry or the blank moment (UX-52). At most 12 marks. The answer code in row 5 shows for every value of the setting. No effect in Receiving. | The plan gives this use of the setting. Graphic marks sit on one line. The `.` and `-` glyphs sit at different heights. Keeping the marks after the character shows what a wrong character was. The answer shows for both values of the hint. | `.` and `-` glyphs (different heights, small dot). The code of the expected character as a hint before keying (not the plan). |
+| UX-51 | User decision 2026-10-06: the Receiving keyboard uses all four buttons (sections 5.12.1, 6.8). Four runs in the case order `menu/back`, `prev`, `next`, `enter`. Run `k` of a group of `c` characters has `(c + 3 - k) / 4` characters (`training_spec.md` D-T27). Tap mode covers all four buttons. An `enter` tap (or a tip closure shorter than 800 ms) selects the right run. A long `enter` (or a tip closure of 800 ms) replays in Item and does nothing in the other states and on the end screen. Long `menu/back` exits, long `prev` undoes one step, long `next` does nothing. Labels in row 7 only, in fields x 2-26 (5 cells, left-aligned), 30-54 (5 cells, centered), 58-82 (5 cells, centered) and 87-126 (8 cells, right-aligned), with a key bar segment at y 55 above each field. Label text of a character: `morse_format()` in `MORSE_STYLE_NAME` (`Prosign`, `Both`) or `MORSE_STYLE_PUNCTUATION` (`Punctuation`). One character: its text. More characters: a list if it fits the field, else a range `first-last`. Refines UX-42, UX-43, UX-44 and UX-47. | User: three groups for four buttons were confusing. One run per button puts each label above its own button. The balanced split keeps the keyboard order and gives 3 presses for every pick with 43 or 40 characters, at most 2 up to 16 characters and 1 up to 4. The pick is the frequent action, so it gets the tap. The replay is rare, so it gets the hold of the same button. Tap mode keeps a hold from selecting first. On the end screen, a hold never acts as a tap (UX-43), and the user taps again. The field widths fit every label of every Koch prefix for all three `Prosigns` values (script check, section 5.12.1) and keep at least 4 blank pixels between two labels. Only the right run can hold two prosigns, so only its field is wider. One text per character keeps the labels short. The user hears the name, so `<AR>` is enough to find AR. The brackets stay, so a prosign never reads as two letters. The key bars show four keys and the field limits, also for a blank label. | Keep three runs and `enter` for replay only (the user found it confusing). `enter` tap = replay and long `enter` = right run (every pick on the right run then costs 800 ms). Four equal fields of 6 cells (1 blank pixel between fields, so four adjacent lists read as one string). Labels in two rows, rows 6 and 7 (LC-2 allows it only when no one-row rule fits, and the key bar must move). Prosign names without brackets in lists and ranges (`SKAR`, `SK-AR` read as letters). The marks `+` and `=` in the labels for `Prosign` (the user chose names). The full `Both` text for one character (`<BT/=>` and `<AR/+>` need 6 cells). One unbroken key bar line (no field limits). Long `enter` starts the next session on the end screen (a second gesture for one action). |
+| UX-52 | User decision 2026-10-07 (sections 5.13, 5.14). (1) The retry clears row 7. The retry moment comes `TRAINING_WRONG_MS` after the check. Its redraw shows `Try 2 of 3` or `Try 3 of 3`, moves the bar to the first character and turns row 7 off. This applies to both `Show CW Code` values. Before that moment, row 7 keeps the wrong code. (2) Pause limit in a Sending word item. Rule: a WORD_GAP in Item counts when it ends the space right after a correct character that is not the last one of the item. It ends the attempt like a wrong character. It uses an attempt. The retry is the whole item (D-T6). The third one is the failed path. The status is `Wrong: pause too long` (21 cells, 1200 ms, or 2500 ms after attempt 3). The bar stays under the next character. After attempt 3, row 5 shows the code of that next character. A WORD_GAP does nothing before the first correct character of the attempt, in a character item and in a delay. After OVERFLOW it also does nothing: a lost event is a device fault (D-T16). The limit is the keyer word space, 5 Farnsworth units at `TX Eff. Speed`. Refines UX-45, UX-46 and UX-50. | The user wants the retry to look like a fresh item, with the same `Try N of 3` status in both modes. The wrong code must stay readable for the whole delay, so the clear waits for the retry. In CW the space inside a word must be shorter than a word space. Otherwise the receiver hears two words. The keyer already measures this space for Free Input, so both modes use one rule and one threshold. The `Wrong: ` prefix keeps the UX-46 grammar: the user first reads that the attempt failed, then why. A keyed character text has no space, so the three words never read as a character. The bar marks where the pause came. A long pause often means the user did not recall the next code, so the failed path shows that code: the same rule as a wrong character (the expected character at the failed position). | Clear the status at the retry (the user chose to keep `Try N of 3`, as in Receiving). Clear row 7 at the check (the user cannot read the wrong code). `Wrong: KM` plus a space mark (the font has no space glyph, `_` and `-` are keyable characters, and the text does not say why). `Gap too long` (`gap` has other meanings in this file: the start pause and the blank moment) or `Pause too long` without the prefix (breaks the UX-46 grammar). A blank row 5 after a third pause error (no help for a user who did not recall the code). A limit of 3 or 7 units, or an own setting (the user chose 5 units, the Free Input point). A pause error before the first character (nothing to measure from: the space after the item start is not inside the word). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -1129,10 +2060,10 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | D-2 | Contrast range 0-63. | Record the lowest and highest readable values and whether 0 or 63 make the screen blank or black. |
 | D-3 | Backlight levels 0-10. | No visible flicker. Levels are distinguishable. The screen is readable in room light with level 0. |
 | D-4 | Bounce time of the four buttons and of the paddle tip. | All bounce trains are shorter than 20 ms. |
-| D-5 | Plug insertion into the paddle socket while the menu shows. | Record whether a spurious `enter` occurs. |
+| D-5 | Plug insertion into the paddle socket while the menu shows, and in Receiving: in Item and on the end screen (UX-51, `training_spec.md` DC-T7). | Record whether a spurious `enter` occurs and how long the tip stays closed. In Receiving, a closure shorter than 800 ms is an `enter` tap: record whether the right run is selected or the next session starts. A closure of 800 ms or longer replays. |
 | D-6 | Time from a button press to the change on the glass. Full-screen redraw time. Behaviour during auto-repeat. | Within 100 ms. Values step at 12.5 per second. |
 | D-7 | Save on leaving Settings. | No visible glitch. A button pressed during the save is not lost. |
-| D-8 | Physical order of prev and next on the case. | prev is up/left. Otherwise review sections 5.4, 5.7 and 6.1. |
+| D-8 | Physical order of the buttons on the case. | Closed by user facts (section 3.1): `menu/back`, `prev`, `next`, `enter` from left to right (2026-10-06). |
 | D-9 | Display recovery start: set contrast 0 and backlight 0, save, switch off. Hold `menu/back` and switch on. | The `Display Defaults` message is readable. The `on/off` button powers the MCU up from off. |
 | D-10 | Tone preview at the edit start. Speaker and headphones. Tone 400, 600 and 1000 Hz. Volume at its middle. | The tone starts with no audible delay after `enter`. It lasts about 0.3 s. No click at the start or at the end. The user can judge the pitch. |
 | D-11 | Single presses about 0.5 s apart from 600 Hz up and down. | Each press gives one clear beep at the new pitch. |
@@ -1148,8 +2079,17 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | D-21 | Legibility and speed of the Free Input text: 5 x 8 font at 30-60 cm during keying. Key a full screen at 50 WPM with long words, so that the screen scrolls. Measure the 7-page flush time. | The text is readable at a glance. A character appears within about 100 ms after the character gap. No character is lost or turns into `*` during a scroll (F-11). The sidetone has no gap or click during the flush. |
 | D-22 | Mono plug with a straight key: insert it before Free Input opens, then key. Then insert it while Free Input is open. | Before: the tip keys, the ring short has no effect. During: record the behaviour (F-9). A long `menu/back` stops the tone. |
 | D-23 | Delimiter and clear on the glass. Key text with `-` and `_` characters around a delimiter. | The delimiter line is clearly different from the `-` and `_` glyphs. Clear leaves the title bar intact and gives no flicker of the title. |
-| D-24 | Receiving and Sending placeholders: a user who has not read the manual tries to leave. | Record whether the user finds the long `menu/back`. If not, record it for the user. Decision UX-36: no hint on the screen. |
+| D-24 | Receiving and Sending: a user who has not read the manual tries to leave a session. | Record whether the user finds the long `menu/back`. If not, record it for the user. Decision UX-36: no hint on the screen. The session end screen also leaves with a short `menu/back`. |
 | D-25 | Prosign texts on the glass (UX-38, `keyer_spec.md` DC-P1). In Free Input with `Both`, key AR, KN and AS. Also key KN and then a keyed `)` (`-.--.-`). Key a `/` (`-..-.`) next to AR. Key AR with the cursor in column 22, so that `<AR` and `/+>` split. Repeat with `Prosign` and `Punctuation`. Contrast 32, backlight 8 and 0, 30-60 cm, indoor light, straight and at an angle. | The user reads `<AR/+>`, `<KN/(>` and `<AS/&>` correctly at a glance. The user tells `(` from `<` in `<KN/(>`. The user tells the inner `/` of `<AR/+>` from a keyed `/` beside it. The user joins a split text across the line end. No glyph pair looks joined (`+>`, `&>`, `/(`). If a text fails, record it for the user: the options are the `Prosign` or `Punctuation` value, or a new text (a user decision, then `architector` changes `keyer_spec.md` section 17). |
+| D-26 | Item line on the glass (UX-41): 8 x 16 letters, digits, `. , ? /`, `<SK>`, `<AR/+>`, an 8-letter word, the block and the bars. Also `Q` with the Sending bar under it. Contrast 32, backlight 8 and 0, 30-60 cm, straight and at an angle. | The user reads the item at a glance. The block and the bars are clearly different. The slots of an 8-letter word are countable. `Q` stays readable above the bar. |
+| D-27 | Blank moment (300 ms) in Sending with the same character twice in a row, and in Receiving. If possible, repeat it at a low room temperature. | The user sees each new item start. If the LCD is too slow to show 300 ms, record the shortest visible time for `architector`. |
+| D-28 | Group keyboard with four labels (UX-51, `training_spec.md` DC-T3): labels and key bars against the four button positions. A user picks 20 random characters with all 43 learned (also AR, SK and BT), 10 with 40 (a word session) and 10 with a few learned. Contrast 32, backlight 8 and 0, 30-60 cm. | Each label and key bar sits above its own button: `menu/back`, `prev`, `next`, `enter` from left to right. The user presses the button under each label without looking twice. Two labels never read as one, also four lists of 5 characters (`AEFIJ`, `KLMNO`, `PRSTU`, `WY0.,`). Ranges such as `A-K` and `7-<AR>` and the list `<SK><AR>` are clear. Record the time per pick and the wrong picks. |
+| D-29 | Training timing feel and lag: the 1000 ms start pause, the result delays 600, 1200 and 2500 ms, the gaps 500 ms (Receiving) and 300 ms (Sending). Measure the time from a tap release to the change on the glass. | The rhythm feels steady and not slow. The user can read `Wrong. The answer is:` and the answer. Changes show within 100 ms (UX-16). Record values the user wants changed. |
+| D-30 | Tap mode in Receiving (`training_spec.md` DC-T4, DC-T7): taps of normal speed on all four buttons, a long `prev` inside a group, after a pick and with no pick, a long `menu/back`, and a long `enter` while the item plays and after it. Repeat the `enter` tap and the long `enter` with the dit lever of a paddle and with a straight key on the tip. On the end screen: an `enter` tap and a long `enter`. | A tap feels prompt, although it acts at the release. A long `prev` undoes one step with no group change first. A long `menu/back` exits with no pick first. A long `enter` replays with no group change or pick first. A short tip closure selects the right run, a tip closure of 800 ms replays. On the end screen, the tap starts the next session and the long `enter` does nothing. Record whether the user expects the long `enter` to start the next session. |
+| D-31 | Code marks in rows 5 and 7 at 30-60 cm: dots and dashes at 20 and 40 WPM. | The user tells dots from dashes at a glance and reads the pattern of a wrong character. |
+| D-32 | Sending: hold the dit lever across the last character and the session end. Start the next session with the dit lever and with `enter`. | The end screen shows. No next session until the lever opens and closes. The start gives no element and no tone. |
+| D-33 | Receiving playback (speaker and headphones, Tone 600 Hz, 20 WPM and 50 WPM). Results with the playback running. | No click at element edges and at a stop by the check or the exit. The playback timing checks of `training_spec.md` pass. |
+| D-34 | Sending word sessions (UX-52) at 20 / 20, 13 / 13 and 20 / 10, with `Iambic B` and with a straight key. Key words at a normal rhythm, then with one pause of about 4 units and one of about 6 units inside a word. Also read a wrong code in row 7 during the 1200 ms delay, and watch the retry. | A normal rhythm never gives `Wrong: pause too long`. The 6-unit pause gives it, the 4-unit pause does not. The user understands the text and finds the bar under the next character. The user reads the wrong code before row 7 clears, and sees the retry as a fresh start. Report false pause errors at 20 / 20 with a straight key to `architector`. The 5-unit limit is a user decision. |
 
 ## 12. Open questions
 
@@ -1168,6 +2108,49 @@ The item is in the Settings list (UX-38).
 
 Resolved by `architector`: Q-4 (`eeprom_write` reads back each byte, and a failed save shows `Not saved` / `OK`, see
 F-7 and `menu_subsystem_spec.md` sections 3.5 and 3.6).
+
+Resolved by the user for the training modes (approved plan, 2026-10):
+
+- Session sizes and pass rules. "Correct" for the score means correct on the first attempt. The word pass rate
+  changed on 2026-10-07 (below).
+- 3 attempts per item, and the answer shows after the third wrong attempt.
+- The Koch order, the word length, the progress key, no manual level.
+- Receiving input: narrowing presses, long `prev` undo, `enter` replay. Changed on 2026-10-06 (below).
+- The button order on the case (closes D-8).
+
+Resolved by the user on 2026-10-06 (`training_spec.md` D-T27, D-T28, UX-51):
+
+- The order of the four buttons on the case, from left to right: `menu/back`, `prev`, `next`, `enter` (`enter` is
+  right of `next`). This closes the open note on the position of `enter` (C-4).
+- The Receiving keyboard uses all four buttons: four groups, one per button, in the case order. Three groups were
+  confusing.
+- In Receiving: long `menu/back` exits, long `enter` replays, long `prev` undoes, long `next` does nothing.
+- The paddle tip shares P3.2 with `enter`: a short closure selects the right run, a closure of 800 ms replays, and a
+  plug insertion can select a run (accepted risk, F-20).
+
+Resolved by the user on 2026-10-07 (Sending, UX-52):
+
+- A Sending retry clears row 7, so the screen looks like a fresh item. The bar goes back to the first character.
+  The status keeps `Try 2 of 3` or `Try 3 of 3`, the same as Receiving. Receiving does not change.
+- Row 7 keeps the wrong code for the whole `Wrong: ...` delay (1200 ms). The clear comes at the retry moment.
+- In a Sending word item, a pause of 5 Farnsworth units at `TX Eff. Speed` between two characters is an error,
+  like a wrong character. It counts only after the first correct character of the attempt and before the item is
+  complete. Character sessions do not change.
+- Word sessions pass at 80 % of the count, rounded up: 8 of 10, 80 of 100. This applies to every word session,
+  also the final word levels with 10 to 100 words. Character sessions stay at 45 of 50 (90 %).
+
+Resolved by the user after the training specification:
+
+- Q-11: word items and the word keyboard hold no prosign (UX-48, `training_spec.md` D-T4).
+- Q-12: the Koch set has 43 characters. The 44 of the plan was a counting error (`training_spec.md` D-T3).
+
+Resolved by `architector` for the training modes (`training_spec.md`): the shown level is the index plus 1,
+saturated at 65535 (D-T5, was Q-13). Tap mode on the Receiving screen (D-T7, U-11). A Sending retry starts the whole
+item again (D-T6, U-15). A failed reset shows `Not saved` (D-T11, U-17). Also:
+
+- Q-14: `training_hold_result()` holds RESULT while the answer plays. `TRAINING_FAILED_MS` starts at the first poll
+  that sees the player idle (`training_spec.md` D-T14).
+- Q-15: the Sending event rules of section 5.13.2 are adopted as proposed (`training_spec.md` D-T15 and D-T16).
 
 | ID | Question | Impact | Owner |
 | --- | --- | --- | --- |

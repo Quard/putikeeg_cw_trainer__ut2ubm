@@ -8,6 +8,7 @@
 #include "fake_button_pins.h"
 #include "fake_delay.h"
 #include "fake_iap.h"
+#include "fake_koch_item.h"
 #include "fake_menu_outputs.h"
 #include "fake_sidetone.h"
 #include "fake_tick.h"
@@ -17,8 +18,8 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define NEXT BUTTON_EVENT_NEXT
 #define PREV BUTTON_EVENT_PREV
@@ -47,7 +48,7 @@ static void put_record(uint16_t tone_hz, uint8_t contrast, uint8_t backlight) {
   record[4] = (uint8_t)(tone_hz >> 8);
   record[12] = backlight;
   record[13] = contrast;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   memcpy(fake_iap_memory(), record, sizeof(record));
 }
 
@@ -485,19 +486,27 @@ static void test_v52_no_sound_outside_tone_edit(void) {
   steps(REPEAT(PREV), 5U);
   steps(PREV, 2U);
   poll_500();
-  /* 2. Each placeholder, all four buttons; only a long menu/back closes it. */
+  /*
+   * 2. Receiving and Sending (D-T8), all four buttons in the start pause; only a long menu/back closes them. The
+   * mode start sets the tone and makes no other sidetone call.
+   */
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
   for (row = 0U; row < 2U; ++row) {
     steps(REPEAT(PREV), 5U);
     steps(NEXT, row);
     step(ENTER);
-    TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
+    TEST_ASSERT_EQUAL((row == 0U) ? MENU_SCREEN_RECEIVING : MENU_SCREEN_SENDING, menu_screen());
     step(PREV);
     step(NEXT);
     step(ENTER);
     step(MENU);
-    TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
+    TEST_ASSERT_EQUAL((row == 0U) ? MENU_SCREEN_RECEIVING : MENU_SCREEN_SENDING, menu_screen());
     step(LONG(MENU));
     TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+    TEST_ASSERT_EQUAL(1U, fake_sidetone_call_count());
+    TEST_ASSERT_EQUAL(FAKE_SIDETONE_CALL_TONE, fake_sidetone_call_at(0U).kind);
+    reset_slog();
     poll_500();
   }
   /* 3. Settings > CW: onto Tone and past it in browse mode. */

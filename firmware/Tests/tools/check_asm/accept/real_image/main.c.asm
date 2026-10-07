@@ -10,9 +10,29 @@
 ;--------------------------------------------------------
 	.globl _main
 	.globl _tick_init
-	.globl _lcd_fb_set_pixel
-	.globl _lcd_flush
+	.globl _sidetone_poll
+	.globl _sidetone_init
+	.globl _settings_use_display_defaults
+	.globl _settings_get
+	.globl _settings_load
+	.globl _progress_load
+	.globl _menu_show_message
+	.globl _menu_render
+	.globl _menu_needs_redraw
+	.globl _menu_poll
+	.globl _menu_handle
+	.globl _menu_init
+	.globl _lcd_flush_step
+	.globl _lcd_set_contrast
 	.globl _lcd_init
+	.globl _gfx_init
+	.globl _eeprom_init
+	.globl _keyer_init
+	.globl _buttons_poll
+	.globl _buttons_is_recovery_start
+	.globl _buttons_init
+	.globl _backlight_init
+	.globl _P5_5
 	.globl _CY
 	.globl _AC
 	.globl _F0
@@ -88,13 +108,32 @@
 	.globl _P0_2
 	.globl _P0_1
 	.globl _P0_0
+	.globl _RSTCFG
+	.globl _IAP_TPS
+	.globl _IAP_CONTR
+	.globl _IAP_TRIG
+	.globl _IAP_CMD
+	.globl _IAP_ADDRL
+	.globl _IAP_ADDRH
+	.globl _IAP_DATA
+	.globl _AUXR
+	.globl _P5M0
+	.globl _P5M1
+	.globl _P5
+	.globl _P1M0
+	.globl _P1M1
 	.globl _AUXINTIF
 	.globl _IE2
 	.globl _T3L
 	.globl _T3H
 	.globl _T4T3M
+	.globl _P_SW2
+	.globl _P3M0
+	.globl _P3M1
 	.globl _P2M0
 	.globl _P2M1
+	.globl _P0M0
+	.globl _P0M1
 	.globl _B
 	.globl _ACC
 	.globl _PSW
@@ -142,13 +181,32 @@ _IP	=	0x00b8
 _PSW	=	0x00d0
 _ACC	=	0x00e0
 _B	=	0x00f0
+_P0M1	=	0x0093
+_P0M0	=	0x0094
 _P2M1	=	0x0095
 _P2M0	=	0x0096
+_P3M1	=	0x00b1
+_P3M0	=	0x00b2
+_P_SW2	=	0x00ba
 _T4T3M	=	0x00d1
 _T3H	=	0x00d4
 _T3L	=	0x00d5
 _IE2	=	0x00af
 _AUXINTIF	=	0x00ef
+_P1M1	=	0x0091
+_P1M0	=	0x0092
+_P5	=	0x00c8
+_P5M1	=	0x00c9
+_P5M0	=	0x00ca
+_AUXR	=	0x008e
+_IAP_DATA	=	0x00c2
+_IAP_ADDRH	=	0x00c3
+_IAP_ADDRL	=	0x00c4
+_IAP_CMD	=	0x00c5
+_IAP_TRIG	=	0x00c6
+_IAP_CONTR	=	0x00c7
+_IAP_TPS	=	0x00f5
+_RSTCFG	=	0x00ff
 ;--------------------------------------------------------
 ; special function bits
 ;--------------------------------------------------------
@@ -229,6 +287,7 @@ _RS1	=	0x00d4
 _F0	=	0x00d5
 _AC	=	0x00d6
 _CY	=	0x00d7
+_P5_5	=	0x00cd
 ;--------------------------------------------------------
 ; overlayable register banks
 ;--------------------------------------------------------
@@ -295,8 +354,8 @@ __interrupt_vect:
 	ljmp	__sdcc_gsinit_startup
 	reti
 	.ds	7
-	reti
-	.ds	7
+	ljmp	_sidetone_timer0_isr
+	.ds	5
 	reti
 	.ds	7
 	reti
@@ -332,64 +391,6 @@ __interrupt_vect:
 	reti
 	.ds	7
 	ljmp	_tick_isr
-; restartable atomic support routines
-	.ds	2
-sdcc_atomic_exchange_rollback_start::
-	nop
-	nop
-sdcc_atomic_exchange_pdata_impl:
-	movx	a, @r0
-	mov	r3, a
-	mov	a, r2
-	movx	@r0, a
-	sjmp	sdcc_atomic_exchange_exit
-	nop
-	nop
-sdcc_atomic_exchange_xdata_impl:
-	movx	a, @dptr
-	mov	r3, a
-	mov	a, r2
-	movx	@dptr, a
-	sjmp	sdcc_atomic_exchange_exit
-sdcc_atomic_compare_exchange_idata_impl:
-	mov	a, @r0
-	cjne	a, ar2, .+#5
-	mov	a, r3
-	mov	@r0, a
-	ret
-	nop
-sdcc_atomic_compare_exchange_pdata_impl:
-	movx	a, @r0
-	cjne	a, ar2, .+#5
-	mov	a, r3
-	movx	@r0, a
-	ret
-	nop
-sdcc_atomic_compare_exchange_xdata_impl:
-	movx	a, @dptr
-	cjne	a, ar2, .+#5
-	mov	a, r3
-	movx	@dptr, a
-	ret
-sdcc_atomic_exchange_rollback_end::
-
-sdcc_atomic_exchange_gptr_impl::
-	jnb	b.6, sdcc_atomic_exchange_xdata_impl
-	mov	r0, dpl
-	jb	b.5, sdcc_atomic_exchange_pdata_impl
-sdcc_atomic_exchange_idata_impl:
-	mov	a, r2
-	xch	a, @r0
-	mov	dpl, a
-	ret
-sdcc_atomic_exchange_exit:
-	mov	dpl, r3
-	ret
-sdcc_atomic_compare_exchange_gptr_impl::
-	jnb	b.6, sdcc_atomic_compare_exchange_xdata_impl
-	mov	r0, dpl
-	jb	b.5, sdcc_atomic_compare_exchange_pdata_impl
-	sjmp	sdcc_atomic_compare_exchange_idata_impl
 ;--------------------------------------------------------
 ; global & static initialisations
 ;--------------------------------------------------------
@@ -420,16 +421,16 @@ __sdcc_program_exit:
 ;--------------------------------------------------------
 	.area CSEG    (CODE)
 ;------------------------------------------------------------
-;Allocation info for local variables in function 'draw_test_pattern'
+;Allocation info for local variables in function 'main'
 ;------------------------------------------------------------
-;i             Allocated to registers r6 r7 
-;j             Allocated to registers r4 r5 
+;event_count   Allocated to registers r7 
+;event         Allocated to registers r5 
 ;------------------------------------------------------------
-;	firmware/src/main.c:9: static void draw_test_pattern(void) {
+;	firmware/src/main.c:19: void main(void) {
 ;	-----------------------------------------
-;	 function draw_test_pattern
+;	 function main
 ;	-----------------------------------------
-_draw_test_pattern:
+_main:
 	ar7 = 0x07
 	ar6 = 0x06
 	ar5 = 0x05
@@ -438,172 +439,92 @@ _draw_test_pattern:
 	ar2 = 0x02
 	ar1 = 0x01
 	ar0 = 0x00
-;	firmware/src/main.c:13: for (i = 0; i < (int16_t)LCD_WIDTH; ++i) {
-	mov	r6,#0x00
-	mov	r7,#0x00
-00105$:
-;	firmware/src/main.c:14: lcd_fb_set_pixel(i, 0, LCD_PIXEL_ON);
-	clr	a
-	mov	_lcd_fb_set_pixel_PARM_2,a
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),a
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dpl, r6
-	mov	dph, r7
-	push	ar7
-	push	ar6
-	lcall	_lcd_fb_set_pixel
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:15: lcd_fb_set_pixel(i, (int16_t)LCD_HEIGHT - 1, LCD_PIXEL_ON);
-	mov	_lcd_fb_set_pixel_PARM_2,#0x3f
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),#0x00
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dpl, r6
-	mov	dph, r7
-	push	ar7
-	push	ar6
-	lcall	_lcd_fb_set_pixel
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:13: for (i = 0; i < (int16_t)LCD_WIDTH; ++i) {
-	inc	r6
-	cjne	r6,#0x00,00169$
-	inc	r7
-00169$:
-	clr	c
-	mov	a,r6
-	subb	a,#0x80
-	mov	a,r7
-	xrl	a,#0x80
-	subb	a,#0x80
-	jc	00105$
-;	firmware/src/main.c:17: for (i = 0; i < (int16_t)LCD_HEIGHT; ++i) {
-	mov	r6,#0x00
-	mov	r7,#0x00
-00107$:
-;	firmware/src/main.c:18: lcd_fb_set_pixel(0, i, LCD_PIXEL_ON);
-	mov	_lcd_fb_set_pixel_PARM_2,r6
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),r7
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dptr,#0x0000
-	push	ar7
-	push	ar6
-	lcall	_lcd_fb_set_pixel
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:19: lcd_fb_set_pixel((int16_t)LCD_WIDTH - 1, i, LCD_PIXEL_ON);
-	mov	_lcd_fb_set_pixel_PARM_2,r6
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),r7
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dptr,#0x007f
-	push	ar7
-	push	ar6
-	lcall	_lcd_fb_set_pixel
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:20: lcd_fb_set_pixel(i, i, LCD_PIXEL_ON);
-	mov	_lcd_fb_set_pixel_PARM_2,r6
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),r7
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dpl, r6
-	mov	dph, r7
-	push	ar7
-	push	ar6
-	lcall	_lcd_fb_set_pixel
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:17: for (i = 0; i < (int16_t)LCD_HEIGHT; ++i) {
-	inc	r6
-	cjne	r6,#0x00,00171$
-	inc	r7
-00171$:
-	clr	c
-	mov	a,r6
-	subb	a,#0x40
-	mov	a,r7
-	xrl	a,#0x80
-	subb	a,#0x80
-	jc	00107$
-;	firmware/src/main.c:22: for (i = 0; i < 16; ++i) {
-	mov	r6,#0x00
-	mov	r7,#0x00
-;	firmware/src/main.c:23: for (j = 0; (i + j) < 16; ++j) {
-00128$:
-	mov	r4,#0x00
-	mov	r5,#0x00
-00110$:
-	mov	a,r4
-	add	a, r6
-	mov	r2,a
-	mov	a,r5
-	addc	a, r7
-	mov	r3,a
-	clr	c
-	mov	a,r2
-	subb	a,#0x10
-	mov	a,r3
-	xrl	a,#0x80
-	subb	a,#0x80
-	jnc	00113$
-;	firmware/src/main.c:24: lcd_fb_set_pixel(j, i, LCD_PIXEL_ON);
-	mov	_lcd_fb_set_pixel_PARM_2,r6
-	mov	(_lcd_fb_set_pixel_PARM_2 + 1),r7
-	mov	_lcd_fb_set_pixel_PARM_3,#0x01
-	mov	dpl, r4
-	mov	dph, r5
-	push	ar7
-	push	ar6
-	push	ar5
-	push	ar4
-	lcall	_lcd_fb_set_pixel
-	pop	ar4
-	pop	ar5
-	pop	ar6
-	pop	ar7
-;	firmware/src/main.c:23: for (j = 0; (i + j) < 16; ++j) {
-	inc	r4
-	cjne	r4,#0x00,00110$
-	inc	r5
-	sjmp	00110$
-00113$:
-;	firmware/src/main.c:22: for (i = 0; i < 16; ++i) {
-	inc	r6
-	cjne	r6,#0x00,00175$
-	inc	r7
-00175$:
-	mov	ar4,r6
-	mov	ar5,r7
-	clr	c
-	mov	a,r4
-	subb	a,#0x10
-	mov	a,r5
-	xrl	a,#0x80
-	subb	a,#0x80
-	jc	00128$
-;	firmware/src/main.c:27: }
-	ret
-;------------------------------------------------------------
-;Allocation info for local variables in function 'main'
-;------------------------------------------------------------
-;	firmware/src/main.c:29: void main(void) {
-;	-----------------------------------------
-;	 function main
-;	-----------------------------------------
-_main:
-;	firmware/src/main.c:30: tick_init();
+;	firmware/src/main.c:23: tick_init();
 	lcall	_tick_init
-;	firmware/src/main.c:32: EA = 1;
+;	firmware/src/main.c:25: EA = 1;
 ;	assignBit
 	setb	_EA
-;	firmware/src/main.c:33: lcd_init();
+;	firmware/src/main.c:26: eeprom_init();
+	lcall	_eeprom_init
+;	firmware/src/main.c:28: buttons_init();
+	lcall	_buttons_init
+;	firmware/src/main.c:29: (void)settings_load();
+	lcall	_settings_load
+;	firmware/src/main.c:30: (void)progress_load();
+	lcall	_progress_load
+;	firmware/src/main.c:31: if (buttons_is_recovery_start()) {
+	lcall	_buttons_is_recovery_start
+	mov	a, dpl
+	jz	00102$
+;	firmware/src/main.c:32: settings_use_display_defaults();
+	lcall	_settings_use_display_defaults
+00102$:
+;	firmware/src/main.c:34: sidetone_init(settings_get(SETTINGS_ID_TONE_HZ));
+	mov	dpl, #0x00
+	lcall	_settings_get
+	lcall	_sidetone_init
+;	firmware/src/main.c:35: keyer_init();
+	lcall	_keyer_init
+;	firmware/src/main.c:36: lcd_init();
 	lcall	_lcd_init
-;	firmware/src/main.c:34: draw_test_pattern();
-	lcall	_draw_test_pattern
-;	firmware/src/main.c:35: lcd_flush();
-	lcall	_lcd_flush
-00103$:
-;	firmware/src/main.c:38: }
-	sjmp	00103$
+;	firmware/src/main.c:37: lcd_set_contrast((uint8_t)settings_get(SETTINGS_ID_CONTRAST));
+	mov	dpl, #0x09
+	lcall	_settings_get
+	lcall	_lcd_set_contrast
+;	firmware/src/main.c:38: backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
+	mov	dpl, #0x08
+	lcall	_settings_get
+	lcall	_backlight_init
+;	firmware/src/main.c:39: gfx_init();
+	lcall	_gfx_init
+;	firmware/src/main.c:40: menu_init();
+	lcall	_menu_init
+;	firmware/src/main.c:41: if (buttons_is_recovery_start()) {
+	lcall	_buttons_is_recovery_start
+	mov	a, dpl
+	jz	00126$
+;	firmware/src/main.c:42: menu_show_message(MENU_MESSAGE_DISPLAY_DEFAULTS);
+	mov	dpl, #0x02
+	lcall	_menu_show_message
+;	firmware/src/main.c:46: for (event_count = 0U; event_count < MAIN_EVENTS_PER_PASS; ++event_count) {
+00126$:
+	mov	r7,#0x00
+00111$:
+;	firmware/src/main.c:47: event = buttons_poll();
+	push	ar7
+	lcall	_buttons_poll
+	mov	r6, dpl
+	pop	ar7
+;	firmware/src/main.c:48: if (event == BUTTON_EVENT_NONE) {
+	mov	a,r6
+	mov	r5,a
+	jz	00107$
+;	firmware/src/main.c:51: menu_handle(event);
+	mov	dpl, r5
+	push	ar7
+	lcall	_menu_handle
+	pop	ar7
+;	firmware/src/main.c:46: for (event_count = 0U; event_count < MAIN_EVENTS_PER_PASS; ++event_count) {
+	inc	r7
+	cjne	r7,#0x04,00163$
+00163$:
+	jc	00111$
+00107$:
+;	firmware/src/main.c:53: menu_poll();
+	lcall	_menu_poll
+;	firmware/src/main.c:54: sidetone_poll();
+	lcall	_sidetone_poll
+;	firmware/src/main.c:55: if (menu_needs_redraw()) {
+	lcall	_menu_needs_redraw
+	mov	a, dpl
+	jz	00109$
+;	firmware/src/main.c:56: menu_render();
+	lcall	_menu_render
+00109$:
+;	firmware/src/main.c:58: lcd_flush_step();
+	lcall	_lcd_flush_step
+;	firmware/src/main.c:60: }
+	sjmp	00126$
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
 	.area XINIT   (CODE)

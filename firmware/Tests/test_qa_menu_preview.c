@@ -20,8 +20,8 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
 #define QA_LOG_RESET_LEVEL 900U
@@ -48,7 +48,7 @@ static void qa_cw_tone(uint16_t tone_hz) {
   memcpy(record, qa_default_record, sizeof(record));
   record[3] = (uint8_t)(tone_hz & 0xFFU);
   record[4] = (uint8_t)(tone_hz >> 8);
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   memcpy(fake_iap_memory(), record, sizeof(record));
 
   fake_lcd_contrast_reset();

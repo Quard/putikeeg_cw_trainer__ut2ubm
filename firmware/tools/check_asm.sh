@@ -27,6 +27,15 @@
 # Fail closed: a written operand that the scan cannot resolve but that contains a protected name or address is a
 # violation. Data operands such as (_tick_count_ms + 1) contain no protected name and stay accepted.
 #
+# Rules on function bodies. A body starts at its label line (_name: at column 0) and ends before the next column-0
+# label that starts with _, or at the end of the file:
+#   R6  Module sidetone.c has the label _sidetone_timer0_isr (a missing label is a violation). Its body has exactly
+#       three calls (lcall or acall): _keyer_service, _player_service and _sidetone_service, in this order, no
+#       ljmp, ajmp or sjmp to a label that starts with _, and a reti. In every module, the bodies of _keyer_service,
+#       _player_service and _sidetone_service have no lcall, no acall and no ljmp, ajmp or sjmp to a label that
+#       starts with _. Other functions are not checked.
+#   R7  No line of any file contains sdcc_atomic, in any case.
+#
 # Fixture convention for --self-test: <fixtures>/reject/<case>/ and <fixtures>/accept/<case>/ are scan roots.
 # Every reject case must exit 1, every accept case must exit 0. A reject case named r<N>_<anything> must also be
 # reported under rule R<N>, so it cannot pass by tripping another rule. <fixtures> defaults to
@@ -141,6 +150,9 @@ function bit_write(op, destination,   address) {
   else emit("R2")
 }
 BEGIN {
+  isr_label = "_sidetone_timer0_isr"
+  split("_keyer_service _player_service _sidetone_service", isr_order, " ")
+  leaf_services["_keyer_service"] = 1; leaf_services["_player_service"] = 1; leaf_services["_sidetone_service"] = 1
   predefined["p2"] = 160; predefined["ie"] = 168; predefined["ea"] = 175; predefined["ie2"] = 175
   predefined["t4t3m"] = 209; predefined["auxintif"] = 239; predefined["p2m0"] = 150; predefined["p2m1"] = 149
   predefined["p0m1"] = 147; predefined["p0m0"] = 148; predefined["p3m1"] = 177; predefined["p3m0"] = 178
@@ -170,6 +182,15 @@ FNR == NR {
 }
 {
   text = tolower($0)
+  if (index(text, "sdcc_atomic") > 0) {
+    shown = FNR ":" trim(text)
+    emit("R7")
+  }
+  if (match(text, /^_[a-z0-9_$]*::?/)) {
+    function_name = substr(text, 1, RLENGTH)
+    sub(/:+$/, "", function_name)
+    if (function_name == isr_label) has_isr = 1
+  }
   sub(/;.*/, "", text)
   gsub(/\t/, " ", text)
   sub(/^ *[a-z0-9_$.]+::? */, "", text)
@@ -183,6 +204,17 @@ FNR == NR {
   for (i = 1; i <= argc; i++) args[i] = trim(args[i])
   for (i = argc + 1; i <= 3; i++) args[i] = ""
   shown = FNR ":" text
+  is_call = (op == "lcall" || op == "acall")
+  is_function_jump = (op == "ljmp" || op == "ajmp" || op == "sjmp") && (args[1] ~ /^_/)
+  if (function_name == isr_label) {
+    if (is_call) {
+      isr_call_count++
+      if (isr_call_count > 3 || args[1] != isr_order[isr_call_count]) emit("R6")
+    }
+    if (is_function_jump) emit("R6")
+    if (op == "reti") has_isr_reti = 1
+  }
+  if ((function_name in leaf_services) && (is_call || is_function_jump)) emit("R6")
   if (op == "setb" || op == "clr" || op == "cpl" || op == "jbc") {
     if (!is_register(args[1])) bit_write(op, args[1])
   } else if (op == "mov") {
@@ -202,6 +234,21 @@ END {
   if (module == "lcd_spi.c" && (orl_count != 1 || anl_count != 1)) {
     shown = "0: expected one orl 0x96,#0x1f and one anl 0x95,#0xe0, found " (orl_count + 0) " and " (anl_count + 0)
     emit("R4")
+  }
+  if (module == "sidetone.c") {
+    if (!has_isr) {
+      shown = "0: no " isr_label " label"
+      emit("R6")
+    } else {
+      if (isr_call_count != 3) {
+        shown = "0: expected 3 calls in " isr_label ", found " (isr_call_count + 0)
+        emit("R6")
+      }
+      if (!has_isr_reti) {
+        shown = "0: no reti in " isr_label
+        emit("R6")
+      }
+    }
   }
 }
 '
@@ -268,6 +315,13 @@ write_case() {
   mkdir -p "$1"
   printf '%s\n' "$3" > "$1/$2.asm"
 }
+
+# Leaf services and the three-call Timer 0 ISR (rule R6). Every sidetone.c case needs them.
+readonly SERVICES=$'_keyer_service:\n\tjb\t_keyer_is_enabled,00102$\n\tret\n00102$:\n\tsjmp\t00103$\n00103$:\n\tret\n_player_service:\n\tret\n_sidetone_service:\n\tret'
+readonly ISR_HEAD=$'\n_sidetone_timer0_isr:\n\tpush\tacc\n\tmov\tpsw,#0x00'
+readonly ISR_TAIL=$'\n\tpop\tacc\n\treti'
+readonly ISR_OK="${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tlcall\t_player_service\n\tlcall\t_sidetone_service'"${ISR_TAIL}"
+readonly SIDETONE_OK=$'\n'"${SERVICES}${ISR_OK}"
 
 readonly CLEAN_SPI=$'\torl\t_P2M0,#0x1f\n\tanl\t_P2M1,#0xe0\n\tclr\t_P2_3\n\tmov\t_P2_4,c\n\tsetb\t_P2_0'
 
@@ -363,25 +417,39 @@ readonly -a BUILTIN_CASES=(
   "r5_mov_rstcfg|eeprom.c|"$'\tmov\t_RSTCFG,#0x03'
   "r5_pop_rstcfg|eeprom.c|"$'\tpop\t0xff'
   "accept_p0_bits_near_pcon|buttons.c|"$'\tsetb\t0x87\n\tclr\t_P0_7\n\tmov\ta,_PCON'
-  "accept_p1_orl_anl|sidetone.c|"$'\torl\t_P1,#0x06\n\tanl\tp1,#0xf9'
-  "r5_mov_p1|sidetone.c|"$'\tmov\t_P1,#0xff'
-  "accept_p1m1_orl_anl|sidetone.c|"$'\tanl\t_P1M1,#0xf9\n\torl\t0x91,#0x01'
-  "r5_mov_p1m1|sidetone.c|"$'\tmov\t_P1M1,#0x01'
-  "accept_p1m0_orl_anl|sidetone.c|"$'\torl\t_P1M0,#0x06\n\tanl\tp1m0,#0xfe'
-  "r5_mov_p1m0|sidetone.c|"$'\tmov\t0x92,a'
-  "accept_tmod_orl_anl|sidetone.c|"$'\tanl\t_TMOD,#0xf0\n\torl\ttmod,#0x00'
-  "r5_mov_tmod|sidetone.c|"$'\tmov\t_TMOD,#0x03'
-  "accept_auxr_orl_anl|sidetone.c|"$'\tanl\t_AUXR,#0x7f\n\torl\t0x8e,#0x00'
-  "r5_mov_auxr|sidetone.c|"$'\tmov\t_AUXR,#0x02'
-  "accept_p1_bits_and_reads|sidetone.c|"$'\tsetb\t_P1_1\n\tclr\t0x92\n\tmov\t_P1_2,c\n\tmov\tc,_P1_0\n\tmov\ta,_TMOD'
+  "accept_p1_orl_anl|sidetone.c|"$'\torl\t_P1,#0x06\n\tanl\tp1,#0xf9'"${SIDETONE_OK}"
+  "r5_mov_p1|sidetone.c|"$'\tmov\t_P1,#0xff'"${SIDETONE_OK}"
+  "accept_p1m1_orl_anl|sidetone.c|"$'\tanl\t_P1M1,#0xf9\n\torl\t0x91,#0x01'"${SIDETONE_OK}"
+  "r5_mov_p1m1|sidetone.c|"$'\tmov\t_P1M1,#0x01'"${SIDETONE_OK}"
+  "accept_p1m0_orl_anl|sidetone.c|"$'\torl\t_P1M0,#0x06\n\tanl\tp1m0,#0xfe'"${SIDETONE_OK}"
+  "r5_mov_p1m0|sidetone.c|"$'\tmov\t0x92,a'"${SIDETONE_OK}"
+  "accept_tmod_orl_anl|sidetone.c|"$'\tanl\t_TMOD,#0xf0\n\torl\ttmod,#0x00'"${SIDETONE_OK}"
+  "r5_mov_tmod|sidetone.c|"$'\tmov\t_TMOD,#0x03'"${SIDETONE_OK}"
+  "accept_auxr_orl_anl|sidetone.c|"$'\tanl\t_AUXR,#0x7f\n\torl\t0x8e,#0x00'"${SIDETONE_OK}"
+  "r5_mov_auxr|sidetone.c|"$'\tmov\t_AUXR,#0x02'"${SIDETONE_OK}"
+  "accept_p1_bits_and_reads|sidetone.c|"$'\tsetb\t_P1_1\n\tclr\t0x92\n\tmov\t_P1_2,c\n\tmov\tc,_P1_0\n\tmov\ta,_TMOD'"${SIDETONE_OK}"
   "accept_p5_orl_anl|keyer.c|"$'\torl\t_P5,#0x20\n\tanl\tp5,#0xdf'
   "r5_mov_p5|keyer.c|"$'\tmov\t_P5,#0xff'
   "accept_p5m1_orl_anl|keyer.c|"$'\torl\t_P5M1,#0x20\n\tanl\t0xc9,#0xff'
   "r5_mov_p5m1|keyer.c|"$'\tmov\t_P5M1,#0x20'
   "accept_p5m0_orl_anl|keyer.c|"$'\tanl\t_P5M0,#0xdf\n\torl\tp5m0,#0x00'
   "r5_mov_p5m0|keyer.c|"$'\tmov\t0xca,a'
-  "accept_p5_5_bit_reads|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tmov\tc,_P5_5\n\tjb\t_P5_5,00101$\n\tjnb\t0xcd,00102$'
-  "accept_p5_5_bit_writes|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tsetb\t0xcd\n\tclr\t_P5_5\n\tmov\ta,_P5'
+  "accept_p5_5_bit_reads|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tmov\tc,_P5_5\n\tjb\t_P5_5,00101$\n\tjnb\t0xcd,00102$'"${SIDETONE_OK}"
+  "accept_isr_three_calls|sidetone.c|${SERVICES}${ISR_OK}"
+  "r6_isr_two_calls|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tlcall\t_sidetone_service'"${ISR_TAIL}"
+  "r6_isr_wrong_order|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_player_service\n\tlcall\t_keyer_service\n\tlcall\t_sidetone_service'"${ISR_TAIL}"
+  "r6_isr_extra_call|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tlcall\t_player_service\n\tlcall\t_sidetone_service\n\tlcall\t_tick_service'"${ISR_TAIL}"
+  "r6_isr_acall_extra|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tacall\t_keyer_service\n\tlcall\t_player_service\n\tlcall\t_sidetone_service'"${ISR_TAIL}"
+  "r6_isr_tail_jump|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tlcall\t_player_service\n\tlcall\t_sidetone_service\n\tljmp\t_x'"${ISR_TAIL}"
+  "r6_isr_no_reti|sidetone.c|${SERVICES}${ISR_HEAD}"$'\n\tlcall\t_keyer_service\n\tlcall\t_player_service\n\tlcall\t_sidetone_service\n\tret'
+  "r6_isr_missing|sidetone.c|${SERVICES}"
+  "r6_service_calls|sidetone.c|"$'_keyer_service:\n\tret\n_player_service:\n\tlcall\t__mulint\n\tret\n_sidetone_service:\n\tret'"${ISR_OK}"
+  "r6_service_tail_jump|sidetone.c|"$'_keyer_service:\n\tret\n_player_service:\n\tret\n_sidetone_service:\n\tsjmp\t_sidetone_poll'"${ISR_OK}"
+  "r6_keyer_service_calls|keyer.c|"$'_keyer_start:\n\tlcall\t_keyer_stop\n\tret\n_keyer_service:\n\tacall\t_keyer_read_event\n\tret'
+  "accept_other_functions_call|keyer.c|"$'_keyer_start:\n\tlcall\t_keyer_stop\n\tljmp\t_cw_timing_compute\n_keyer_service:\n\tret\n_keyer_stop::\n\tlcall\t_sidetone_set_on\n\tret'
+  "r7_sdcc_atomic|main.c|"$'\tlcall\tsdcc_atomic_maybe_rollback'
+  "r7_sdcc_atomic_upper_case_comment|lcd.c|"$'\tnop\t; SDCC_ATOMIC_MAYBE_ROLLBACK'
+  "accept_p5_5_bit_writes|sidetone.c|"$'_P5_5\t=\t0x00cd\n\tsetb\t0xcd\n\tclr\t_P5_5\n\tmov\ta,_P5'"${SIDETONE_OK}"
 )
 
 self_test() {

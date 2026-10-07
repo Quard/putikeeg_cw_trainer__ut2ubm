@@ -11,8 +11,8 @@
 #include "eeprom/eeprom.h"
 #include "fake_iap.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -97,7 +97,7 @@ static void oracle_record(const values_t* values, uint8_t* record) {
   record[11] = (uint8_t)values->values[7];
   record[12] = (uint8_t)values->values[8];
   record[13] = (uint8_t)values->values[9];
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
 }
 
 static bool live_is(const values_t* expected) {
@@ -145,7 +145,7 @@ static void random_record(uint8_t version, uint8_t* record) {
     record[9] = (uint8_t)(rng_next() % 3U);
     record[13] = (uint8_t)(rng_next() % 64U);
   }
-  record[OFFSET_CRC] = settings_crc8(record, 14U);
+  record[OFFSET_CRC] = crc8_compute(record, 14U);
 }
 
 /* Spec constants of 17.3.2 that the oracle uses. */
@@ -315,12 +315,12 @@ static void test_version_1_twin_of_version_2(void) {
     values_t v2;
     memcpy(record, v1_defaults, sizeof(record));
     record[OFFSET_FLAGS] = (uint8_t)flags;
-    record[OFFSET_CRC] = settings_crc8(record, 14U);
+    record[OFFSET_CRC] = crc8_compute(record, 14U);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
     v1 = live_values();
     TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_BOTH, v1.values[SETTINGS_ID_PROSIGN_STYLE]);
     record[OFFSET_VERSION] = 2U;
-    record[OFFSET_CRC] = settings_crc8(record, 14U);
+    record[OFFSET_CRC] = crc8_compute(record, 14U);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
     v2 = live_values();
     v2.values[SETTINGS_ID_PROSIGN_STYLE] = SETTINGS_PROSIGN_BOTH;
@@ -341,7 +341,7 @@ static void test_version_1_bad_records(void) {
 
   memcpy(record, v1_reversed, sizeof(record));
   record[0] = 0x42U;
-  record[OFFSET_CRC] = settings_crc8(record, 14U);
+  record[OFFSET_CRC] = crc8_compute(record, 14U);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_NO_RECORD, load(record));
   TEST_ASSERT(live_is(&defaults));
 
@@ -429,7 +429,7 @@ static void test_faults_in_first_save_after_version_1_load(void) {
   old_records[2][4] = 0x03U;
   old_records[2][5] = 60U;
   old_records[2][OFFSET_FLAGS] = 0xFEU;
-  old_records[2][OFFSET_CRC] = settings_crc8(old_records[2], 14U);
+  old_records[2][OFFSET_CRC] = crc8_compute(old_records[2], 14U);
 
   for (which = 0U; which < 3U; ++which) {
     unsigned edit;

@@ -24,7 +24,7 @@ Source: `references/internal/sidetone_spec.md` sections 6.2, 9 and 14.
 ### Interrupt service routines
 
 Source: `references/internal/sidetone_spec.md` sections 9 and 21, `references/internal/keyer_spec.md` section 3.1
-(decision D-K1).
+(decision D-K1), `references/internal/training_spec.md` section 3.1 (decision D-T1).
 
 - An interrupt calls only functions of its own file. The firmware compiles with `--norestartseqatomics`. With
   SDCC 4.6.0, an interrupt that calls a function of another file still gets the `sdcc_atomic_maybe_rollback`
@@ -32,15 +32,19 @@ Source: `references/internal/sidetone_spec.md` sections 9 and 21, `references/in
 - A service of another module comes into the ISR file through a header. The header defines the service as a
   `static` function. Only the ISR file includes it on the target, so the service is a function of that file.
   Example: `firmware/inc/cw/keyer_service.h` defines `static void keyer_service(void)`, and only
-  `firmware/src/sidetone/sidetone.c` includes it, at the end of the file, before the Timer 0 ISR. The ISR body is
-  `keyer_service(); sidetone_service();` in this order.
+  `firmware/src/sidetone/sidetone.c` includes it, at the end of the file, before the Timer 0 ISR.
+  `firmware/inc/cw/player_service.h` defines `static void player_service(void)` in the same way. The ISR body is
+  `keyer_service(); player_service(); sidetone_service();` in this order.
 - Every file that includes such a header calls its `static` function. Otherwise GCC reports an unused function,
   and `-Werror` stops the host build. Host tests include the header directly.
 - The ISR reads and writes the state that it shares with the main loop directly. That is a memory access, not a
   call. Example: `firmware/src/cw/keyer.c` defines the shared keyer state, and `firmware/inc/cw/keyer_shared.h`
   declares it `extern`.
-- `sidetone_timer0_isr` has exactly two calls: `lcall _keyer_service` and `lcall _sidetone_service`. If the build
-  shows an `sdcc_atomic` symbol or another call in this ISR, stop and report it to `architector`.
+- `sidetone_timer0_isr` has exactly three calls: `lcall _keyer_service`, `lcall _player_service` and
+  `lcall _sidetone_service`, in this order. `firmware/tools/check_asm.sh` rule R6 checks the call list and the leaf
+  services, and rule R7 rejects every `sdcc_atomic` symbol. If the build shows an `sdcc_atomic` symbol or another
+  call in this ISR, stop and report it to `architector`.
+- At most one of the keyer and the CW player is enabled at a time. Both write the sidetone request bit.
 - A function that an interrupt calls uses `#pragma nooverlay`. It calls no other function and no library
   arithmetic helper (`__mulint`, `__divulong` and others), because the main loop uses them too.
 - No source uses `<stdatomic.h>` or C11 atomics.
@@ -54,8 +58,9 @@ Project documents in `references/internal/`:
 | --- | --- |
 | `components_and_wiring.md` | Board revision, components, pins, audio routes, measurements. |
 | `menu_subsystem_spec.md` | Menu, settings, EEPROM and button contract. |
-| `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view, `Paddle` setting, `Prosigns` setting (section 5.10, UX-38), device checks. |
+| `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view. `Paddle` setting, `Prosigns` setting (section 5.10, UX-38). Training modes: Receiving, Sending and session end screens, group keyboard, tap mode, delays and layout constants (sections 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50). Four-button Receiving keyboard, tap `enter` and long `enter` (UX-51). Sending retry screen and pause limit in a word (UX-52). Device checks. |
 | `sidetone_spec.md` | Sidetone contract: API, envelope, registers, memory, decisions. |
+| `training_spec.md` | Koch training modes Receiving and Sending. Three-call ISR (D-T1), CW player and timing extraction. RNG, Koch level model and the four-button group keyboard with tap `enter` and long `enter` (D-T27, D-T28). Progress record in EEPROM page 1. Session engine, menu wiring, memory budget, tasks T0-T11, D1, Q2. Sending retry screen and word-space error (D-T30, D-T31), tasks D2, T12, Q3, W3. Word pass rate 80 % (D-T33), tasks D3, T13, Q4, W4. |
 | `keyer_spec.md` | Keyer, Free Input and long-press contract: ISR layout (D-K1), keyer behavior and timing, Morse table, P3.2 and P5.5 use, `Paddle` setting, memory, device checks DC-K1 to DC-K7. Prosign display setting (section 17): prosign codes, `morse_format()`, settings layout version 2, device checks DC-P1 to DC-P3. |
 | `sidetone_pwm_envelope_research.md` | Sidetone research and the implemented design. |
 | `sidetone_validation.md` | Sidetone device checks and measurement results. |

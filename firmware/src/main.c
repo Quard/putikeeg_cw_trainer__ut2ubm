@@ -8,6 +8,7 @@
 #include "gfx/gfx.h"
 #include "lcd/lcd.h"
 #include "menu/menu.h"
+#include "progress/progress.h"
 #include "settings/settings.h"
 #include "sidetone/sidetone.h"
 #include "tick/tick.h"
@@ -26,6 +27,7 @@ void main(void) {
   /* The buttons are sampled first, so a recovery start never shows the stored contrast and backlight. */
   buttons_init();
   (void)settings_load();
+  (void)progress_load();
   if (buttons_is_recovery_start()) {
     settings_use_display_defaults();
   }

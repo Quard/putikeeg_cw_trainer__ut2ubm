@@ -3,6 +3,8 @@
 #include "gfx/gfx.h"
 #include "lcd/lcd_fb.h"
 #include "menu_internal.h"
+#include "modes/receiving.h"
+#include "modes/sending.h"
 #include "settings/settings.h"
 
 /* Screen grid (references/internal/ui-ux.md sections 4 and 5): 8 rows x 25 columns of 5 x 8 cells from x = 2. */
@@ -176,12 +178,14 @@ void menu_render(void) {
     draw_list();
   } else if (menu_current_screen == MENU_SCREEN_MESSAGE) {
     draw_message();
+  } else if (menu_current_screen == MENU_SCREEN_RECEIVING) {
+    receiving_render();
+  } else if (menu_current_screen == MENU_SCREEN_SENDING) {
+    sending_render();
   } else {
     draw_title(menu_current_item()->label);
     render_row = MESSAGE_ROW;
-    if (menu_current_screen == MENU_SCREEN_PLACEHOLDER) {
-      draw_centered(menu_text_not_ready);
-    } else if (menu_current_screen == MENU_SCREEN_DIALOG) {
+    if (menu_current_screen == MENU_SCREEN_DIALOG) {
       draw_centered(menu_text_reset_question);
       draw_button(BUTTON_NO_FIRST_CELL, BUTTON_SHORT_CELLS, menu_text_no, menu_current_choice == MENU_DIALOG_NO);
       draw_button(BUTTON_YES_FIRST_CELL, BUTTON_LONG_CELLS, menu_text_yes, menu_current_choice == MENU_DIALOG_YES);

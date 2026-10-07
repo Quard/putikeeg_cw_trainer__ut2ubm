@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "cw/timing.h"
 #include "mcu/compiler.h"
 
 typedef uint8_t keyer_event_t;
@@ -24,8 +25,8 @@ typedef uint8_t keyer_event_t;
 #define KEYER_KEY_IAMBIC_A 1U /* equal to SETTINGS_KEY_IAMBIC_A */
 #define KEYER_KEY_IAMBIC_B 2U /* equal to SETTINGS_KEY_IAMBIC_B */
 
-#define KEYER_WPM_MIN 5U  /* equal to settings_min(SETTINGS_ID_TX_WPM) */
-#define KEYER_WPM_MAX 50U /* equal to settings_max(SETTINGS_ID_TX_WPM) */
+#define KEYER_WPM_MIN CW_TIMING_WPM_MIN /* equal to settings_min(SETTINGS_ID_TX_WPM) */
+#define KEYER_WPM_MAX CW_TIMING_WPM_MAX /* equal to settings_max(SETTINGS_ID_TX_WPM) */
 
 /** Sets up the ring pin and an empty queue, and leaves the keyer stopped. Call once, after sidetone_init(). */
 void keyer_init(void);

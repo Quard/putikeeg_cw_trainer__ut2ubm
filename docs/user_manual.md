@@ -1,8 +1,8 @@
 # User manual
 
 This manual is for the custom firmware of the Putikeeg CW Trainer (board `CW_MINI_V2.0D`). It tells you how to use
-the menu, the settings and the Free Input mode. The [release notes](release_notes.md) list the changes of each
-version.
+the menu, the settings, the Free Input mode and the training modes `Receiving` and `Sending`. The
+[release notes](release_notes.md) list the changes of each version.
 
 > **Not tested on the device.** This firmware version passed host tests only. Nobody tested it on the device
 > yet. The behavior in this manual comes from the firmware design and the host tests. On the device, some
@@ -11,19 +11,22 @@ version.
 
 ## What this version does
 
-This version has the menu, the settings, the display controls and the [Free Input](#free-input) mode:
+This version has the menu, the settings, the display controls, the [Free Input](#free-input) mode and the
+[Koch training](#koch-training) modes:
 
 - In `Free Input`, you key Morse code with a paddle or a straight key. You hear the sidetone, and the screen shows
   the decoded text. The keyer has three key types: `Straight`, `Iambic A` and `Iambic B`.
-- `Receiving` and `Sending` are not available yet. They show the message `Not ready`.
-- The device makes two sounds: the sidetone in Free Input and the Tone preview. When you edit `Tone` in
+- In `Receiving`, the device plays Morse code and you pick the characters with the buttons. In `Sending`, the
+  device shows characters and words and you key them. Both modes teach the characters in Koch order, one level at
+  a time.
+- The device makes three sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
+  Tone preview. When you edit `Tone` in
   `Settings > CW`, the device plays the edited tone for about 0.3 s. Each change of the value plays the new tone
   again. At a limit, a press plays nothing new. When you leave the edit, the tone stops at once. The volume knob
   sets the loudness. With headphones plugged in, the headphones play instead of the speaker.
-- The device collects no statistics.
-- `Backlight` and `Contrast` change the display. `Tone`, `TX Speed`, `TX Eff. Speed`, `Key Type` and `Paddle` set
-  the keyer in Free Input. `Prosigns` sets how Free Input shows the prosigns AR, BT, KN and AS. The firmware saves
-  the other settings for the training modes of a later version.
+- The device stores your training level for each mode and each speed. It stores no other statistics.
+- `Backlight` and `Contrast` change the display. The other settings set Free Input and the training modes (see
+  [Settings for training](#settings-for-training)).
 
 ## Buttons
 
@@ -39,13 +42,15 @@ The device has four control buttons and an `on/off` button.
 Notes:
 
 - **`enter` is shared with the paddle socket.** The tip contact of the key/paddle socket is connected to `enter`.
-  In the menu, a paddle dit contact or a straight key acts as `enter`. A key that stays closed gives only one
-  `enter`. The other buttons continue to work. In Free Input, the keyer uses this contact. Then `enter` keys like
-  the tip contact (see [The enter button in Free Input](#the-enter-button-in-free-input)).
+  In the menu and in Receiving, a paddle dit contact or a straight key acts as `enter`. In the menu, a key that
+  stays closed gives only one `enter`. The other buttons continue to work. In Free Input, the keyer uses this
+  contact. Then `enter` keys like the tip contact (see
+  [The enter button in Free Input](#the-enter-button-in-free-input)).
 - If you insert a plug into the paddle socket while the menu shows, the device can see one `enter`. Then it can
   open an item or start editing. Press `menu/back` to go back. Nothing changes. If it opens a mode screen, hold
-  `menu/back` to go back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). This effect is
-  not checked on the device.
+  `menu/back` to go back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). In Receiving, a
+  plug insertion can select the `enter` group of the keyboard (see
+  [Key or paddle in Receiving](#key-or-paddle-in-receiving)). This effect is not checked on the device.
 - **Hold for auto-repeat.** To repeat the action of `prev` or `next`, hold the button. The first repeat comes
   after 0.4 s. After that, the action repeats every 0.08 s (12.5 steps per second). `enter` and `menu/back` do
   not repeat. In the menu lists, a longer hold does nothing more.
@@ -53,8 +58,8 @@ Notes:
   the first item moves it to the last item. When you hold the button, the cursor stops at the end of the list.
 - A button that is held while you switch on the device does nothing until you release it and press it again.
   The only exception is the [display recovery start](#display-recovery-start).
-- The position of `prev` and `next` on the case is not checked yet. This manual assumes that `prev` means up or
-  decrease and `next` means down or increase.
+- From left to right on the case, the four buttons are `menu/back`, `prev`, `next` and `enter`. `prev` means up or
+  decrease, and `next` means down or increase.
 
 ## Screens
 
@@ -69,8 +74,8 @@ After you switch on the device, the main menu `CW Trainer` shows. The cursor is 
 
 ```text
 CW Trainer
-├── Receiving           shows "Not ready"
-├── Sending             shows "Not ready"
+├── Receiving           Koch training: listen and pick the characters
+├── Sending             Koch training: read and key the characters
 ├── Free Input          key and decode Morse code
 └── Settings
     ├── CW
@@ -98,14 +103,16 @@ CW Trainer
 
 ## Hold a button in a mode screen
 
-`Receiving`, `Sending` and `Free Input` are mode screens. In a mode screen, a short press of a button does nothing.
-This protects your text from a press by accident. To give a command, hold the button for about 0.8 s.
+`Receiving`, `Sending` and `Free Input` are mode screens. In Free Input and in a Sending session, a short press of
+a button does nothing. This protects your work from a press by accident. Receiving uses short presses as keyboard
+keys (see [The group keyboard](#the-group-keyboard)). To give a command, hold the button for about 0.8 s.
 
-| Hold this button | In `Free Input` | In `Receiving` or `Sending` |
-| --- | --- | --- |
-| `menu/back` | Leaves Free Input. The main menu shows with the cursor on `Free Input`. The text is lost. | Goes back to the main menu. |
-| `prev` | Clears the text. | Does nothing. |
-| `next` | Draws a line under the text. | Does nothing. |
+| Hold this button | In `Free Input` | In `Receiving` | In `Sending` |
+| --- | --- | --- | --- |
+| `menu/back` | Leaves Free Input. The main menu shows with the cursor on `Free Input`. The text is lost. | Leaves the session. The main menu shows with the cursor on `Receiving`. | Leaves the session. The main menu shows with the cursor on `Sending`. |
+| `prev` | Clears the text. | Undoes one step of the answer. | Does nothing. |
+| `next` | Draws a line under the text. | Does nothing. | Does nothing. |
+| `enter` | No hold action. `enter` keys like the tip contact. | Plays the item again from its start, while the item shows. | No hold action. `enter` keys like the tip contact. |
 
 How to hold a button:
 
@@ -118,13 +125,14 @@ Notes:
 - The screen shows no hint about these holds. The device gives no beep and no progress mark. The change of the
   screen is the only signal.
 - One hold gives one action. A longer hold does nothing more.
-- `enter` has no hold action. In Free Input, `enter` keys like the tip contact.
+- Only Receiving has a hold of `enter`. In Free Input and in Sending, `enter` keys like the tip contact.
 - If you hold `prev` and `next` together in Free Input, the device clears the text and then draws a line.
 
 ### Receiving and Sending
 
-In this version these items open a screen with the message `Not ready`. To go back to the main menu, hold
-`menu/back` for about 0.8 s. A short press does nothing on this screen.
+A session that you leave with a hold of `menu/back` is lost. Your level does not change. The session end screen is
+different: there a short press of `menu/back` also opens the main menu (see
+[Session end screen](#session-end-screen)).
 
 ## Free Input
 
@@ -274,6 +282,8 @@ With `Key Type` = `Straight`, both contacts key, so `Paddle` has no effect.
 - The table in [What the screen shows](#what-the-screen-shows) gives the texts of all five prosigns.
 - A change applies the next time you open Free Input. The menu shows no preview of the text, and the device makes
   no sound.
+- `Receiving` and `Sending` also use this setting for BT, SK and AR (see
+  [Settings for training](#settings-for-training)).
 
 ### The enter button in Free Input
 
@@ -324,7 +334,7 @@ Examples (values are rounded):
 
 | Problem | Possible cause | What to do |
 | --- | --- | --- |
-| You cannot leave Free Input, `Receiving` or `Sending`. | A short press does nothing in a mode screen. | Hold `menu/back` for about 0.8 s, until the main menu shows. |
+| You cannot leave Free Input. | A short press does nothing in Free Input. | Hold `menu/back` for about 0.8 s, until the main menu shows. |
 | The tone does not stop, or the keyer sends dahs or dits without end, and no new character shows. | You inserted the plug while Free Input was open. A mono plug closes the ring contact. | Hold `menu/back` to leave. Then open Free Input again. Insert the plug before you open Free Input. |
 | A short tone sounds, and an extra character (`E`, `T` or `*`) can show. | You inserted or removed a plug while Free Input was open. | To remove the extra character, hold `prev` to clear the text. |
 | Dits and dahs are on the wrong levers. | `Paddle` does not match your paddle. | Change `Settings > CW > Paddle`. |
@@ -350,6 +360,489 @@ These parts of Free Input passed host tests only. Nobody checked them on the dev
 - The line from a long `next`. It must look different from the `-` and `_` characters.
 - The prosign texts of each `Prosigns` value. The user must read `<AR/+>`, `<KN/(>` and `<AS/&>` at a glance, tell
   `(` from `<`, tell the `/` inside a text from a keyed `/`, and join a text that splits at a line end.
+
+## Koch training
+
+`Receiving` and `Sending` are the two training modes. They use the Koch method: you start with two characters at
+the character speed that you set, and each passed session adds a new character.
+
+- In `Receiving`, the device plays a character or a word in Morse code. You pick the characters with the buttons.
+- In `Sending`, the device shows a character or a word. You key it with a paddle or a straight key.
+
+Each mode has its own level. The level sets the characters and the length of the session.
+
+### Levels and sessions
+
+A session is a set of items. An item is one character or one word. The device teaches 43 characters in this order:
+
+```text
+K M R S U A P T L O W I . N J E F 0 Y , V G 5 / Q 9 Z H 3 8 B ? 4 2 7 C 1 D 6 X BT SK AR
+```
+
+BT, SK and AR are prosigns. The sessions come in a fixed order. Two character sessions add two new characters.
+Then a word session uses all characters that you learned:
+
+| Level | Session | Characters | Items |
+| --- | --- | --- | --- |
+| L1 | Characters | K and M | 50 characters |
+| L2 | Characters | K, M and the new R | 50 characters |
+| L3 | Words | K, M, R | 10 words |
+| L4 | Characters | Adds S | 50 characters |
+| L5 | Characters | Adds U | 50 characters |
+| L6 | Words | K, M, R, S, U | 10 words |
+| ... | The same pattern: two character sessions, then one word session | ... | ... |
+| L61 | Characters | Adds SK | 50 characters |
+| L62 | Characters | Adds AR, the last character | 50 characters |
+| L63 | Words | All characters | 10 words |
+| L64 and higher | Final word sessions | All characters | 10 words at L64. Each level adds one word, up to 100 words from L154. |
+
+The final word sessions have no end. After L154, each level has 100 words.
+
+Rules for the items:
+
+- In a character session, about half of the items are the new character. The earlier characters share the other
+  half equally. At L1, K and M come equally often.
+- A word is a random group of the characters that you learned. A word never contains BT, SK or AR. These three
+  prosigns come only in character sessions.
+- The first two word sessions have words of 2 characters. The next two have words of 3 characters. The length grows
+  by one character every two word sessions.
+- `Max Word Length` sets the longest word: 4 to 8 characters, default 5. The final word sessions always use words of
+  `Max Word Length` characters.
+
+Rules for a pass:
+
+- The score counts only the items that you answer correctly on the first attempt.
+- To pass a character session, you need 90 % of the items: 45 of 50 characters.
+- To pass a word session, you need 80 % of the words, rounded up: 8 of 10 words, 80 of 100 words. This rule
+  applies to every word session, also to the final word sessions.
+- A pass moves you to the next level. A fail repeats the level with new random items.
+- You cannot choose a level. `Reset Statistics` sets all levels back to L1 (see
+  [Reset Statistics](#reset-statistics)).
+
+### Settings for training
+
+At the start of a mode, the device reads its settings once. A new session from the session end screen keeps the
+same settings. To change a setting, hold `menu/back` to leave the mode. Change the setting, and leave `Settings` to
+save it. Then open the mode again.
+
+| Setting | In `Receiving` | In `Sending` |
+| --- | --- | --- |
+| `Tone` | The pitch of the playback. | The pitch of the sidetone. |
+| `RX Speed` | The character speed of the playback. It also selects the stored level (see [Progress](#progress)). | No effect. |
+| `RX Eff. Speed` | The effective speed of the playback. | No effect. |
+| `TX Speed` | No effect. | The speed of the keyer and the decoder. It also selects the stored level. |
+| `TX Eff. Speed` | No effect. | Shows in the header. It sets the pause limit between the characters of a word (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
+| `Key Type`, `Paddle` | No effect. | The keyer, as in Free Input (see [Key types](#key-types) and [Paddle setting](#paddle-setting)). |
+| `Show CW Code` | No effect. | Shows the dots and dashes that you key (see [Sending](#sending)). |
+| `Prosigns` | How BT, SK and AR show in the items and in the keyboard labels. | How BT, SK and AR show in the items and in the `Wrong:` text. |
+| `Max Word Length` | The longest word. | The longest word. |
+
+The `Prosigns` setting gives these texts. For example, BT shows as `=`, `<BT>` or `<BT/=>`. SK always shows as
+`<SK>`. The table in [What the screen shows](#what-the-screen-shows) gives all texts.
+
+### The training screen
+
+Both modes use the same screen layout. The top row is the header. It shows the mode, the speeds, the level and the
+item number:
+
+```text
+RX 20/15 L12         7/50
+```
+
+| Field | Example | Meaning |
+| --- | --- | --- |
+| Mode | `RX` | `RX` in Receiving, `TX` in Sending. |
+| Speeds | `20/15` | The character speed and the effective speed, in WPM. Receiving shows `RX Speed` and `RX Eff. Speed`. Sending shows `TX Speed` and `TX Eff. Speed`. |
+| Level | `L12` | The level of this session. |
+| Item | `7/50` | The number of the current item and the number of items in the session. |
+
+Below the header:
+
+- The second row is the status line. It shows the result of a check, for example `Correct` or `Try 2 of 3`.
+- The middle of the screen shows the item, or the slots of your answer, in large characters.
+- In Receiving, the bottom row shows the four keyboard labels. A short bar above each label marks its button. In
+  Sending, the bottom row shows the dots and dashes that you key.
+
+Each session starts with a pause of 1 s. Then the first item comes. Before each next item, the item area goes blank
+for a short moment. So you can see the start of each new item, also for the same character again. During a
+pause, the header already shows the number of the next item.
+
+The screen shows no hint about how to leave. To leave a session at any time, hold `menu/back` for about 0.8 s. The
+main menu shows with the cursor on the mode. The session is lost, and your level does not change.
+
+### Receiving
+
+In Receiving, you listen to an item and pick its characters with the four buttons.
+
+#### Start, answer and leave
+
+1. In the main menu, select `Receiving` and press `enter`. This press picks nothing and replays nothing, also if
+   you hold it.
+2. Wait 1 s. The device plays the first item at `RX Speed` and `RX Eff. Speed`.
+3. Look at the slots in the middle of the screen. Each character of the item has one slot. A block marks the slot
+   that your next pick fills. A short bar marks each other empty slot.
+4. Pick the characters with the keyboard (see [The group keyboard](#the-group-keyboard)). You can pick while the
+   item plays. Each pick shows at once.
+5. Fill the last slot. The device checks the whole answer at once. If the item still plays, the playback stops.
+6. Read the result in the status line (see [Results and attempts](#results-and-attempts)). The next item comes
+   after the result.
+7. To leave, hold `menu/back` for about 0.8 s.
+
+In Receiving, a short press is a tap. You must release the button before about 0.8 s. When you release the
+button, the tap acts. The push alone does nothing. A tap of `enter` selects the right group of the keyboard. It
+does not replay the item.
+
+To hear the item again, hold `enter` for about 0.8 s while the item shows:
+
+- The item plays again from its start. This also works while the item plays.
+- The replay starts while you still hold the button. The screen does not change. When you hear the playback start
+  again, release the button.
+- Your picks and the labels stay. A replay is free: it uses no attempt and does not change the score.
+- A hold of `enter` does nothing during the start pause, a result or the blank moment.
+
+#### Key or paddle in Receiving
+
+The tip contact of the key/paddle socket is connected to `enter`. So in Receiving, the dit lever (with
+`Paddle` = `Normal`) or a straight key acts as `enter`:
+
+- A short closure is a tap of `enter`. It selects the right group.
+- A closure of about 0.8 s is a hold of `enter`. It plays the item again.
+
+The ring contact does nothing. The paddle gives no sidetone in Receiving.
+
+> **Insert the plug before you open Receiving.** A plug insertion can close the tip contact for a short time.
+> During Receiving, this acts as a tap of `enter`. So it can select the right group. If that group has two or more
+> characters, the labels change. Hold `prev` to go back. If that group has one character, the device picks it.
+> Hold `prev` to undo the pick. But if the pick fills the last slot, the device checks the answer at once. This
+> uses an attempt, and you cannot undo it. On the session end screen, a plug insertion can start the next session.
+
+#### The group keyboard
+
+The bottom row shows four labels, one above each button. From left to right, the buttons are `menu/back`, `prev`,
+`next` and `enter`. Each label shows a group of characters. A short bar above each label marks its button. Also
+for a blank label, the bar shows.
+
+The keyboard holds only the characters that you learned. It shows them in this order: `A` to `Z`, `0` to `9`, `.`
+`,` `?` `/`, then BT, SK and AR. In a word session, the keyboard has no BT, SK and AR.
+
+The keyboard splits its characters into four groups, one for each button. The groups keep the keyboard order. Their
+sizes differ by one character at most, and the larger groups are on the left. For example, 43 characters give
+groups of 11, 11, 11 and 10 characters.
+
+Example: all 43 characters learned, `Prosigns` = `Both`, before the first pick. `#` is the block in the slot:
+
+```text
+RX 20/15 L62        12/50
+
+
+            #
+            #
+
+_____ _____ ____ ________
+A-K    L-V  W-6    7-<AR>
+```
+
+The labels `A-K`, `L-V`, `W-6` and `7-<AR>` belong to `menu/back`, `prev`, `next` and `enter`.
+
+| Label | Example | A tap of the button below it |
+| --- | --- | --- |
+| One character | `K`, `<BT>` | Picks the character. It goes into the slot with the block. |
+| A list of characters | `KM`, `ABC` | Splits these characters into four smaller groups. The labels change. |
+| A range | `A-K`, `7-<AR>` | Splits the learned characters from the first to the last into four smaller groups. The labels change. |
+| Blank | | Does nothing. |
+
+How to read a label:
+
+- A list shows the characters with no space between them, for example `KM` or `<SK><AR>`.
+- A range shows the first character, `-` and the last character. A `-` in a label always means a range. The
+  keyboard has no `-` character.
+- A range holds only the characters that you learned. For example, with 30 characters learned, `A-K` holds A, E,
+  F, G, H, I, J and K. You did not learn B, C and D yet.
+- The `enter` label has more room than the other labels. So it can show a list while the other labels show ranges.
+- A prosign shows as `<BT>`, `<SK>` or `<AR>`. With `Prosigns` = `Punctuation`, BT shows as `=` and AR as `+`. SK
+  always shows as `<SK>`.
+- The slots show the full text of the `Prosigns` setting. So with `Both`, the label `<AR>` picks AR, and the slot
+  shows `<AR/+>`.
+- After each pick, the labels show all learned characters again.
+
+Example: pick AR from the screen above.
+
+1. The labels show `A-K`, `L-V`, `W-6` and `7-<AR>`. Tap `enter`.
+2. The labels show `789`, `.,?`, `/<BT>` and `<SK><AR>`. Tap `enter`.
+3. The labels show `<SK>` and `<AR>`. The `next` and `enter` labels are blank. Tap `prev`. AR goes into the slot,
+   and the slot shows `<AR/+>`.
+
+One pick needs 3 taps at most:
+
+| Characters on the keyboard | Taps for one pick |
+| --- | --- |
+| 2 to 4 | 1 |
+| 5 to 16 | 1 or 2 |
+| 17 to 43 | 2 or 3. With 43 characters, and with the 40 characters of a word session, each pick needs 3 taps. |
+
+With 2 characters, the `next` and `enter` labels are blank. With 3 characters, the `enter` label is blank. A tap of a
+button with a blank label does nothing.
+
+If you hold a button for about 0.8 s, the device sees a hold, not a tap. A hold picks nothing. A held button gives no
+repeat. The holds give commands (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)).
+
+#### Undo
+
+To undo one step, hold `prev` for about 0.8 s:
+
+- If the labels show a smaller group, they go back one group level.
+- If the labels show all characters, the last pick goes away. The block moves to that slot.
+- If no slot holds a pick, nothing happens.
+
+One hold undoes one step. To undo two steps, hold `prev` two times. The undo does not change the playback. A hold
+of `next` does nothing.
+
+A pick that fills the last slot starts the check at once. You cannot undo a check.
+
+### Sending
+
+In Sending, you read an item and key it. The device decodes each character and checks it at once.
+
+#### Before you start
+
+1. Set the keyer in `Settings > CW`: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone`. Sending uses
+   the same keyer as Free Input (see [Key types](#key-types) and [Speeds and pauses](#speeds-and-pauses)).
+2. Set `Show CW Code` in `Settings`. With `On`, the screen shows the dots and dashes that you key.
+3. Press `menu/back` until the main menu shows. The device saves the changed settings.
+4. Insert the plug of the key or paddle into the key/paddle socket.
+
+> **Insert the plug before you open Sending.** A plug that you insert during a session can close a contact. Then
+> the keyer can send a tone, extra elements and a wrong character. A wrong character uses an attempt.
+
+#### Start, key and leave
+
+1. In the main menu, select `Sending` and press `enter`. This press gives no element and no tone. If a contact
+   stays closed, the keyer ignores it until it opens.
+2. Wait 1 s. The first item shows in large characters.
+3. Key the item. You hear the sidetone. After a pause of 2 dits, the device decodes the character and checks it.
+4. In a word, a short bar shows under the character that you key next. After each correct character, the bar moves
+   to the next character. The status line shows nothing.
+5. After the last correct character, the status line shows `Correct`. Then the next item comes.
+6. To leave, hold `menu/back` for about 0.8 s.
+
+Notes:
+
+- One wrong character ends the attempt. The status line shows `Wrong:` and the character that you keyed, for
+  example `Wrong: N`. `*` means a pattern that the decoder does not know. It is always wrong.
+- In a word, a long pause between two characters also ends the attempt (see
+  [Pause between characters of a word](#pause-between-characters-of-a-word)).
+- In the next attempt, key the whole item again from its first character (see
+  [Wrong attempts and the retry](#wrong-attempts-and-the-retry)).
+- After the last character of a word, a pause does nothing. You do not have to key a word space at the end of a
+  word.
+- In a session, short presses do nothing. `enter` keys like the tip contact, as in Free Input. A hold of `prev` or
+  `next` does nothing.
+
+#### Code row
+
+With `Show CW Code` = `On`, the bottom row shows one mark for each element that you key. A short mark is a dot, and
+a long mark is a dash. The marks show what the keyer decoded. They stay until you start the next character, or
+until the retry starts. So after a wrong character, you can see what you keyed. The row shows at most 12 marks for
+one character. With `Off`, the bottom row stays blank.
+
+#### Pause between characters of a word
+
+In a word session, key the word as one word. Start the next character before the pause reaches 5 units of the
+`TX Eff. Speed` spacing. With `TX Eff. Speed` equal to `TX Speed`, one unit is one dit. Free Input inserts a word
+space at the same point (see [Speeds and pauses](#speeds-and-pauses)). The pause starts at the end of the last
+element of a character. It ends at the start of the first element of the next character.
+
+A longer pause is a wrong attempt, the same as a wrong character:
+
+- The status line shows `Wrong: pause too long`.
+- The bar stays under the next character. It shows where the pause came.
+- The pause uses an attempt. In the next attempt, key the whole word again from its first character.
+- After the third wrong attempt, the code of the character under the bar shows below the item.
+
+A pause does nothing in these cases:
+
+- Before the first character of an attempt.
+- After the last character of the word.
+- In a character session.
+- After a character that the device lost (see [Keying during a pause](#keying-during-a-pause)).
+- During the start pause, a result or the blank moment.
+
+Examples (values are rounded):
+
+| `TX Speed` | `TX Eff. Speed` | Normal pause between characters (3 units) | Pause limit (5 units) |
+| ---: | ---: | ---: | ---: |
+| 32 WPM | 32 WPM | 113 ms | 188 ms |
+| 20 WPM | 20 WPM | 180 ms | 300 ms |
+| 13 WPM | 13 WPM | 277 ms | 461 ms |
+| 5 WPM | 5 WPM | 720 ms | 1200 ms |
+| 20 WPM | 10 WPM | 654 ms | 1090 ms |
+| 20 WPM | 5 WPM | 1601 ms | 2669 ms |
+
+The normal pause between characters is 3 units. So you have 2 units of margin before the limit. If you need more
+time, set a lower `TX Eff. Speed`. A lower value gives a longer pause limit.
+
+#### Wrong attempts and the retry
+
+After a wrong attempt 1 or 2:
+
+1. The status line shows the result for 1.2 s: `Wrong:` and the keyed character, or `Wrong: pause too long`.
+   During this time, the bottom row keeps the code that you keyed, so you can read it. After a pause error, the
+   bottom row shows the code of the last correct character.
+2. Then the retry starts. The status line shows `Try 2 of 3` or `Try 3 of 3`. The rows below the item are blank,
+   with `Show CW Code` = `On` and with `Off`. In a word, the bar goes back to the first character.
+3. Key the whole item again from its first character.
+
+Only the status line tells you that this is a retry. The rest of the screen looks like a new item.
+
+#### Keying during a pause
+
+The keyer and the sidetone also work during the start pause, a result and the blank moment. You hear what you key,
+but the device ignores it.
+
+- If you start a character during a pause, the device ignores the whole character. This is also true for the part
+  that you key after the pause. Key the character again.
+- If the display falls far behind the keyer, the device ignores the character in progress. It uses no attempt and
+  shows no message. Key the character again.
+
+### Results and attempts
+
+You have 3 attempts for each item. The status line shows the result of each check. The device makes no sound for a
+result.
+
+| Result | Status line | Time on the screen | Then |
+| --- | --- | --- | --- |
+| Correct | `Correct` | 0.6 s | The blank moment, then the next item. |
+| Wrong, attempt 1 or 2 | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character. |
+| Wrong, attempt 3 | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: 2.5 s after the end of the playback. Sending: 2.5 s. | The blank moment, then the next item. |
+
+- In Sending, the dots and dashes of the expected character show after the third wrong attempt, also with
+  `Show CW Code` = `Off`.
+- An item that you answer correctly on attempt 2 or 3 does not add to the score.
+- The blank moment takes 0.5 s in Receiving and 0.3 s in Sending.
+- After the last item, the session end screen shows at once.
+
+### Session end screen
+
+After the last item, the session end screen shows. The header stays. A pass looks like this:
+
+```text
+       Score 46/50
+         Passed
+      New level L13
+
+          Next
+```
+
+A fail looks like this:
+
+```text
+       Score 43/50
+   Not passed, need 45
+    Repeat level L12
+
+          Next
+```
+
+| Text | Meaning |
+| --- | --- |
+| `Score 46/50` | Items correct on the first attempt, and the number of items. |
+| `Passed` | You passed the session. |
+| `Not passed, need 45` | You did not pass. The number is the score that you need. |
+| `New level L13` | After a pass: the level of your next session. |
+| `Repeat level L12` | After a fail: the next session repeats this level. |
+| `Top level L65535` | After a pass at the highest level. The level does not change. |
+| `Not saved` | After a pass: the device did not store the new level (see [Progress](#progress)). |
+
+Controls:
+
+- Press `enter` to start the next session at the level on the screen. The tip contact of the key/paddle socket also
+  starts it. The session uses the settings from the mode start.
+- Press or hold `menu/back` to go to the main menu. The cursor is on the mode.
+- `prev` and `next` do nothing.
+- The screen has no timeout.
+
+In Receiving, the buttons of the session end screen work as taps. A tap acts at the release:
+
+- Tap `enter` to start the next session. A short closure of the tip contact does the same.
+- Tap `menu/back` to open the main menu. A hold of `menu/back` opens the main menu after about 0.8 s.
+- A hold of `enter`, or a tip closure of about 0.8 s, does nothing. The release after the hold also does nothing.
+  Tap `enter` again.
+- A plug insertion can start the next session.
+
+In Sending, `enter` and `menu/back` act at the push. The keyer stops at the session end screen. If you hold the
+tip contact (the dit lever with `Paddle` = `Normal`, or a straight key) at that moment, it starts nothing. Release
+it, and then close it again or press `enter`. The ring contact does nothing on this screen. The press that starts
+the next session gives no element and no tone.
+
+### Progress
+
+The device stores one level for each mode and each character speed from 5 to 50 WPM:
+
+- Receiving uses the level of the current `RX Speed`. Sending uses the level of the current `TX Speed`.
+- The effective speeds do not select a level.
+- A speed that you never trained starts at L1.
+
+Example: you are at L12 in Receiving at `RX Speed` 20 WPM. You set `RX Speed` to 25 WPM. Receiving now starts at the
+level that you have at 25 WPM, for example L1. When you set `RX Speed` back to 20 WPM, Receiving starts at L12
+again.
+
+When the device saves the level:
+
+- The device saves only after a passed session. It saves before the session end screen shows.
+- A failed session, a session that you leave, and a power loss during a session do not change the stored level.
+- If the stored levels are damaged, every level is L1. This is also true at the first start. The device shows no
+  message.
+
+If the save fails, the session end screen shows `Not saved`. A low battery voltage is one possible cause:
+
+1. Start the next session. The new level stays in use until you switch off the device.
+2. Pass a session. The device then tries the save again.
+3. If you switch off before a save works, the next start can use the earlier levels, or L1 for all speeds in both
+   modes.
+
+> **Caution:** Wait until the session end screen shows before you switch off. To save, the device first erases all
+> stored levels and then writes them again. This takes a few milliseconds. If the power stops at that moment, the
+> next start can use L1 for all speeds in both modes. The device shows no message.
+
+The levels and the settings are in the same memory. A firmware download can keep or delete them. Nobody checked
+this on the device yet.
+
+### Problems in training
+
+| Problem | Possible cause | What to do |
+| --- | --- | --- |
+| You cannot leave a session. | In Receiving, a short press of `menu/back` is a keyboard key. In Sending, it does nothing. | Hold `menu/back` for about 0.8 s, until the main menu shows. |
+| A press picks nothing in Receiving. | The device saw a hold. Or a start pause, a result or the blank moment shows. Or the label above the button is blank. | Press and release the button quickly while the item shows. |
+| You hear no playback in Receiving. | The volume knob is at its minimum. | Turn up the volume. Hold `enter` for about 0.8 s to play the item again. |
+| The item plays again without a press. | You inserted or removed a plug. A tip closure of about 0.8 s acts as a hold of `enter`. | Nothing. A replay is free. |
+| In Receiving, a character was picked without a press, or an attempt was used after you inserted the plug. | You inserted the plug while Receiving was open. A short tip closure acts as a tap of `enter`. | Insert the plug before you open Receiving. To undo a pick that the device did not check yet, hold `prev`. |
+| In Sending, a tone sounds or a wrong character shows without a keyed element. | You inserted or removed a plug during the session. A mono plug closes the ring contact. | Hold `menu/back` to leave. Insert the plug, then open `Sending` again. |
+| In Sending, a character that you keyed does not count. | You started it during a pause. | Key the character again. |
+| In Sending, many characters are wrong or show as `*`. | Your speed is different from `TX Speed`. The decoder does not adapt. | Set `TX Speed` near your keying speed. |
+| In Sending, `Wrong: pause too long` shows while you key at a normal rhythm. | Your pause between two characters of a word is too long. The limit is 5 units, only 2 units more than the normal pause. | Set a lower `TX Eff. Speed`. A lower value gives a longer pause limit (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
+| The level is L1, but you trained before. | You changed `RX Speed` or `TX Speed`. Each speed has its own level. | Set the speed back. |
+| All levels are L1. | A reset, a failed save, or a power loss during a save. | Train the levels again. |
+
+### Not checked on the device
+
+These parts of the training modes passed host tests only. Nobody checked them on the device yet:
+
+- The timing of the playback, and no clicks at the start and the end of each element.
+- The legibility of the large characters, the block, the bars and the dot and dash marks.
+- The four keyboard labels sit above `menu/back`, `prev`, `next` and `enter`, in this order.
+- The feel of a tap that acts at the release.
+- A hold of `enter` plays the item again with no group change and no pick first.
+- Short tip closures and tip closures of 0.8 s, with the dit lever of a paddle and with a straight key.
+- A plug insertion in Receiving, during an item and on the session end screen.
+- The blank moment of 0.3 s in Sending. The display can be too slow to show it.
+- The pause limit in Sending words, with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM. Words
+  with the normal 3-unit pause must pass. A pause of about 6 units must give `Wrong: pause too long`. A pause of
+  about 4 units must not.
+- The retry screen in Sending: the rows below the item must be blank at the retry. The wrong code in the bottom
+  row must be readable during the 1.2 s result.
+- The time on the screen of each result.
+- A held lever at the session end and at the start of the next session.
+- A stored level after a power cycle, and L1 after `Reset Statistics` and a power cycle.
 
 ## Change a setting
 
@@ -388,9 +881,9 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 `RX Speed` and `TX Speed` are the character speeds. `RX Eff. Speed` and `TX Eff. Speed` are the effective
 (Farnsworth) speeds.
 
-`Backlight` and `Contrast` change the display at each step while you edit them. `Tone`, `TX Speed`,
-`TX Eff. Speed`, `Key Type`, `Paddle` and `Prosigns` take effect the next time you open Free Input. The other
-settings have no effect in this version.
+`Backlight` and `Contrast` change the display at each step while you edit them. The other settings take effect the
+next time you open Free Input, `Receiving` or `Sending`. [Settings for training](#settings-for-training) tells which
+setting affects which training mode.
 
 ### Effective-speed rule
 
@@ -452,17 +945,21 @@ again.
 
 ## Reset Statistics
 
-This version collects no statistics. The dialog works, but there is nothing to reset yet.
+`Reset Statistics` sets all training levels back to L1: both modes, all speeds. It does not change the settings.
 
 1. In `Settings`, select `Reset Statistics` and press `enter`.
 2. The dialog `Reset statistics?` shows. The focus is on `No` each time the dialog opens.
 3. Press `next` to select `Yes`, or `prev` to select `No`.
 4. Press `enter`:
    - With `No`, the dialog closes and `Settings` shows.
-   - With `Yes`, the device resets the statistics and shows `Statistics reset` and `OK`. Press `enter` or
+   - With `Yes`, the device resets the levels and shows `Statistics reset` and `OK`. Press `enter` or
      `menu/back` to go back to `Settings`.
 
 `menu/back` in the dialog is the same as `No`.
+
+If the device cannot store the reset, it shows `Not saved` and `OK` in place of `Statistics reset`. Press `enter` or
+`menu/back` to go back to `Settings`. Then do the reset again. After a failed reset, the next start can use the
+earlier levels, or L1 for all speeds.
 
 ## Display recovery start
 

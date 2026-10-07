@@ -1,3 +1,5 @@
 #include "stats/stats.h"
 
-void stats_reset(void) {}
+#include "progress/progress.h"
+
+bool stats_reset(void) { return progress_reset() == PROGRESS_OK; }

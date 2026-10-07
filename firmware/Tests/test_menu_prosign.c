@@ -19,8 +19,8 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -321,7 +321,7 @@ static void test_v82_save(void) {
     TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
     TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION]);
     TEST_ASSERT_EQUAL(style, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
-    TEST_ASSERT_EQUAL(fake_iap_memory()[14], settings_crc8(fake_iap_memory(), 14U));
+    TEST_ASSERT_EQUAL(fake_iap_memory()[14], crc8_compute(fake_iap_memory(), 14U));
     power_on();
     TEST_ASSERT_EQUAL(style, settings_get(SETTINGS_ID_PROSIGN_STYLE));
     open_settings();

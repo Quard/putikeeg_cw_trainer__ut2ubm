@@ -144,7 +144,8 @@ static void test_random_walk_invariants(void) {
       const uint8_t choice = menu_dialog_choice();
       const size_t starts_before = fake_keyer_start_count();
       const size_t stops_before = fake_keyer_stop_count();
-      const bool is_mode_screen = (screen == MENU_SCREEN_PLACEHOLDER) || (screen == MENU_SCREEN_FREE_INPUT);
+      const bool is_training_screen = (screen == MENU_SCREEN_RECEIVING) || (screen == MENU_SCREEN_SENDING);
+      const bool is_mode_screen = is_training_screen || (screen == MENU_SCREEN_FREE_INPUT);
       const menu_item_t MEM_CODE* item = item_under_cursor();
       const size_t stats_before = fake_stats_reset_count();
       const size_t erases_before = fake_iap_erase_count(0U);
@@ -184,7 +185,7 @@ static void test_random_walk_invariants(void) {
 
       /* UX-24 and ui-ux.md 6.1: a long event outside a mode screen, and a short event in one, change nothing. */
       if ((is_long && !is_mode_screen) || (!is_long && is_mode_screen) ||
-          (is_long && (screen == MENU_SCREEN_PLACEHOLDER) && (code != BUTTON_EVENT_MENU))) {
+          (is_long && is_training_screen && (code != BUTTON_EVENT_MENU))) {
         ++ignored_longs;
         TEST_ASSERT_EQUAL(screen, menu_screen());
         TEST_ASSERT_EQUAL(node, menu_node());
@@ -206,8 +207,11 @@ static void test_random_walk_invariants(void) {
           TEST_ASSERT_EQUAL(stops_before, fake_keyer_stop_count());
         }
       }
-      if ((screen != MENU_SCREEN_FREE_INPUT) && (menu_screen() == MENU_SCREEN_FREE_INPUT)) {
-        ++free_input_entries;
+      if ((screen != menu_screen()) &&
+          ((menu_screen() == MENU_SCREEN_FREE_INPUT) || (menu_screen() == MENU_SCREEN_SENDING))) {
+        if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
+          ++free_input_entries;
+        }
         TEST_ASSERT_EQUAL(starts_before + 1U, fake_keyer_start_count());
         TEST_ASSERT_EQUAL(settings_get(SETTINGS_ID_KEY_TYPE), fake_keyer_last_key_type());
         TEST_ASSERT_EQUAL(settings_get(SETTINGS_ID_PADDLE_SWAP) != 0U, fake_keyer_last_is_swapped());
@@ -216,8 +220,9 @@ static void test_random_walk_invariants(void) {
       } else {
         TEST_ASSERT_EQUAL(starts_before, fake_keyer_start_count());
       }
-      /* The keyer runs exactly while Free Input is open. */
-      TEST_ASSERT_EQUAL(menu_screen() == MENU_SCREEN_FREE_INPUT, fake_keyer_is_running());
+      /* The keyer runs exactly while Free Input or Sending is open (Sending stops it only at its end screen). */
+      TEST_ASSERT_EQUAL((menu_screen() == MENU_SCREEN_FREE_INPUT) || (menu_screen() == MENU_SCREEN_SENDING),
+                        fake_keyer_is_running());
       if ((menu_screen() == MENU_SCREEN_FREE_INPUT) && ((rng_next() % 2U) == 0U)) {
         feed_free_input();
       }
@@ -225,13 +230,17 @@ static void test_random_walk_invariants(void) {
       TEST_ASSERT((menu_depth >= 1U) && (menu_depth <= MENU_STACK_DEPTH));
       TEST_ASSERT(menu_node() < MENU_NODE_COUNT);
       TEST_ASSERT(menu_cursor() < menu_nodes[menu_node()].item_count);
-      TEST_ASSERT(menu_screen() <= MENU_SCREEN_FREE_INPUT);
+      TEST_ASSERT(menu_screen() <= MENU_SCREEN_SENDING);
+      TEST_ASSERT(menu_screen() != 2U);
       TEST_ASSERT(menu_dialog_choice() <= MENU_DIALOG_YES);
       if (menu_screen() == MENU_SCREEN_EDIT) {
         TEST_ASSERT((item_under_cursor()->kind == MENU_KIND_VALUE) || (item_under_cursor()->kind == MENU_KIND_CHOICE));
-      } else if (menu_screen() == MENU_SCREEN_PLACEHOLDER) {
+      } else if (menu_screen() == MENU_SCREEN_RECEIVING) {
         TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_MODE);
-        TEST_ASSERT(item_under_cursor()->target != MENU_MODE_FREE_INPUT);
+        TEST_ASSERT_EQUAL(MENU_MODE_RECEIVING, item_under_cursor()->target);
+      } else if (menu_screen() == MENU_SCREEN_SENDING) {
+        TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_MODE);
+        TEST_ASSERT_EQUAL(MENU_MODE_SENDING, item_under_cursor()->target);
       } else if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
         TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_MODE);
         TEST_ASSERT_EQUAL(MENU_MODE_FREE_INPUT, item_under_cursor()->target);

@@ -1,9 +1,10 @@
 /*
  * QA tests for the buttons module: random bounce trains with irregular poll intervals, repeat catch-up with slow
  * main-loop passes, bounce of a second button during a repeat, the recovery window with a late tick, and long
- * presses with slow passes, release bounce, the tick wrap and the P3.2 ownership.
- * The oracles come from menu_subsystem_spec.md section 4.5, keyer_spec.md section 6.12 and ui-ux.md sections 6.2
- * and 6.6, not from buttons.c.
+ * presses with slow passes, release bounce, the tick wrap and the P3.2 ownership. Tap mode of all four buttons
+ * with the long enter (0x44) and the drop rules of buttons_set_enter_enabled() and buttons_set_tap_mode().
+ * The oracles come from menu_subsystem_spec.md section 4.5, keyer_spec.md section 6.12, ui-ux.md sections 6.2
+ * and 6.6, and training_spec.md D-T7, D-T22, D-T28 and section 5.9, not from buttons.c.
  */
 #include <string.h>
 
@@ -506,9 +507,8 @@ static void test_long_press_order_same_poll(void) {
   size_t i;
   start_released(65000U);
   for (time = 0U; time < 1500U; ++time) {
-    fake_button_pins_set(((time >= 10U) && (time < 1400U))
-                             ? (uint8_t)(BUTTON_BIT_MENU | BUTTON_BIT_PREV | BUTTON_BIT_NEXT)
-                             : 0U);
+    fake_button_pins_set(
+        ((time >= 10U) && (time < 1400U)) ? (uint8_t)(BUTTON_BIT_MENU | BUTTON_BIT_PREV | BUTTON_BIT_NEXT) : 0U);
     (void)pass_at(65000U + time, 8U);
   }
   /* Presses at 30 (MENU, PREV, NEXT), then at 830 the three long events, then the PREV repeat due at 830. */
@@ -675,6 +675,371 @@ static void test_long_press_exact_boundary(void) {
   }
 }
 
+/* ---------- Tap mode (training_spec.md D-T7, D-T22, D-T28, section 5.9; AC-T15) ---------- */
+
+static const uint8_t all_bits[4] = {BUTTON_BIT_MENU, BUTTON_BIT_PREV, BUTTON_BIT_NEXT, BUTTON_BIT_ENTER};
+static const button_event_t all_codes[4] = {BUTTON_EVENT_MENU, BUTTON_EVENT_PREV, BUTTON_EVENT_NEXT,
+                                            BUTTON_EVENT_ENTER};
+
+static void start_tap_mode(uint16_t start_time) {
+  start_released(start_time);
+  buttons_set_tap_mode(true);
+}
+
+/* D-T28: the long enter is BUTTON_EVENT_ENTER | BUTTON_EVENT_LONG_FLAG, and BUTTON_EVENT_CODE() gives ENTER. */
+static void test_long_enter_code(void) {
+  TEST_ASSERT_EQUAL(0x44U, LONG(BUTTON_EVENT_ENTER));
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, BUTTON_EVENT_CODE(LONG(BUTTON_EVENT_ENTER)));
+}
+
+/*
+ * Random poll model in tap mode for all four buttons, also across the tick wrap. The debounced press P and the
+ * debounced release Q come from the poll times alone. Q - P < 800: one press event at Q, nothing else. Else: one
+ * long event at the first poll at or after P + 800 (also the poll of Q, D-T22), and nothing at Q. No repeat.
+ */
+static void test_tap_model_random_polls(void) {
+  static uint32_t polls[8192];
+  unsigned trial;
+  size_t long_trials = 0U;
+  size_t tap_trials = 0U;
+
+  rng_state = 4242U;
+  for (trial = 0U; trial < 4000U; ++trial) {
+    const size_t which = trial % 4U;
+    const uint32_t max_gap = (trial % 5U == 0U) ? 1U : rng_range(1U, 40U);
+    const uint32_t base = (trial % 3U == 0U) ? 64700U : 700U;
+    const uint32_t raw_press = rng_range(30U, 80U);
+    const uint32_t hold =
+        (trial % 7U == 0U) ? rng_range(60U, 400U) : rng_range(BUTTONS_LONG_PRESS_MS - 60U, BUTTONS_LONG_PRESS_MS + 60U);
+    const uint32_t raw_release = raw_press + hold;
+    const uint32_t end = raw_release + 200U;
+    size_t poll_count = 0U;
+    size_t i;
+    uint32_t time = 0U;
+    uint32_t c1 = 0xFFFFFFFFU;
+    uint32_t press = 0xFFFFFFFFU;
+    uint32_t c2 = 0xFFFFFFFFU;
+    uint32_t release = 0xFFFFFFFFU;
+    uint32_t long_event = 0xFFFFFFFFU;
+    bool is_long;
+
+    while (time < end) {
+      polls[poll_count++] = time;
+      time += rng_range(1U, max_gap);
+    }
+    for (i = 0U; i < poll_count; ++i) {
+      const uint32_t t = polls[i];
+      if ((c1 == 0xFFFFFFFFU) && (t >= raw_press)) {
+        c1 = t;
+      }
+      if ((c1 != 0xFFFFFFFFU) && (press == 0xFFFFFFFFU) && (t >= c1 + BUTTONS_DEBOUNCE_MS) && (t < raw_release)) {
+        press = t;
+      }
+      if ((press != 0xFFFFFFFFU) && (c2 == 0xFFFFFFFFU) && (t >= raw_release)) {
+        c2 = t;
+      }
+      if ((c2 != 0xFFFFFFFFU) && (release == 0xFFFFFFFFU) && (t >= c2 + BUTTONS_DEBOUNCE_MS)) {
+        release = t;
+      }
+    }
+    if (!TEST_ASSERT((press != 0xFFFFFFFFU) && (release != 0xFFFFFFFFU))) {
+      return;
+    }
+    is_long = (release - press) >= BUTTONS_LONG_PRESS_MS;
+    if (is_long) {
+      for (i = 0U; i < poll_count; ++i) {
+        if (polls[i] >= press + BUTTONS_LONG_PRESS_MS) {
+          long_event = polls[i];
+          break;
+        }
+      }
+    }
+
+    start_tap_mode((uint16_t)base);
+    for (i = 0U; i < poll_count; ++i) {
+      const uint32_t t = polls[i];
+      fake_button_pins_set(((t >= raw_press) && (t < raw_release)) ? all_bits[which] : 0U);
+      (void)pass_at(base + t, 4U);
+    }
+    if (!TEST_ASSERT_EQUAL(1U, event_count)) {
+      fprintf(stderr, "trial %u: button %u, %u events\n", trial, (unsigned)which, (unsigned)event_count);
+      continue;
+    }
+    if (is_long) {
+      ++long_trials;
+      TEST_ASSERT_EQUAL(LONG(all_codes[which]), event_log[0].event);
+      TEST_ASSERT_EQUAL(base + long_event, event_log[0].time);
+    } else {
+      ++tap_trials;
+      TEST_ASSERT_EQUAL(all_codes[which], event_log[0].event);
+      TEST_ASSERT_EQUAL(base + release, event_log[0].time);
+    }
+  }
+  printf("tap model: %u long, %u tap\n", (unsigned)long_trials, (unsigned)tap_trials);
+  TEST_ASSERT(long_trials >= 500U);
+  TEST_ASSERT(tap_trials >= 500U);
+}
+
+/*
+ * Tap mode off: ENTER gives its event at the debounced press, never a long event and never a repeat, also for a
+ * hold of 3 s and across the tick wrap (AC-K45 unchanged by D-T28).
+ */
+static void test_tap_off_enter_has_no_long(void) {
+  static const uint32_t bases[2] = {500U, 65300U};
+  size_t k;
+  for (k = 0U; k < 2U; ++k) {
+    uint32_t time;
+    start_released((uint16_t)bases[k]);
+    for (time = 0U; time < 4000U; ++time) {
+      fake_button_pins_set(((time >= 10U) && (time < 3010U)) ? BUTTON_BIT_ENTER : 0U);
+      (void)pass_at(bases[k] + time, 4U);
+    }
+    TEST_ASSERT_EQUAL(1U, event_count);
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, event_log[0].event);
+    TEST_ASSERT_EQUAL((uint16_t)(bases[k] + 10U + BUTTONS_DEBOUNCE_MS), (uint16_t)event_log[0].time);
+  }
+}
+
+/* Tap mode: release bounce (runs shorter than the debounce) during a hold gives no tap; one long at P + 800. */
+static void test_tap_release_bounce(void) {
+  unsigned trial;
+
+  rng_state = 777U;
+  for (trial = 0U; trial < 400U; ++trial) {
+    const size_t which = trial % 4U;
+    const bool is_short_hold = (trial % 2U) == 0U;
+    const uint32_t raw_end = is_short_hold ? 500U : 2000U;
+    static bool level[3000];
+    uint32_t time;
+    uint32_t t;
+
+    for (t = 0U; t < 3000U; ++t) {
+      level[t] = (t >= 10U) && (t < raw_end);
+    }
+    t = 40U;
+    while (t < raw_end - 50U) {
+      const uint32_t run = rng_range(1U, BUTTONS_DEBOUNCE_MS - 1U);
+      uint32_t k;
+      for (k = 0U; (k < run) && (t + k < raw_end - 50U); ++k) {
+        level[t + k] = false;
+      }
+      t += run + rng_range(1U, 120U);
+    }
+    /* A release bounce train at the end of the hold. */
+    level[raw_end + 3U] = true;
+    level[raw_end + 4U] = true;
+    level[raw_end + 11U] = true;
+    start_tap_mode(1000U);
+    for (time = 0U; time < 3000U; ++time) {
+      fake_button_pins_set(level[time] ? all_bits[which] : 0U);
+      (void)pass_at(1000U + time, 4U);
+    }
+    if (!TEST_ASSERT_EQUAL(1U, event_count)) {
+      continue;
+    }
+    if (is_short_hold) {
+      /* The last pin change is at raw_end + 12; the debounced release comes 20 ms later. */
+      TEST_ASSERT_EQUAL(all_codes[which], event_log[0].event);
+      TEST_ASSERT_EQUAL(1000U + raw_end + 12U + BUTTONS_DEBOUNCE_MS, event_log[0].time);
+    } else {
+      TEST_ASSERT_EQUAL(LONG(all_codes[which]), event_log[0].event);
+      TEST_ASSERT_EQUAL(1000U + 30U + BUTTONS_LONG_PRESS_MS, event_log[0].time);
+    }
+  }
+}
+
+/* Tap mode: long events due in one poll come out MENU, ENTER, PREV, NEXT; taps released together likewise. */
+static void test_tap_orders_with_enter(void) {
+  static const button_event_t press_order[4] = {BUTTON_EVENT_MENU, BUTTON_EVENT_ENTER, BUTTON_EVENT_PREV,
+                                                BUTTON_EVENT_NEXT};
+  const uint8_t all = (uint8_t)(BUTTON_BIT_MENU | BUTTON_BIT_PREV | BUTTON_BIT_NEXT | BUTTON_BIT_ENTER);
+  uint32_t time;
+  size_t i;
+
+  start_tap_mode(65000U);
+  for (time = 0U; time < 1500U; ++time) {
+    fake_button_pins_set(((time >= 10U) && (time < 1400U)) ? all : 0U);
+    (void)pass_at(65000U + time, 8U);
+  }
+  TEST_ASSERT_EQUAL(4U, event_count);
+  for (i = 0U; i < 4U; ++i) {
+    TEST_ASSERT_EQUAL(LONG(press_order[i]), event_log[i].event);
+    TEST_ASSERT_EQUAL(65000U + 30U + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+  }
+
+  start_tap_mode(65000U);
+  for (time = 0U; time < 500U; ++time) {
+    fake_button_pins_set(((time >= 10U) && (time < 300U)) ? all : 0U);
+    (void)pass_at(65000U + time, 8U);
+  }
+  TEST_ASSERT_EQUAL(4U, event_count);
+  for (i = 0U; i < 4U; ++i) {
+    TEST_ASSERT_EQUAL(press_order[i], event_log[i].event);
+    TEST_ASSERT_EQUAL(65000U + 300U + BUTTONS_DEBOUNCE_MS, event_log[i].time);
+  }
+}
+
+/*
+ * D-T28: both values of buttons_set_enter_enabled() drop a long-pending ENTER in tap mode. A held contact then gives
+ * no long event and no tap at its release. The next closure works normally. MENU, held over the same calls, keeps
+ * its long event.
+ */
+static void test_tap_enter_enabled_drops_long_pending(void) {
+  size_t variant;
+
+  for (variant = 0U; variant < 3U; ++variant) {
+    uint32_t time;
+    size_t i;
+    size_t enter_events = 0U;
+    size_t menu_longs = 0U;
+
+    start_tap_mode(2000U);
+    for (time = 0U; time < 3000U; ++time) {
+      uint8_t mask = 0U;
+      /* ENTER closed 10..1500 and 1700..1800. MENU closed 5..1300 (long at 25 + 800). */
+      if (((time >= 10U) && (time < 1500U)) || ((time >= 1700U) && (time < 1800U))) {
+        mask |= BUTTON_BIT_ENTER;
+      }
+      if ((time >= 5U) && (time < 1300U)) {
+        mask |= BUTTON_BIT_MENU;
+      }
+      if (time == 400U) {
+        buttons_set_enter_enabled(variant == 0U); /* variant 0: true while closed */
+      }
+      if ((variant == 1U) && (time == 1000U)) {
+        buttons_set_enter_enabled(true); /* still closed */
+      }
+      /* variant 2: false at 400 and true only after the release. */
+      if ((variant == 2U) && (time == 1600U)) {
+        buttons_set_enter_enabled(true);
+      }
+      fake_button_pins_set(mask);
+      (void)pass_at(2000U + time, 4U);
+    }
+    for (i = 0U; i < event_count; ++i) {
+      if (BUTTON_EVENT_CODE(event_log[i].event) == BUTTON_EVENT_ENTER) {
+        ++enter_events;
+        /* Only the closure at 1700 gives an event: a tap at its debounced release. */
+        TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, event_log[i].event);
+        TEST_ASSERT_EQUAL(2000U + 1800U + BUTTONS_DEBOUNCE_MS, event_log[i].time);
+      } else if (event_log[i].event == LONG(BUTTON_EVENT_MENU)) {
+        ++menu_longs;
+        TEST_ASSERT_EQUAL(2000U + 25U + BUTTONS_LONG_PRESS_MS, event_log[i].time);
+      } else {
+        TEST_ASSERT(false);
+      }
+    }
+    if (!TEST_ASSERT_EQUAL(1U, enter_events)) {
+      fprintf(stderr, "variant %u\n", (unsigned)variant);
+    }
+    TEST_ASSERT_EQUAL(1U, menu_longs);
+  }
+}
+
+/* ENTER alone: disabled at 400 and enabled at 1000 while still closed. Only the new closure at 1700 gives a tap. */
+static void test_tap_enable_while_closed_then_new_closure(void) {
+  uint32_t time;
+  start_tap_mode(100U);
+  for (time = 0U; time < 3000U; ++time) {
+    const bool is_closed = ((time >= 10U) && (time < 1500U)) || ((time >= 1700U) && (time < 1800U));
+    if (time == 400U) {
+      buttons_set_enter_enabled(false);
+    }
+    if (time == 1000U) {
+      buttons_set_enter_enabled(true);
+    }
+    fake_button_pins_set(is_closed ? BUTTON_BIT_ENTER : 0U);
+    (void)pass_at(100U + time, 4U);
+  }
+  TEST_ASSERT_EQUAL(1U, event_count);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, event_log[0].event);
+  TEST_ASSERT_EQUAL(100U + 1800U + BUTTONS_DEBOUNCE_MS, event_log[0].time);
+}
+
+/*
+ * Section 5.9: buttons_set_tap_mode() drops the pending presses. A pending ENTER that the caller has not read yet
+ * (MENU came first in the same poll) is dropped by the switch in both directions.
+ */
+static void test_tap_switch_drops_pending_enter(void) {
+  size_t direction;
+
+  for (direction = 0U; direction < 2U; ++direction) {
+    const bool is_tap_before = (direction == 0U);
+    uint32_t time;
+    /* Tap on: the events come at the release (100 + 20). Tap off: at the press (10 + 20). */
+    const uint32_t event_time = is_tap_before ? 120U : 30U;
+
+    start_released(0U);
+    buttons_set_tap_mode(is_tap_before);
+    for (time = 0U; time < 1500U; ++time) {
+      fake_button_pins_set(((time >= 10U) && (time < 100U)) ? (uint8_t)(BUTTON_BIT_ENTER | BUTTON_BIT_MENU) : 0U);
+      if (time == event_time) {
+        (void)pass_at(time, 1U);
+        buttons_set_tap_mode(!is_tap_before);
+        continue;
+      }
+      (void)pass_at(time, 4U);
+    }
+    TEST_ASSERT_EQUAL(1U, event_count);
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_MENU, event_log[0].event);
+    TEST_ASSERT_EQUAL(event_time, event_log[0].time);
+  }
+}
+
+/*
+ * The enter that opens Receiving (ui-ux.md 6.8, V-125): tap off, ENTER gives its event at the press, tap mode goes on
+ * while it is still closed. No long ENTER and no tap at the release, for holds below and above 800 ms. A release
+ * bounce at the end of the hold changes nothing. Then a new closure gives its tap.
+ */
+static void test_tap_on_during_enter_hold(void) {
+  static const uint32_t holds[3] = {300U, 900U, 2500U};
+  size_t k;
+
+  for (k = 0U; k < 3U; ++k) {
+    const uint32_t release = 10U + holds[k];
+    uint32_t time;
+    start_released(65200U);
+    for (time = 0U; time < 4000U; ++time) {
+      bool is_closed = (time >= 10U) && (time < release);
+      if ((time == release + 5U) || (time == release + 6U)) {
+        is_closed = true; /* bounce shorter than the debounce */
+      }
+      if ((time >= 3500U) && (time < 3600U)) {
+        is_closed = true;
+      }
+      fake_button_pins_set(is_closed ? BUTTON_BIT_ENTER : 0U);
+      (void)pass_at(65200U + time, 4U);
+      if (time == 30U) {
+        buttons_set_tap_mode(true); /* receiving_enter() after the menu took the ENTER press */
+      }
+    }
+    TEST_ASSERT_EQUAL(2U, event_count);
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, event_log[0].event);
+    TEST_ASSERT_EQUAL(65200U + 30U, event_log[0].time);
+    TEST_ASSERT_EQUAL(BUTTON_EVENT_ENTER, event_log[1].event);
+    TEST_ASSERT_EQUAL(65200U + 3600U + BUTTONS_DEBOUNCE_MS, event_log[1].time);
+  }
+}
+
+/* Tap mode never repeats: PREV and NEXT held 3 s give one long event each and no repeat; a tap after works. */
+static void test_tap_no_repeat(void) {
+  uint32_t time;
+  start_tap_mode(10U);
+  for (time = 0U; time < 4000U; ++time) {
+    uint8_t mask = ((time >= 10U) && (time < 3010U)) ? (uint8_t)(BUTTON_BIT_PREV | BUTTON_BIT_NEXT) : 0U;
+    if ((time >= 3500U) && (time < 3550U)) {
+      mask = BUTTON_BIT_NEXT;
+    }
+    fake_button_pins_set(mask);
+    (void)pass_at(10U + time, 4U);
+  }
+  TEST_ASSERT_EQUAL(3U, event_count);
+  TEST_ASSERT_EQUAL(LONG(BUTTON_EVENT_PREV), event_log[0].event);
+  TEST_ASSERT_EQUAL(LONG(BUTTON_EVENT_NEXT), event_log[1].event);
+  TEST_ASSERT_EQUAL(BUTTON_EVENT_NEXT, event_log[2].event);
+  TEST_ASSERT_EQUAL(10U + 3550U + BUTTONS_DEBOUNCE_MS, event_log[2].time);
+}
+
 int main(void) {
   TEST_RUN(test_random_bounce_irregular_polls);
   TEST_RUN(test_repeat_catch_up_with_slow_passes);
@@ -689,5 +1054,15 @@ int main(void) {
   TEST_RUN(test_same_poll_repeat_goes_to_prev);
   TEST_RUN(test_enter_ownership_keeps_long_state);
   TEST_RUN(test_disable_drops_pending_enter);
+  TEST_RUN(test_long_enter_code);
+  TEST_RUN(test_tap_model_random_polls);
+  TEST_RUN(test_tap_off_enter_has_no_long);
+  TEST_RUN(test_tap_release_bounce);
+  TEST_RUN(test_tap_orders_with_enter);
+  TEST_RUN(test_tap_enter_enabled_drops_long_pending);
+  TEST_RUN(test_tap_enable_while_closed_then_new_closure);
+  TEST_RUN(test_tap_switch_drops_pending_enter);
+  TEST_RUN(test_tap_on_during_enter_hold);
+  TEST_RUN(test_tap_no_repeat);
   return TEST_FINISH();
 }

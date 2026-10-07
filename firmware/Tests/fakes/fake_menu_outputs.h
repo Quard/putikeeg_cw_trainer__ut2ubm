@@ -7,6 +7,7 @@
  * Each records its calls.
  */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -26,7 +27,10 @@ size_t fake_backlight_count(void);
 uint8_t fake_backlight_at(size_t index);
 uint8_t fake_backlight_last(void);
 
+/** Clears the count and sets the stats_reset() result back to true. */
 void fake_stats_reset(void);
 size_t fake_stats_reset_count(void);
+/** Sets the result of the next stats_reset() calls. */
+void fake_stats_set_reset_result(bool is_stored);
 
 #endif /* FAKE_MENU_OUTPUTS_H */

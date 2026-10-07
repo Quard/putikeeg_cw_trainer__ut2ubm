@@ -9,8 +9,8 @@
 #include "eeprom/eeprom.h"
 #include "fake_iap.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -146,7 +146,7 @@ static void test_bit_upsets_never_load_as_a_mix(void) {
     unsigned b;
     unsigned c;
     memcpy(original, originals[which], sizeof(original));
-    original[14] = settings_crc8(original, 14U);
+    original[14] = crc8_compute(original, 14U);
     values_of(original, values);
     for (a = 0U; a < RECORD_BITS; ++a) {
       for (b = a; b < RECORD_BITS; ++b) {
@@ -196,7 +196,7 @@ static void test_other_versions_give_defaults(void) {
     memcpy(record, default_record, sizeof(record));
     record[2] = (uint8_t)version;
     record[5] = 40U;
-    record[14] = settings_crc8(record, 14U);
+    record[14] = crc8_compute(record, 14U);
     load_record(record, &status);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, status);
     TEST_ASSERT(are_defaults());
@@ -222,7 +222,7 @@ static void test_every_field_value_loads_clamped(void) {
         settings_load_status_t status;
         memcpy(record, base_records[base], sizeof(record));
         record[offset] = (uint8_t)value;
-        record[14] = settings_crc8(record, 14U);
+        record[14] = crc8_compute(record, 14U);
         values_of(record, values);
         load_record(record, &status);
         TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
@@ -240,7 +240,7 @@ static void test_every_field_value_loads_clamped(void) {
       memcpy(record, base_records[base], sizeof(record));
       record[3] = (uint8_t)value;
       record[4] = (uint8_t)(value >> 8);
-      record[14] = settings_crc8(record, 14U);
+      record[14] = crc8_compute(record, 14U);
       load_record(record, &status);
       TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
       TEST_ASSERT_EQUAL(oracle_clamp(SETTINGS_ID_TONE_HZ, value, 0U), settings_get(SETTINGS_ID_TONE_HZ));
@@ -262,7 +262,7 @@ static void test_flag_bits_written_as_zero(void) {
       const unsigned style = (base == 0U) ? 2U : ((((flags >> 2) & 0x03U) == 3U) ? 2U : ((flags >> 2) & 0x03U));
       memcpy(record, base_records[base], sizeof(record));
       record[10] = (uint8_t)flags;
-      record[14] = settings_crc8(record, 14U);
+      record[14] = crc8_compute(record, 14U);
       load_record(record, &status);
       TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
       TEST_ASSERT_EQUAL(flags & 0x01U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
@@ -274,7 +274,7 @@ static void test_flag_bits_written_as_zero(void) {
       TEST_ASSERT_EQUAL((flags & 0x03U) | (style << 2), fake_iap_memory()[10]);
       TEST_ASSERT_EQUAL(saved_flags_of(record, (uint8_t)flags), fake_iap_memory()[10]);
       TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION_OFFSET]);
-      TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+      TEST_ASSERT_EQUAL(crc8_compute(fake_iap_memory(), 14U), fake_iap_memory()[14]);
     }
   }
 }
@@ -296,7 +296,7 @@ static void test_paddle_record_vectors(void) {
   old_record[3] = 0x84U;
   old_record[4] = 0x03U;
   old_record[10] = 0x00U;
-  old_record[14] = settings_crc8(old_record, 14U);
+  old_record[14] = crc8_compute(old_record, 14U);
   load_record(old_record, &status);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_PADDLE_SWAP));
@@ -305,7 +305,7 @@ static void test_paddle_record_vectors(void) {
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
   TEST_ASSERT_EQUAL(0U, write_operations());
 
-  TEST_ASSERT_EQUAL(0x78U, settings_crc8(reversed_record, 14U));
+  TEST_ASSERT_EQUAL(0x78U, crc8_compute(reversed_record, 14U));
   load_record(reversed_record, &status);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, status);
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
@@ -334,7 +334,7 @@ static void test_paddle_record_vectors(void) {
         /* The save writes layout version 2 with the default prosign style Both in bits 2-3. */
         TEST_ASSERT_EQUAL((uint8_t)(show | (paddle << 1) | (2U << 2)), fake_iap_memory()[10]);
         TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION_OFFSET]);
-        TEST_ASSERT_EQUAL(settings_crc8(fake_iap_memory(), 14U), fake_iap_memory()[14]);
+        TEST_ASSERT_EQUAL(crc8_compute(fake_iap_memory(), 14U), fake_iap_memory()[14]);
       }
     }
   }
@@ -391,7 +391,7 @@ static void test_read_fail_at_each_byte(void) {
   memcpy(record, default_record, sizeof(record));
   record[3] = 0x84U; /* 900 Hz */
   record[4] = 0x03U;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   for (operation = 1U; operation <= SETTINGS_RECORD_SIZE; ++operation) {
     fake_iap_reset();
     memcpy(fake_iap_memory(), record, sizeof(record));

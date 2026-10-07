@@ -1,0 +1,1617 @@
+# Koch training modes Receiving and Sending: implementation specification
+
+Owner: `architector`. Status: T0-T10 implemented, final review `approved` on 2026-10-06 (section 22). Change
+request D-T27 to D-T29 (four-button Receiving keyboard, user decision 2026-10-06): D1, T11 and Q2 done, final review
+`approved` on 2026-10-06 (section 22.1). W2 is open. Change request D-T30/D-T31 (Sending retry screen and word
+space, user decision 2026-10-07): D2, T12, Q3 and W3 done, final review `approved` on 2026-10-07 (section 22.2). Change request D-T33 (word pass rate 80 %, user
+decision 2026-10-07): D3, T13, Q4 and W4 done, final review `approved` on 2026-10-07 (section 22.3). The user answered Q-T1 and Q-T2 (section 20). Section 21
+reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
+Readers: `c-embedded-developer`, `qa-embedded`,
+`ui-ux-embedded-designer`, `technical-writer`.
+
+## 1. Sources and precedence
+
+| Source | Role |
+| --- | --- |
+| This document | Interfaces, memory placement, level model, EEPROM record, player, session engine, task split and acceptance criteria. It refines the approved plan. It does not change a user decision. |
+| Approved plan `~/.claude/plans/silly-knitting-flurry.md` | User decisions (section 2.1) and the module split. |
+| `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | All that the user sees, hears or presses: layouts, texts, delays, control tables. Section 21 lists every value that this document takes from it. |
+| `references/internal/keyer_spec.md` | Keyer contract. Decision D-T1 of this document revises D-K1 (section 3.1). The keyer timing of section 6.7 stays the reference for the timing extraction. |
+| `references/internal/sidetone_spec.md` | Sidetone contract, envelope, ISR frame. |
+| `references/internal/menu_subsystem_spec.md` | Menu, settings record, EEPROM driver, buttons. |
+| `AGENTS.md`, `llm.md` | Project rules: memory, ISR rules, software SPI, team workflow. |
+
+Precedence rules:
+
+- For a UI value, `ui-ux.md` wins. UI values are layouts, glyphs, texts, delays and the reaction to a button. When
+  `ui-ux.md` asks for a behavior that the interfaces of section 5 cannot give, stop and report it to `architector`.
+  Do not change an interface yourself.
+- For behavior, timing, memory, records and interfaces, this document wins.
+- After implementation starts, only `architector` changes this document.
+
+## 2. Scope
+
+### 2.1 User decisions (fixed)
+
+| Topic | Decision |
+| --- | --- |
+| Character session | 50 items. Pass at 45 or more correct on the first attempt (90 %). A fail repeats the level. |
+| Word session | 10 words. Pass at 8 or more correct on the first attempt (80 %, user decision 2026-10-07, D-T33). |
+| Final word levels | After the last character, every level is a word session. Each level adds one word: 10, 11, 12 ... capped at 100 words. Pass at 80 % (rounded up) of the word count (D-T33). |
+| Item mix | All learned characters. About half of the items are the new character. Level 1 mixes K and M evenly. |
+| Character set | `K M R S U A P T L O W I . N J E F 0 Y , V G 5 / Q 9 Z H 3 8 B ? 4 2 7 C 1 D 6 X`, then BT, SK, AR: 43 characters. The final word phase starts at L = 63 (Q-T1). |
+| Words and prosigns | Random words contain no prosign. BT, SK and AR appear only in character sessions. Words and the Receiving word keyboard use the first 40 Koch characters. With fewer learned characters, they use the learned ones (Q-T2). |
+| Word length | 2 for word sessions 1-2, 3 for 3-4, and so on (+1 every two word sessions), capped at `Max Word Length` (4..8). |
+| Attempts | 3 per item. The correct answer shows only after the third wrong attempt. |
+| Receiving word input | Pick characters one by one. Check the whole word after the last one. Long `prev` undoes the last pick or steps out of a group. Long `enter` replays (D-T27). |
+| Progress key | One 16-bit level per mode per character WPM (5..50). The effective speed has no effect. The level stops at 65535 and never wraps. |
+| Manual level | None. `Reset Statistics` sets all levels back to level 1. |
+| Button order on the case | `menu/back`, `prev`, `next`, `enter` from left to right (user fact 2026-10-06: `enter` is right of `next`). The four group labels follow this order (D-T27). |
+| Receiving keyboard | Four groups, one per button, in the case order (user decision 2026-10-06, D-T27). Three groups were confusing. |
+| Sending retry screen | At the retry, the code row (row 7) and the answer code row (row 5) are blank, as for a new item. The bar goes back to the first character. The status keeps `Try 2 of 3` or `Try 3 of 3`, as in Receiving (user decision 2026-10-07, D-T30). |
+| Sending word space | Inside a word item, the space between two characters must stay shorter than the keyer word space (5 Farnsworth units at `TX Eff. Speed`). A word space after an accepted character of an unfinished item is a wrong attempt (user decision 2026-10-07, D-T30). |
+
+"Done" means: host tests pass, the build checks pass, QA approves, `architector` approves. Device behavior stays
+unverified until the user tests it (section 18).
+
+### 2.2 In scope
+
+- `morse_encode()`.
+- Timing extraction from `keyer_start()` into `cw/timing`.
+- CW player with its ISR service, the three-call Timer 0 ISR and the `check_asm.sh` rules R6 and R7.
+- RNG, Koch tables, level model, item generation, group keyboard.
+- CRC-8 move to `util/crc8`, progress record in EEPROM page 1, `stats_reset()` with a result.
+- Button tap mode for the Receiving screen, all four buttons, with a long `enter` event (D-T7, D-T28).
+- Session engine, Receiving mode, Sending mode, shared screen helpers, menu and `main.c` wiring.
+- Host fakes, host tests, memory, stack and ISR-time report.
+
+### 2.3 Out of scope
+
+- A manual level choice.
+- Statistics other than the level.
+- Any change in `firmware/drivers/`.
+- Any change of the keyer behavior or timing.
+
+## 3. Decisions
+
+### 3.1 D-T1: three-call Timer 0 ISR (revises D-K1 of `keyer_spec.md`)
+
+Decision:
+
+- The ISR body of `sidetone_timer0_isr` is `keyer_service(); player_service(); sidetone_service();` in this order.
+- `firmware/inc/cw/player_service.h` defines `static void player_service(void)` and the ISR-private player state,
+  with the same rules as `keyer_service.h`. On the target, only `sidetone.c` includes it, after `keyer_service.h`
+  and before the ISR. So `player_service()` is a function of `sidetone.c`.
+- `sidetone.c` defines `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()` before the include, with the same bodies
+  as the keyer macros. If an includer does not define both, the header gives an `#error`.
+- At most one of the keyer and the player is enabled at a time (D-T12). Both write the same sidetone request bit.
+- `check_asm.sh` checks the call list automatically (rule R6) and rejects `sdcc_atomic` symbols (rule R7). Section
+  13.2 lists the tool changes.
+
+Rationale:
+
+- The player must run in the 4 kHz interrupt. A main-loop player on `tick_now()` jitters, because the LCD drawing
+  delays the loop. The jitter changes element lengths, which a CW trainer must not do.
+- The D-K1 layout already proves that a `static` function from a header is a function of the ISR file. A third
+  service keeps the same rule with no compiler-specific behavior.
+- The cost is one more `LCALL`/`RET` pair and one bit test per call, about 10 clocks on the disabled path. The ISR
+  frame does not grow: all three calls are at the same depth.
+- Rejected: the player inside `keyer_service()` (it mixes two state machines in one leaf and makes the keyer tests
+  depend on the player). Rejected: a conditional call in the ISR (it saves no stack and adds a branch to review).
+
+In these cases, stop and report to `architector`: the build shows an `sdcc_atomic` symbol, the link fails, or R6
+fails. Do not try another layout.
+
+### 3.2 Other decisions
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| D-T2 | The dit and Farnsworth math moves from `keyer_start()` to `cw_timing_compute()` in `src/cw/timing.c`. The keyer and the player both call it. The keyer tick values stay bit-exact (AC-K9, AC-K16 unchanged). | One copy of the 32-bit math. |
+| D-T3 | User decision (Q-T1). The Koch table holds the 43 characters of the user list, in that order. `KOCH_CHAR_COUNT` = 43, `KOCH_FINAL_LEVEL` = 63. All level formulas use `KOCH_CHAR_COUNT`. | The user answered 43. The 44 of the plan was a counting error. |
+| D-T4 | User decision (Q-T2). Words and the Receiving word keyboard use only the first `min(m, KOCH_WORD_ALPHABET_MAX)` Koch characters, with `KOCH_WORD_ALPHABET_MAX` = 40. BT, SK and AR appear only in character sessions. `koch_alphabet_count()` gives this count. | A prosign takes up to 6 cells. A word of 8 prosigns does not fit one row in either font. In CW, a prosign is not part of a word. |
+| D-T5 | The shown level is `L + 1`, saturated at 65535. Level indexes 65534 and 65535 both show 65535. | `L + 1` = 65536 does not fit `uint16_t` and `gfx_format_u16()`. The case needs 65535 passed sessions. |
+| D-T6 | An attempt covers the whole item. A wrong check ends the attempt. The next attempt starts again at the first character, with an empty answer. | One rule for both modes and for words. The score counts items, not characters. UI dependency U-15. |
+| D-T7 | Button tap mode (revised by D-T28). It applies on the Receiving screen to all four buttons. A button gives its press event at the release, and only for a release before the long-press time. A hold gives only the long event. `enter` (button or paddle tip) has a long event only in tap mode. | A press event comes before the long event of the same hold. Without the tap mode, a long `prev` first narrows a group (or picks a character and checks the word) and only then undoes. A long `enter` replays, so a tap of `enter` must not pick first. UI dependency U-11, U-23. |
+| D-T8 | The placeholder screen and its text `Not ready` go away. `MENU_SCREEN_PLACEHOLDER` (2) is no longer defined. No other screen number changes. | No menu item uses it after this change. Dead code costs flash. |
+| D-T9 | The progress module keeps the whole 188-byte record image in xdata. The image is the level cache. | No second buffer for the save. 4 bytes more than a 184-byte cache. |
+| D-T10 | The CRC-8 function moves from `settings.c` to `src/util/crc8.c` as `crc8_compute()`. `src/settings/settings_crc.h` goes away. Existing tests change only the include and the function name. | Settings and progress share one function. |
+| D-T11 | `stats_reset()` returns `bool`. True means that the reset levels are stored. The menu shows `Statistics reset` on true and `Not saved` on false. | A reset that is not stored comes back after a power cycle. The user must know. UI dependency U-17. |
+| D-T12 | Receiving never starts the keyer. Sending never starts the player. Every leave path stops the module of its mode. A menu host test checks that the fake keyer and the fake player never run at the same time. | Both write `sidetone_is_on_requested`. |
+| D-T13 | No `player_init()`. The C start-up RAM clear sets `player_is_enabled` and `player_is_start_requested` to 0 (same reason as R-5 of `keyer_spec.md`). | Flash. |
+| D-T14 | Result hold (`ui-ux.md` Q-14). After the third wrong attempt, Receiving plays the item once more. `training_hold_result(true)` stops the RESULT delay. The mode calls `training_hold_result(player_is_busy())` on each poll. The first call with false starts `TRAINING_FAILED_MS` at the tick of that call. | The answer playback of a long word at a low speed is longer than 2500 ms. The engine stays free of the player. The delay counts exactly from the first poll that sees the player idle. |
+| D-T15 | Dropped-character rule (`ui-ux.md` Q-15, item 1). In Sending, a DIT or DAH outside phase ITEM sets a drop flag. While the flag is set, the mode drops every keyer event up to and including the next CHAR_GAP, also in phase ITEM. That CHAR_GAP clears the flag. | A character that starts during a delay never counts and never uses an attempt. |
+| D-T16 | Overflow (`ui-ux.md` Q-15, item 2). In phase ITEM, OVERFLOW empties the pattern and sets the drop flag of D-T15. No check, no attempt, no status. | A lost event is a fault of the device, not of the user. If the lost events held a CHAR_GAP, the next character is dropped too. The user keys it again. |
+| D-T17 | Top level outcome. A pass at level index 65535 gives `TRAINING_OUTCOME_PASS_TOP`. The end screen then shows `Top level L65535`. | `ui-ux.md` UX-47 has its own text for this case. |
+| D-T18 | Test seam for items. `koch_make_item()` is in its own file, `src/koch/koch_item.c`. The modes and menu test groups link `Tests/fakes/fake_koch_item.c` in its place. The level, and so the keyboard set and the session kind, come from a progress record in the fake EEPROM. | The V-tests of `ui-ux.md` 9.4 need scripted items. The production code has no test hook. |
+| D-T20 | `check_asm.sh` R7 stays strict: any `sdcc_atomic` text in any scanned `.asm` file is a violation. The stale `accept/real_image` fixture is regenerated from the current build (section 13.2). | Any `sdcc_atomic` text in a new build means that `--norestartseqatomics` is lost. A narrow R7 (for example only `sdcc_atomic_maybe_rollback`) lets the helper code back in unseen. The fixture shows real compiler output, so it must come from the current flags. |
+| D-T21 | Accepted implementation details of T0-T6. The koch test group links `src/cw/morse.c` (AC-T4 calls `morse_encode()`). The Koch tables use `[]` with a `_Static_assert` on the size. `keyboard_group_first()` returns `range_first + range_count` for an unknown group. The player start call loads `player_ticks = 1` in the gap state and uses the normal countdown, with the same result as section 9.2. The `stats_reset()` result wiring in `menu.c` came in T4. The clang-tidy finding `bugprone-easily-swappable-parameters` stays on `player_start()`, `koch_word_length()` and the internal `progress_offset()`: no suppression and no signature change. | Each detail keeps the contract behavior. AC-T12, AC-T4 and AC-T8 prove it. The signatures are part of the contract. |
+| D-T22 | Tap mode and a late poll. Tap or hold follows the debounced state (D-K4 of `keyer_spec.md`). A release that debounces at or after `BUTTONS_LONG_PRESS_MS` after the press event is a hold. Then only the long event comes. A late poll does not change this. | One rule for the long event and for the tap. The user held the button for the long time. |
+| D-T23 | Final memory of T0-T10 accepted: flash +7538 B (target 6144, hard limit 8192), xdata +411 B (target 384, hard limit 512). No cut is required. | Both stay under the hard limits. The image uses 26 593 of 61 440 B and xdata 1811 of 3072 B. The internal RAM grew by 4 B, the stack margin is 108 B and the ISR worst path is 403 clocks. A cut now costs rework during QA for no user benefit. If a later change needs flash, the first candidate is the largest new file, `training_screen.c` (1707 B). |
+| D-T24 | `ui-ux.md` V-104, second run, is wrong. The start pause ends at `TRAINING_START_MS` = 1000 ms, and the first item plays from then (`ui-ux.md` 5.12.2, this document 12.2). A hold from 300 ms leaves at 1100 ms with the player running, so the log is `play`, then `stop`. The designer changes the second run to a hold from 100 ms: the main menu at 900 ms, empty player log. The developer test follows the new text. It keeps the 300 ms case as an extra check with `play` then `stop`. | The contract and the `ui-ux.md` item flow agree. Only the test vector has the wrong time. |
+| D-T25 | Accepted implementation details of T7-T10. The Receiving and Sending tests link the menu group, because the `ui-ux.md` 9.4 scenarios start from the menu. `src/modes/training_screen_internal.h` holds the draw helpers that `training_screen.c`, `receiving.c` and `sending.c` share. `training_screen_draw_header()` reads the speeds with `settings_get()`. No settings edit can run on a training screen, so the values equal those of the mode start (UX-49). `sending_leave()` at END does not call `keyer_stop()` again: END already stopped the keyer and gave P3.2 back. Most scenario taps go to `menu_handle()` directly. V-94 to V-97, V-104, V-108 and V-120 use the real buttons. The extra `training_hold_result(true)` at the FAILED check stays. The clang-tidy finding `bugprone-easily-swappable-parameters` stays also on `training_start()` and the internal `training_set_phase()` (D-T21). | Each detail keeps the contract behavior. AC-T15 tests tap mode itself. |
+| D-T26 | Two V-test steps have no host test: the P5.5 step of V-97 and the entry-mask step of V-110. They are keyer behavior. AC-K3 covers the entry mask, and no code outside the keyer reads P5.5. The V-110 test still checks that the keyer starts once with `Iambic B`, `Normal`, 20 WPM and 20 WPM. | The menu-group tests use the fake keyer, which has no pins. |
+| D-T27 | User decision and user facts (2026-10-06). The Receiving keyboard has four groups, one per button. The case order is `menu/back`, `prev`, `next`, `enter` from left to right (closes the `ui-ux.md` C-4 note "position of `enter` not documented"). Run `k` (0..3, left to right) of a range of `c` characters has `(c + 3 - k) / 4` characters (integer division). This equals the proposed rule "each run gets ceil(remaining / buttons left)": 43 -> 11/11/11/10, 40 -> 10/10/10/10. `KEYBOARD_GROUP_COUNT` = 4, `KEYBOARD_DEPTH_MAX` = 3: at most 3 selects per pick for 2..64 characters. In Receiving: an `enter` tap selects the right run, a long `enter` replays, long `menu/back` exits, long `prev` undoes, long `next` does nothing. On the end screen, an `enter` tap (or the tip) starts the next session and a `menu/back` tap leaves. P3.2 is also the paddle tip. A short dit-lever or straight-key closure selects the right run. A closure of 800 ms replays. A plug insertion can select a run (accepted, `ui-ux.md` F-20 and D-5). Sending, Free Input and the menu do not change. | Three keys for four buttons confused the user. The balanced split keeps the keyboard order and gives sizes that differ by at most 1, larger runs first. The closed form needs no division chain (a shift by 2 on the target). |
+| D-T28 | Interface of D-T27. The long `enter` event is `BUTTON_EVENT_ENTER \| BUTTON_EVENT_LONG_FLAG` (0x44). No new event macro: every long event is a code with `BUTTON_EVENT_LONG_FLAG`, and the modes decode it with `BUTTON_EVENT_CODE()`. `buttons_poll()` gives long `enter` only in tap mode. Tap mode covers all four buttons. `buttons_set_tap_mode()` and both values of `buttons_set_enter_enabled()` drop the pending press and the long-pending state of `enter`. Long events come in the order `menu/back`, `enter`, `prev`, `next`, the same order as the press events. The keyboard group names follow the buttons (`KEYBOARD_GROUP_MENU` ... `KEYBOARD_GROUP_ENTER`). `LEFT`, `MIDDLE` and `RIGHT` go away. | A second spelling of a long event adds a name with no new meaning. Outside tap mode, `enter` stays the paddle tip with no long event (AC-K45 unchanged). New group names make every old use a compile error, so no use keeps the old "right = `next`" meaning in silence. |
+| D-T29 | Decisions on the D1 result (`ui-ux.md` UX-51). (1) The labels use row 7 only. The fields are at pixel x 2-26, 30-54 and 58-82 (5 cells each) and x 87-126 (8 cells, right-aligned at x = 127 - 5n). (2) Accepted: the key bar is four 1 px segments at y 55 over the four fields, not one line. The mode draws the segments only in a full render. A label redraw does not touch them, and they stay in GAP. (3) Accepted: a label of one character uses the short text (the `rx_short_style()` style), so `<AR/+>` never shows in a label. The item line keeps the full text. (4) R-T7 is corrected: a glitch pick can fill the last slot and use an attempt. | The script check of D1 passes for 84 sets, 3 `Prosigns` values and 12 096 labels, so row 6 stays free. The segments show which field belongs to which button. They cost four line draws on a full render only. One label style removes a branch from the label code. |
+| D-T30 | User decisions (2026-10-07), Sending only. (1) Retry screen: at the RETRY event, rows 5 and 7 go blank, so the screen looks like a new item. The bar goes back to the first character. The status keeps `Try 2 of 3` or `Try 3 of 3` (the user first asked to clear it, then kept it, so that both modes act the same). This applies after every kind of wrong attempt. During RESULT, row 7 still shows the marks of the keyed character. Receiving already clears its slots at a retry and keeps `Try N of 3`: no change. (2) Word space: the keyer gives KEYER_EVENT_WORD_GAP when a space reaches `KEYER_WORD_GAP_UNITS` = 5 Farnsworth units at `TX Eff. Speed` (the point where Free Input inserts a space). In phase ITEM, a WORD_GAP in the space right after a character that gave PARTIAL is a wrong attempt, the same as a wrong character: it uses an attempt, the retry is the whole item (D-T6), and the third one gives FAILED. A WORD_GAP before the first character of the item (also at a retry), after the item is complete, in GAP or RESULT, or after a dropped character (D-T15, D-T16) does nothing. Character sessions do not change, because their item is complete after one character. The keyer, its timing and Free Input do not change. The user chose 5 units, not 7. | The user wants a word keyed as one word, not as single characters with long pauses. 5 units is the keyer threshold that already exists, so no new timing value and no keyer change. Farnsworth spacing (lower `TX Eff. Speed`) gives more room between characters. A blank retry screen shows that the attempt starts again. |
+| D-T31 | Interface of D-T30. (1) `modes/training.h` defines `TRAINING_CHAR_WORD_SPACE` = `' '`. `sending.c` gives it to `training_add_char()` for a word-space error. No Koch item character and no `morse_decode()` result is `' '`, so the Sending compare of section 11.3 always gives a wrong attempt, and the status code can tell a word space from a keyed character. The engine code does not change: no new function, no new state. (2) `sending.c` has the flag `tx_is_word_gap_armed` (`static MEM_XDATA bool`). Only a CHAR_GAP that gives PARTIAL sets it. Every other keyer event that the mode reads clears it, also a dropped event, the WORD_GAP itself and OVERFLOW. `tx_start_session()` clears it. A WORD_GAP counts only with the flag set and the phase ITEM. (3) The word-space status text and the RESULT look are UI values (`ui-ux.md`, task D2) within the limits WS-1 to WS-6 (section 12.3). | The engine already treats every mismatch as a wrong attempt with the right delays, so a sentinel character costs no engine code. The keyer gives at most one WORD_GAP per space, always after the CHAR_GAP of that space, and a new mark cancels it (AC-K15). So "the last event was a PARTIAL CHAR_GAP" means exactly "this space follows an accepted character". The answer length alone is not enough: after OVERFLOW, a CHAR_GAP clears the drop flag and the WORD_GAP of the same space then follows a lost character. That pause is not the fault of the user (D-T16). One xdata byte buys this. |
+| D-T32 | Accepted implementation details of T12. The WORD_GAP test in `tx_handle_keyer_event()` keeps its phase check (D-T31), although the armed flag is set only in ITEM. The push of `event` around `training_phase()` raises the summed-push stack bound from 65 to 66 B (margin 107 B). The real call-site depth stays 35 B. The ITEM/RETRY branch of `sending_poll()` clears rows 5 to 7 in one call: row 6 is always off in Sending. The CHAR_GAP and WORD_GAP paths share one check tail. | The phase check keeps the rule local: it does not depend on the fact that ITEM has no time-out in Sending. 1 B of stack is far inside the 64 B margin rule. The "no deeper chain" target of 14.2 is waived for this 1 B. |
+| D-T33 | User decision (2026-10-07). Every word session, the final word levels included, passes at `ceil(0.8 n)` correct on the first attempt: 10 -> 8, 11 -> 9, 15 -> 12, 50 -> 40, 100 -> 80. Character sessions keep `ceil(0.9 n)` (45 of 50). Interface: `koch_pass_threshold()` takes the session kind as its first parameter, because the item count alone cannot tell the kind (a final level of 50 words has the count of a character session). `training_start()` gives `koch_kind()` of the session level. A kind other than `KOCH_KIND_WORD` uses the character rule. No change in the progress record, the level model or the engine state. The rounding rule for the final levels is an assumption, confirmed with the user by the coordinator. | One function keeps one place for the rule. Taking the kind (not the level) keeps the pure arithmetic testable for every count 0..255. Defaulting an unknown kind to the stricter character rule never lets a session pass easier by mistake. |
+| D-T34 | Accepted details of T13. Flash +41 B, 1 B above the +40 B target and far below the +100 B hard limit. `koch_pass_threshold()` selects the numerator and denominator by kind and uses one formula `(p n + p) / q`. The test helper `pick()` uses 0xFF, not 0, for "not found". `training_harness.h` gets an `end_screen_is` probe. | 1 B over a target is not worth a rework. The helper change fixes test code only. QA showed that the old helper failed loudly and hid no result. |
+| D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
+
+## 4. Baseline (measured)
+
+`firmware/build.sh` at HEAD `06b28ec`, 2026-10-06, `build/putikeeg_cw_trainer.mem` and `.map`:
+
+| Resource | Value |
+| --- | --- |
+| Flash | 19 055 of 61 440 B |
+| xdata | 1400 of 3072 B (0x0001-0x0578) |
+| DSEG (data) | 43 B (0x08-0x1F and 0x25-0x37) |
+| Bit bytes | 4 B (0x20-0x23), bit bank 1 B (0x24) |
+| Overlay | 5 B (0x38-0x3C) |
+| Stack | starts at 0x3D, 195 B free |
+| Deepest main-loop stack | 65 B, the `menu_render` text path (upper bound from the final review of `keyer_spec.md` section 17.12, not measured again here) |
+| Largest ISR frame | 18 B (195 - 65 - 112 B margin of section 17.12) |
+| Stack margin | 112 B |
+
+T0 measures the deepest main-loop chain and the ISR frame again from the `.asm`.
+
+## 5. Interfaces
+
+General rules:
+
+- All new modules are main-loop only, except the ISR side of the player.
+- Parameters after the first are `MEM_XDATA` on the target, as in `gfx.h` and `keyer.h`. This keeps them out of
+  internal RAM.
+- Work variables of long calculations are `static MEM_XDATA`.
+- Every public function with a parameter range clamps or rejects out-of-range values as stated. No function indexes a
+  table out of range for any input.
+
+### 5.1 Files
+
+| File | Content | Users |
+| --- | --- | --- |
+| `inc/cw/morse.h`, `src/cw/morse.c` (change) | `morse_encode()` | player |
+| `inc/cw/timing.h`, `src/cw/timing.c` (new) | `cw_timing_compute()` and its results | keyer, player |
+| `inc/cw/keyer_shared.h`, `src/cw/keyer.c` (change) | Timing factors removed. `keyer_start()` calls `cw_timing_compute()`. | - |
+| `inc/cw/player.h`, `src/cw/player.c` (new) | Main-loop player API and the shared player state | receiving |
+| `inc/cw/player_shared.h` (new) | `extern` declarations of the shared player state, constants | player.c, player_service.h |
+| `inc/cw/player_service.h` (new) | `static void player_service(void)` and ISR-private state | `sidetone.c` (target only), player tests |
+| `src/sidetone/sidetone.c` (change) | Player macros, include, three-call ISR | - |
+| `inc/util/rng.h`, `src/util/rng.c` (new) | 16-bit xorshift | koch, modes |
+| `inc/util/crc8.h`, `src/util/crc8.c` (new) | `crc8_compute()` | settings, progress |
+| `src/settings/settings_crc.h` (removed) | - | - |
+| `inc/koch/koch.h`, `src/koch/koch.c` (new) | Koch and keyboard order tables, level model | training, keyboard |
+| `src/koch/koch_item.c` (new) | `koch_make_item()` (D-T18) | training |
+| `inc/koch/keyboard.h`, `src/koch/keyboard.c` (new) | Group keyboard | receiving |
+| `inc/progress/progress.h`, `src/progress/progress.c` (new) | Progress record | training, stats, main |
+| `inc/eeprom/eeprom_map.h` (change) | Progress page | progress |
+| `inc/stats/stats.h`, `src/stats/stats.c` (change) | `bool stats_reset(void)` | menu |
+| `inc/buttons/buttons.h`, `src/buttons/buttons.c` (change) | `buttons_set_tap_mode()` | receiving |
+| `inc/modes/training.h`, `src/modes/training.c` (new) | Session engine | receiving, sending, training_screen |
+| `inc/modes/training_screen.h`, `src/modes/training_screen.c` (new) | Header row and end screen | receiving, sending |
+| `src/modes/training_screen_internal.h` (new, private) | Draw helpers shared by the training screens (D-T25) | `training_screen.c`, receiving, sending |
+| `inc/modes/receiving.h`, `src/modes/receiving.c` (new) | Receiving mode | menu |
+| `inc/modes/sending.h`, `src/modes/sending.c` (new) | Sending mode | menu |
+| `inc/menu/menu.h`, `src/menu/*.c` (change) | New screens, placeholder removed | main |
+| `src/main.c` (change) | `progress_load()` | - |
+
+`firmware/CMakeLists.txt` takes all `src/**/*.c` with a glob. No firmware CMake change.
+
+### 5.2 `cw/morse.h` addition
+
+```c
+/**
+ * Returns the pattern of @p character (a table character or a prosign code MORSE_CHAR_SK to MORSE_CHAR_AS), or
+ * MORSE_PATTERN_INVALID when the table has no such character. MORSE_CHAR_UNKNOWN gives MORSE_PATTERN_INVALID.
+ */
+uint8_t morse_encode(char character);
+```
+
+Behavior: a linear search of `morse_table` from index 2 to 127. It returns the first index whose entry equals
+`character`. No new table. `morse_decode(morse_encode(c)) == c` for every table character.
+
+### 5.3 `cw/timing.h` (new)
+
+```c
+#include <stdint.h>
+#include "board/sidetone_config.h"
+#include "mcu/compiler.h"
+
+#define CW_TIMING_WPM_MIN 5U
+#define CW_TIMING_WPM_MAX 50U
+#define CW_TIMING_TICKS_HZ SIDETONE_SERVICE_HZ   /* the keyer and the player run in the Timer 0 ISR */
+#define CW_TIMING_DIT_NUMERATOR 4800UL           /* CW_TIMING_TICKS_HZ * 1.2 s */
+#define CW_TIMING_FARNSWORTH_C_FACTOR 240000UL   /* CW_TIMING_TICKS_HZ * 60 */
+#define CW_TIMING_FARNSWORTH_S_FACTOR 148800UL   /* CW_TIMING_TICKS_HZ * 37.2 */
+#define CW_TIMING_FARNSWORTH_DIVISOR 19UL
+
+/* Results of the last cw_timing_compute() call, in Timer 0 calls. Main loop only. */
+extern MEM_XDATA uint16_t cw_timing_dit_ticks;   /* round(4800 / wpm), 960..96 */
+extern MEM_XDATA uint16_t cw_timing_unit_ticks;  /* Farnsworth unit, at least cw_timing_dit_ticks, at most 2370 */
+
+/**
+ * Computes the dit and the Farnsworth unit. @p wpm is clamped to CW_TIMING_WPM_MIN..CW_TIMING_WPM_MAX, then
+ * @p eff_wpm to CW_TIMING_WPM_MIN..wpm.
+ */
+void cw_timing_compute(uint8_t wpm, MEM_XDATA uint8_t eff_wpm);
+```
+
+- The formulas are those of `keyer_spec.md` section 6.7, unchanged, with the same 32-bit step and the same clamp of
+  the unit to the dit.
+- The `#error` checks for 4000 calls per second and for the dit at 50 WPM (longer than two sidetone ramps) move to
+  `timing.h`.
+- `keyer_shared.h` loses `KEYER_DIT_TICKS_NUMERATOR` and the three `KEYER_FARNSWORTH_*` macros. `keyer.h` keeps
+  `KEYER_WPM_MIN` and `KEYER_WPM_MAX`, defined as `CW_TIMING_WPM_MIN` and `CW_TIMING_WPM_MAX`.
+- `keyer_start()` keeps its signature and its order of section 6.1 of `keyer_spec.md`. Step 2 (clamps) and the
+  tick math become one call, `cw_timing_compute(wpm, eff_wpm)`, then:
+  `keyer_dit_ticks = cw_timing_dit_ticks`, `keyer_dah_ticks = 3 * dit`, `keyer_two_dit_ticks = 2 * dit`,
+  `keyer_word_gap_ticks = 5 * unit`.
+- The static work variables `start_dit`, `start_denominator` and `start_unit` move to `timing.c` as `static
+  MEM_XDATA`. `start_key_type` stays in `keyer.c`.
+
+### 5.4 `cw/player.h`, `cw/player_shared.h`, `cw/player_service.h` (new)
+
+`player.h`:
+
+```c
+#include <stdbool.h>
+#include <stdint.h>
+#include "mcu/compiler.h"
+
+#define PLAYER_TEXT_MAX 8U  /* equal to KOCH_WORD_LEN_MAX */
+
+/**
+ * Stops a running playback, then plays @p length characters of @p text at @p wpm with the Farnsworth spacing of
+ * @p eff_wpm (both clamped as in cw_timing_compute()). Returns false and plays nothing when @p length is 0 or above
+ * PLAYER_TEXT_MAX, or when a character has no Morse code. The keyer must be stopped (D-T12).
+ */
+bool player_start(const char MEM_XDATA* text, MEM_XDATA uint8_t length, MEM_XDATA uint8_t wpm,
+                  MEM_XDATA uint8_t eff_wpm);
+
+/** Returns true from player_start() until the last mark ends or player_stop() runs. */
+bool player_is_busy(void);
+
+/** Stops the playback and requests the sidetone off. A second call has no other effect. */
+void player_stop(void);
+```
+
+`player_shared.h` (defined in `player.c`):
+
+```c
+#define PLAYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS  /* 32: the fall ends at the mark end */
+#define PLAYER_CHAR_GAP_UNITS 3U
+
+extern volatile MEM_BIT player_is_enabled;          /* main sets; main and ISR clear */
+extern volatile MEM_BIT player_is_start_requested;  /* main sets; ISR clears */
+extern volatile MEM_XDATA uint8_t player_codes[PLAYER_TEXT_MAX];  /* play form, see below */
+extern volatile MEM_XDATA uint8_t player_code_count;
+extern volatile MEM_XDATA uint16_t player_dit_ticks;
+extern volatile MEM_XDATA uint16_t player_dah_ticks;
+extern volatile MEM_XDATA uint16_t player_char_gap_ticks;
+```
+
+Play form of one character: bit 0 is the next element (1 = dah). After each element the ISR shifts the value right
+by 1. The value 1 means "no element left". `player_start()` builds it from the `morse_encode()` pattern. The
+pattern has the first element in its highest bit below the start marker. Conversion:
+
+```c
+code = 1U;
+while (pattern > 1U) {
+  code = (uint8_t)((uint8_t)(code << 1) | (pattern & 1U));
+  pattern >>= 1;
+}
+```
+
+Example: A (`.-`) has pattern 0b101 and code 0b110.
+
+`player_service.h`: same structure as `keyer_service.h`. ISR-private state, names are part of the contract (host
+tests read them):
+
+```c
+static MEM_BIT player_is_mark;      /* 1: a mark runs, 0: a gap runs */
+static MEM_DATA uint16_t player_ticks;  /* calls left in the current mark or gap */
+static MEM_DATA uint8_t player_code;    /* play form of the current character */
+static MEM_DATA uint8_t player_index;   /* index of the current character */
+```
+
+The behavior is in section 9.
+
+### 5.5 `util/rng.h`, `util/crc8.h` (new)
+
+```c
+#define RNG_SEED_FALLBACK 0xACE1U
+
+/** Sets the state to @p seed; a seed of 0 gives RNG_SEED_FALLBACK. */
+void rng_seed(uint16_t seed);
+/** XORs @p entropy into the state; a result of 0 gives RNG_SEED_FALLBACK. Does not step. */
+void rng_mix(uint16_t entropy);
+/** Steps the xorshift (x ^= x << 7; x ^= x >> 9; x ^= x << 8) and returns the new state. Never 0. */
+uint16_t rng_next(void);
+/** Returns 0..limit-1 from the high byte of rng_next(): (hi * limit) >> 8. Returns 0 and does not step for 0. */
+uint8_t rng_below(uint8_t limit);
+```
+
+- State: `static MEM_XDATA uint16_t`. The C start-up value 0 acts as `RNG_SEED_FALLBACK` on the first `rng_next()`.
+- Reference: from seed 1, `rng_next()` gives 0x8181, 0x6021, 0xE999, 0x2E0B, 0xB59E. The period is 65535.
+- `rng_below()` multiplies two bytes into 16 bits (`MUL AB`). No library helper.
+
+```c
+/** CRC-8: polynomial 0x07, initial value 0, no reflection, no final XOR. "123456789" gives 0xF4. */
+uint8_t crc8_compute(const MEM_XDATA uint8_t* data, uint8_t length);
+```
+
+The body is the current `settings_crc8()`, unchanged.
+
+### 5.6 `koch/koch.h` (new)
+
+```c
+#include <stdint.h>
+#include "mcu/compiler.h"
+
+typedef uint8_t koch_kind_t;
+#define KOCH_KIND_CHAR 0U
+#define KOCH_KIND_WORD 1U
+
+#define KOCH_CHAR_COUNT 43U          /* entries of the Koch table (D-T3, Q-T1) */
+#define KOCH_FIRST_LEARNED 2U        /* level index 0 has K and M */
+#define KOCH_WORD_ALPHABET_MAX 40U   /* D-T4: BT, SK and AR stay out of words */
+#define KOCH_WORD_LEN_MIN 2U
+#define KOCH_WORD_LEN_MAX 8U         /* equal to settings_max(SETTINGS_ID_MAX_WORD_LEN) */
+#define KOCH_CHAR_ITEMS 50U
+#define KOCH_WORD_ITEMS 10U
+#define KOCH_FINAL_ITEMS_MAX 100U
+#define KOCH_LEVEL_MAX 65535U
+/* First level index of the final word phase: the first character level whose learned count is above the table. */
+#define KOCH_FINAL_LEVEL (((KOCH_CHAR_COUNT % 2U) != 0U) ? (3U * ((KOCH_CHAR_COUNT - 1U) / 2U)) \
+                                                         : ((3U * ((KOCH_CHAR_COUNT - 2U) / 2U)) + 1U))
+
+/** Returns character @p index of the Koch order, or '\0' for an index at or above KOCH_CHAR_COUNT. */
+char koch_char(uint8_t index);
+/** Returns character @p index of the keyboard order, or '\0' for an index at or above KOCH_CHAR_COUNT. */
+char koch_keyboard_char(uint8_t index);
+/** Returns the index of @p character in the Koch order, or KOCH_CHAR_COUNT when it is not in the table. */
+uint8_t koch_index_of(char character);
+
+koch_kind_t koch_kind(uint16_t level);
+/** Learned characters at @p level: KOCH_FIRST_LEARNED..KOCH_CHAR_COUNT. */
+uint8_t koch_learned_count(uint16_t level);
+/** Items of a session at @p level: KOCH_CHAR_ITEMS, KOCH_WORD_ITEMS or 10..KOCH_FINAL_ITEMS_MAX. */
+uint8_t koch_item_count(uint16_t level);
+/** Word length at @p level, or 0 at a character level. @p max_word_len is clamped to 2..KOCH_WORD_LEN_MAX. */
+uint8_t koch_word_length(uint16_t level, MEM_XDATA uint8_t max_word_len);
+/** Characters that an item of @p level can hold: the learned count, or min(learned, 40) at a word level (D-T4). */
+uint8_t koch_alphabet_count(uint16_t level);
+/**
+ * Smallest score that passes a session of @p item_count items (D-T33): ceil(0.8 * item_count) for KOCH_KIND_WORD,
+ * else ceil(0.9 * item_count).
+ */
+uint8_t koch_pass_threshold(koch_kind_t kind, MEM_XDATA uint8_t item_count);
+/**
+ * Writes one random item of @p level and a NUL to @p text (KOCH_WORD_LEN_MAX + 1 bytes) and returns its length.
+ * Uses rng_below() in the order of section 7. Defined in src/koch/koch_item.c (D-T18).
+ */
+uint8_t koch_make_item(uint16_t level, MEM_XDATA uint8_t max_word_len, char MEM_XDATA* MEM_XDATA text);
+```
+
+Tables in `koch.c`, both `static const MEM_CODE char[]` with a `_Static_assert` that the size is `KOCH_CHAR_COUNT`
+(D-T21):
+
+- `koch_order`: `K M R S U A P T L O W I . N J E F 0 Y , V G 5 / Q 9 Z H 3 8 B ? 4 2 7 C 1 D 6 X`, then
+  `MORSE_CHAR_BT`, `MORSE_CHAR_SK`, `MORSE_CHAR_AR`.
+- `koch_keyboard_order`: the letters `A` to `Z`, the digits `0` to `9`, then `. , ? /`, then `MORSE_CHAR_BT`,
+  `MORSE_CHAR_SK`, `MORSE_CHAR_AR`.
+
+The two tables hold the same set. A host test proves it. `koch.c` adds `_Static_assert` checks: both tables have
+`KOCH_CHAR_COUNT` entries, `KOCH_WORD_ALPHABET_MAX <= KOCH_CHAR_COUNT`, `KOCH_FINAL_LEVEL <= 255`.
+
+### 5.7 `koch/keyboard.h` (new)
+
+```c
+#include <stdbool.h>
+#include <stdint.h>
+
+/* Runs from left to right, named after the button under each run (D-T27, D-T28). */
+#define KEYBOARD_GROUP_MENU 0U    /* menu/back, left */
+#define KEYBOARD_GROUP_PREV 1U
+#define KEYBOARD_GROUP_NEXT 2U
+#define KEYBOARD_GROUP_ENTER 3U   /* right */
+#define KEYBOARD_GROUP_COUNT 4U
+#define KEYBOARD_NO_PICK '\0'
+#define KEYBOARD_DEPTH_MAX 3U     /* selects per pick, enough for 4^3 = 64 characters */
+
+/**
+ * Builds the list of the first @p koch_count Koch characters in keyboard order and shows the whole list. The count
+ * is clamped to 2..KOCH_CHAR_COUNT. Receiving passes training_alphabet_count(), so a word session has no prosign.
+ */
+void keyboard_reset(uint8_t koch_count);
+/** Number of characters in the list. */
+uint8_t keyboard_count(void);
+/** Character @p index of the list, or KEYBOARD_NO_PICK out of range. */
+char keyboard_char(uint8_t index);
+/** List index of the first character of @p group in the current range. An unknown group gives the range end. */
+uint8_t keyboard_group_first(uint8_t group);
+/** Characters in @p group of the current range, 0 for an empty group or an unknown group. */
+uint8_t keyboard_group_size(uint8_t group);
+/**
+ * Selects @p group. An empty or unknown group changes nothing. A group of one character returns that character and
+ * shows the whole list again. A larger group becomes the current range. Returns KEYBOARD_NO_PICK unless it picks.
+ */
+char keyboard_select(uint8_t group);
+/** Goes back to the range before the last narrowing. Returns false at the whole list. */
+bool keyboard_back(void);
+/** Shows the whole list. */
+void keyboard_top(void);
+/** Narrowings since the whole list, 0..KEYBOARD_DEPTH_MAX - 1. */
+uint8_t keyboard_depth(void);
+```
+
+The algorithm is in section 8.
+
+### 5.8 `progress/progress.h` (new) and `eeprom/eeprom_map.h`
+
+```c
+#include <stdbool.h>
+#include <stdint.h>
+#include "mcu/compiler.h"
+
+#define PROGRESS_MODE_RECEIVING 0U
+#define PROGRESS_MODE_SENDING 1U
+#define PROGRESS_WPM_MIN 5U          /* equal to settings_min(SETTINGS_ID_RX_WPM) and TX */
+#define PROGRESS_WPM_MAX 50U         /* equal to settings_max(SETTINGS_ID_RX_WPM) and TX */
+#define PROGRESS_SPEED_COUNT 46U
+#define PROGRESS_RECORD_SIZE 188U
+#define PROGRESS_MAGIC_0 0x4BU       /* 'K' */
+#define PROGRESS_MAGIC_1 0x50U       /* 'P' */
+#define PROGRESS_LAYOUT_VERSION 1U
+
+typedef uint8_t progress_status_t;
+#define PROGRESS_OK 0U
+#define PROGRESS_READ_FAILED 1U
+#define PROGRESS_NO_RECORD 2U        /* magic mismatch, for example an erased page */
+#define PROGRESS_BAD_VERSION 3U
+#define PROGRESS_BAD_CRC 4U
+#define PROGRESS_SAVE_FAILED 5U
+
+/** Reads and checks the record. On any failure every level is 0. Never writes the EEPROM. Call once at start-up. */
+progress_status_t progress_load(void);
+/** Level index of @p mode at @p wpm (clamped to 5..50). 0 for an unknown mode. */
+uint16_t progress_level(uint8_t mode, MEM_XDATA uint8_t wpm);
+/** Adds 1 to the level in RAM. Returns false and changes nothing at 65535 or for an unknown mode. */
+bool progress_advance(uint8_t mode, MEM_XDATA uint8_t wpm);
+/** Erases page 1 and writes the record. Returns PROGRESS_OK or PROGRESS_SAVE_FAILED. */
+progress_status_t progress_save(void);
+/** Sets every level to 0 in RAM, then saves. Returns PROGRESS_OK or PROGRESS_SAVE_FAILED. */
+progress_status_t progress_reset(void);
+```
+
+`eeprom_map.h`:
+
+```c
+#define EEPROM_MAP_PROGRESS_PAGE 1U
+#define EEPROM_MAP_PROGRESS_ADDRESS 0x0200U
+#define EEPROM_MAP_FIRST_FREE_PAGE 2U     /* pages 2-7 stay free */
+#define EEPROM_MAP_FREE_ADDRESS 0x0400U
+#define EEPROM_MAP_FREE_SIZE 0x0C00U      /* 0x0400-0x0FFF */
+```
+
+The record is in section 10.
+
+### 5.9 `stats/stats.h` and `buttons/buttons.h` changes
+
+```c
+/** Sets every training level back to level 1 and stores it. Returns true when the store succeeded. */
+bool stats_reset(void);
+```
+
+`stats.c`: `return progress_reset() == PROGRESS_OK;`.
+
+```c
+/**
+ * Tap mode on: MENU, PREV, NEXT and ENTER give no event at the press. A release before BUTTONS_LONG_PRESS_MS gives
+ * the press event then. A hold of BUTTONS_LONG_PRESS_MS gives only the long event. No repeat events. The call drops
+ * the pending presses, the long-pending state and the repeat of all four buttons, so a hold that started before the
+ * call gives no event. buttons_init() sets tap mode off.
+ */
+void buttons_set_tap_mode(bool is_enabled);
+```
+
+Changes of D-T28 (`buttons.h` declarations keep their signatures, and only the comments and the behavior change):
+
+| Item | Contract |
+| --- | --- |
+| Event values | No new macro. Long `enter` = `BUTTON_EVENT_ENTER \| BUTTON_EVENT_LONG_FLAG` (0x44). `BUTTON_EVENT_CODE()` gives `BUTTON_EVENT_ENTER`. |
+| Tap mode off | As today: ENTER gives its press event at the press, no long event, no repeat (AC-K45 unchanged). MENU, PREV and NEXT as today. |
+| Tap mode on | All four buttons: press event at a release before `BUTTONS_LONG_PRESS_MS`, only the long event for a hold, no repeat. |
+| `buttons_poll()` order | Pending presses: MENU, ENTER, PREV, NEXT (unchanged). Long events: MENU, ENTER, PREV, NEXT (ENTER comes only in tap mode). Then a repeat. |
+| `buttons_set_enter_enabled(false)` | Also clears the long-pending ENTER bit. |
+| `buttons_set_enter_enabled(true)` | Also clears the long-pending ENTER bit. A contact closed at the call gives no tap and no long event until it opens and closes again. |
+| `buttons_poll()` header comment | Names ENTER among the long-press buttons "in tap mode only". |
+| File header comment of `buttons.h` | Names the long press of ENTER in tap mode. |
+
+- "Release" and "hold" use the debounced state (D-K4 of `keyer_spec.md`). A release that debounces at or after
+  `BUTTONS_LONG_PRESS_MS` is a hold, also with a late poll (D-T22).
+- The order rules of `buttons_poll()` stay: pending presses first, then long events, then repeats.
+- Tap mode state: `static MEM_XDATA bool buttons_is_tap_mode`.
+- Press times: one 16-bit entry per long-press button, so ENTER adds one entry (+2 B xdata). The developer can merge
+  the press-order and long-order tables, because both orders are now MENU, ENTER, PREV, NEXT.
+- Entry by `enter`: the menu `enter` press opens Receiving and `receiving_enter()` turns tap mode on while the
+  button or the tip is still closed. The call clears the long-pending ENTER, so its release gives no event and a
+  hold gives no long event.
+
+### 5.10 `modes/training.h` (new): session engine
+
+```c
+#include <stdbool.h>
+#include <stdint.h>
+#include "koch/koch.h"
+#include "mcu/compiler.h"
+
+#define TRAINING_MODE_RECEIVING 0U   /* equal to PROGRESS_MODE_RECEIVING */
+#define TRAINING_MODE_SENDING 1U     /* equal to PROGRESS_MODE_SENDING */
+#define TRAINING_ATTEMPTS 3U
+#define TRAINING_TEXT_SIZE (KOCH_WORD_LEN_MAX + 1U)
+/* Sending answer character for a word space inside a word (D-T31). No item character and no decoded character is ' '. */
+#define TRAINING_CHAR_WORD_SPACE ' '
+
+/* Delays in ms, ui-ux.md sections 5.14 and 6.10 (UX-46). Each has an #ifndef guard, so -D can set it for host tests. */
+#define TRAINING_START_MS 1000U
+#define TRAINING_CORRECT_MS 600U
+#define TRAINING_WRONG_MS 1200U
+#define TRAINING_FAILED_MS 2500U          /* Receiving: from the end of the answer playback (D-T14) */
+#define TRAINING_RECEIVING_GAP_MS 500U
+#define TRAINING_SENDING_GAP_MS 300U
+
+typedef uint8_t training_phase_t;
+#define TRAINING_PHASE_IDLE 0U    /* no session */
+#define TRAINING_PHASE_GAP 1U     /* pause before an item; Sending shows a blank item area */
+#define TRAINING_PHASE_ITEM 2U    /* the item is shown or played; answers count */
+#define TRAINING_PHASE_RESULT 3U  /* a check result shows; answers are dropped */
+#define TRAINING_PHASE_END 4U     /* session end screen */
+
+typedef uint8_t training_check_t;
+#define TRAINING_CHECK_PARTIAL 0U  /* the answer so far is accepted; more characters needed */
+#define TRAINING_CHECK_CORRECT 1U
+#define TRAINING_CHECK_WRONG 2U    /* an attempt is used; attempts remain */
+#define TRAINING_CHECK_FAILED 3U   /* third wrong attempt; the answer shows */
+#define TRAINING_CHECK_IGNORED 4U  /* not in TRAINING_PHASE_ITEM; the character is dropped */
+
+typedef uint8_t training_event_t;
+#define TRAINING_EVENT_NONE 0U
+#define TRAINING_EVENT_ITEM 1U   /* ITEM began with a new item */
+#define TRAINING_EVENT_RETRY 2U  /* ITEM began again with the same item after a wrong attempt */
+#define TRAINING_EVENT_GAP 3U    /* GAP began after a resolved item */
+#define TRAINING_EVENT_END 4U    /* END began; the outcome is ready */
+
+typedef uint8_t training_outcome_t;
+#define TRAINING_OUTCOME_FAIL 0U            /* the level repeats */
+#define TRAINING_OUTCOME_PASS 1U            /* the level went up and is stored */
+#define TRAINING_OUTCOME_PASS_NOT_SAVED 2U  /* the level went up in RAM only */
+#define TRAINING_OUTCOME_PASS_TOP 3U        /* passed at level index 65535; no change, no save (D-T17) */
+
+/** Starts a session of @p mode (unknown gives RECEIVING) at the stored level of @p wpm. Phase GAP, TRAINING_START_MS. */
+void training_start(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+/** Ends the session without a store. Phase IDLE. */
+void training_stop(void);
+/** Runs the time-based steps of section 11. Returns at most one event. Reads the tick once. */
+training_event_t training_poll(void);
+/** Adds @p character to the answer and checks it (section 11.3). */
+training_check_t training_add_char(char character);
+/** Removes the last answer character in phase ITEM. Returns false when there is none. */
+bool training_undo_char(void);
+/**
+ * In phase RESULT: true stops the RESULT delay. A later call with false starts the delay again from the tick of that
+ * call. Other phases: no effect. A phase change clears the hold (D-T14).
+ */
+void training_hold_result(bool is_held);
+
+training_phase_t training_phase(void);
+uint8_t training_mode(void);
+uint8_t training_wpm(void);                 /* the progress key of the session */
+koch_kind_t training_kind(void);
+uint16_t training_level(void);              /* level index of the session */
+uint16_t training_shown_level(void);        /* D-T5: min(training_level() + 1, 65535) */
+uint16_t training_new_shown_level(void);    /* in phase END: the shown level of the next session */
+uint8_t training_learned_count(void);
+uint8_t training_alphabet_count(void);      /* koch_alphabet_count() of the session level */
+uint8_t training_item_number(void);         /* 0 before the first item, then 1..item count */
+uint8_t training_shown_item_number(void);   /* header number: GAP gives item number + 1, else the item number */
+uint8_t training_item_count(void);
+uint8_t training_score(void);               /* items correct on the first attempt */
+uint8_t training_pass_threshold(void);
+uint8_t training_wrong_attempts(void);      /* of the current item, 0..TRAINING_ATTEMPTS */
+training_check_t training_last_check(void);
+training_outcome_t training_outcome(void);  /* meaningful in phase END */
+const char MEM_XDATA* training_item_text(void);    /* NUL-terminated, 1..KOCH_WORD_LEN_MAX characters */
+uint8_t training_item_length(void);
+const char MEM_XDATA* training_answer_text(void);  /* NUL-terminated, 0..item length characters */
+uint8_t training_answer_length(void);
+```
+
+### 5.11 `modes/training_screen.h`, `modes/receiving.h`, `modes/sending.h` (new)
+
+```c
+/* training_screen.h: drawing shared by Receiving and Sending. Layouts: ui-ux.md (U-7, U-10). */
+/** Draws row 0 (ui-ux.md 5.11.1): mode tag, speeds, shown level, training_shown_item_number() and the count. */
+void training_screen_draw_header(void);
+/** Draws the session end screen in rows 1-7 from the engine state. */
+void training_screen_draw_end(void);
+```
+
+```c
+/* receiving.h. Main loop only; only menu.c calls these functions. */
+/** Seeds the RNG, sets the tone, turns tap mode on and starts a session at the RX speed. Draws nothing. */
+void receiving_enter(void);
+/** Draws the whole Receiving screen for the current state. menu_render() calls it after the clear. */
+void receiving_render(void);
+/** Runs the engine and the playback, and redraws the rows that change. */
+void receiving_poll(void);
+/** Applies a button event (section 12). Returns true when the user asks to leave. */
+bool receiving_handle(button_event_t event);
+/** Stops the playback and the session and turns tap mode off. Draws nothing. */
+void receiving_leave(void);
+```
+
+```c
+/* sending.h. Main loop only; only menu.c calls these functions. */
+/** Seeds the RNG, takes P3.2 from the menu, sets the tone, starts the keyer and a session at the TX speed. */
+void sending_enter(void);
+void sending_render(void);
+/** Reads at most KEYER_QUEUE_SIZE + 1 keyer events, runs the engine and redraws the rows that change. */
+void sending_poll(void);
+bool sending_handle(button_event_t event);
+/** Stops the keyer and the session and gives P3.2 back to the menu. At END both are already done (D-T25). Draws nothing. */
+void sending_leave(void);
+```
+
+### 5.12 `menu/menu.h` changes
+
+```c
+#define MENU_SCREEN_LIST 0U
+#define MENU_SCREEN_EDIT 1U
+/* 2 is unused (D-T8). */
+#define MENU_SCREEN_DIALOG 3U
+#define MENU_SCREEN_MESSAGE 4U
+#define MENU_SCREEN_FREE_INPUT 5U
+#define MENU_SCREEN_RECEIVING 6U
+#define MENU_SCREEN_SENDING 7U
+```
+
+The header comment of `menu_handle()` changes: Free Input acts only on long events. Receiving and Sending get every
+event except a long `menu/back` (section 12).
+
+## 6. Level model
+
+Level index `L` is `uint16_t`, 0..65535. Every function takes any `L`.
+
+| Range of `L` | Kind | Learned count `m` | Items | Word length |
+| --- | --- | --- | --- | --- |
+| `L < KOCH_FINAL_LEVEL`, `L % 3 == 0` | CHAR | `2 + 2 * (L / 3)` | 50 | 0 |
+| `L < KOCH_FINAL_LEVEL`, `L % 3 == 1` | CHAR | `3 + 2 * (L / 3)` | 50 | 0 |
+| `L < KOCH_FINAL_LEVEL`, `L % 3 == 2` | WORD, word number `L / 3 + 1` | `3 + 2 * (L / 3)` | 10 | `min(2 + (L / 3) / 2, max)` |
+| `L >= KOCH_FINAL_LEVEL` | WORD | `KOCH_CHAR_COUNT` | `L - F >= 90 ? 100 : 10 + (L - F)`, `F = KOCH_FINAL_LEVEL` | `max` |
+
+- `max` = `Max Word Length`, clamped to `KOCH_WORD_LEN_MIN..KOCH_WORD_LEN_MAX`.
+- The new character of a character level is `koch_char(m - 1)`. At `L = 0` it is M, and the item rule of section 7
+  mixes K and M evenly.
+- The word length `2 + (L / 3) / 2` equals `2 + (wordNo - 1) / 2` of the plan.
+- For `L < KOCH_FINAL_LEVEL` the value fits `uint8_t`, and the code divides in 8 bits (`DIV AB`). From
+  `KOCH_FINAL_LEVEL` on, the code compares first, so `L - F` never overflows and no 16-bit division runs.
+- `KOCH_FINAL_LEVEL` = 63 for the 43 characters.
+- Pass threshold (D-T33), in `uint16_t`. Character kind: `(9 * count + 9) / 10`, values 50 gives 45 (and 10 gives 9,
+  100 gives 90 for the arithmetic). Word kind: `(4 * count + 4) / 5`, values 10 gives 8, 11 gives 9, 15 gives 12,
+  50 gives 40, 100 gives 80. For any count 0..255 the products are at most 2304 and 1024, so 16 bits never overflow.
+  Count 0 gives 0 in both rules.
+- Advance: `if (L != 65535) { L = L + 1; }`. No wrap.
+
+Reference values for `KOCH_CHAR_COUNT` = 43:
+
+| `L` | Kind | `m` | New char / word number | Items | Length (max 8) |
+| ---: | --- | ---: | --- | ---: | ---: |
+| 0 | CHAR | 2 | M (with K) | 50 | - |
+| 1 | CHAR | 3 | R | 50 | - |
+| 2 | WORD | 3 | word 1 | 10 | 2 |
+| 3 | CHAR | 4 | S | 50 | - |
+| 5 | WORD | 5 | word 2 | 10 | 2 |
+| 8 | WORD | 7 | word 3 | 10 | 3 |
+| 59 | WORD | 41 | word 20 | 10 | 8 |
+| 60 | CHAR | 42 | SK | 50 | - |
+| 61 | CHAR | 43 | AR | 50 | - |
+| 62 | WORD | 43 | word 21 | 10 | 8 |
+| 63 | WORD (final) | 43 | - | 10 | 8 |
+| 64 | WORD (final) | 43 | - | 11 | 8 |
+| 152 | WORD (final) | 43 | - | 99 | 8 |
+| 153 | WORD (final) | 43 | - | 100 | 8 |
+| 65535 | WORD (final) | 43 | - | 100 | 8 |
+
+## 7. Item generation
+
+`koch_make_item(level, max_word_len, text)`, with `m = koch_learned_count(level)`:
+
+- CHAR level: `r = rng_below(2)`. For `r == 0` the item is `koch_char(m - 1)`. Else the item is
+  `koch_char(rng_below(m - 1))`. Length 1. So the new character has a share of 1/2, and the older characters share
+  the other half evenly. At `L = 0` this gives K and M with 1/2 each.
+- WORD level: `n = koch_alphabet_count(level)` = `min(m, KOCH_WORD_ALPHABET_MAX)`,
+  `len = koch_word_length(level, max_word_len)`. For each position
+  in order, the character is `koch_char(rng_below(n))`.
+- Then `text[len] = '\0'`. The return value is `len`.
+
+The call order of `rng_below()` is part of the contract, so tests can predict items from a seed.
+
+Seeding: `receiving_enter()` and `sending_enter()` call `rng_seed(tick_now())`. Each accepted button event in the
+modes and each keyer DIT or DAH event in Sending calls `rng_mix(tick_now())`.
+
+## 8. Group keyboard
+
+List: `keyboard_reset(a)` copies each `koch_keyboard_char(k)`, `k` = 0..`KOCH_CHAR_COUNT - 1`, whose Koch index
+(`koch_index_of()`) is below `a`, into `keyboard_list[KOCH_CHAR_COUNT]`. The list is in keyboard order. `a` is
+`training_alphabet_count()`: all learned characters in a character session, at most the first 40 Koch characters in
+a word session (D-T4). Example: a word session with all 43 characters learned has 40 characters.
+
+Range: `range_first` and `range_count`. After a reset or a pick: `0` and `keyboard_count()`.
+
+Group sizes of a range of `c` characters (four runs, D-T27):
+
+- Run `k` = 0..3 (`KEYBOARD_GROUP_MENU`, `_PREV`, `_NEXT`, `_ENTER`) has `s_k = (c + 3 - k) / 4` characters. The
+  runs are contiguous from `range_first` in this order. `s0 >= s1 >= s2 >= s3 >= s0 - 1`, and the sum is `c`.
+- Results: 2 gives 1/1/0/0, 3 gives 1/1/1/0, 4 gives 1/1/1/1, 5 gives 2/1/1/1, 9 gives 3/2/2/2, 13 gives 4/3/3/3,
+  17 gives 5/4/4/4, 40 gives 10/10/10/10, 43 gives 11/11/11/10.
+- Selects per pick: 1 for 2..4 characters, at most 2 for 5..16, at most 3 for 17..64.
+- Example, character session with all 43 characters: A to K, L to V, W to 6, then `7 8 9 . , ? /` BT SK AR. The
+  right run of 10 gives 3/3/2/2: `789`, `.,?`, `/` BT, SK AR. Word session with 40 characters: A to J, K to T,
+  U to 3, 4 to `/`.
+- Empty runs are on the right. With 2 or 3 characters, `enter` (and `next` for 2) selects nothing.
+- `keyboard_group_first(g)` for `g >= KEYBOARD_GROUP_COUNT` returns `range_first + range_count` (D-T21 unchanged).
+
+`keyboard_select(g)`:
+
+1. Size 0 or `g >= KEYBOARD_GROUP_COUNT`: no change, return `KEYBOARD_NO_PICK`.
+2. Size 1: return that character, then `keyboard_top()`.
+3. Else push `(range_first, range_count)` on the history (depth + 1), set the range to the group, return
+   `KEYBOARD_NO_PICK`.
+
+`keyboard_back()`: with depth > 0, pop the range and return true. Else return false.
+
+History: `keyboard_history_first[KEYBOARD_DEPTH_MAX]` and `keyboard_history_count[KEYBOARD_DEPTH_MAX]`. A
+`_Static_assert` proves that `KEYBOARD_DEPTH_MAX` covers `KOCH_CHAR_COUNT` (four runs: 4^3 = 64 >= 43). The last
+select picks, so at most `KEYBOARD_DEPTH_MAX - 1` = 2 narrowings go on the history. The arrays can have
+`KEYBOARD_DEPTH_MAX - 1` entries. `keyboard_sizes[KEYBOARD_GROUP_COUNT]` grows to 4 entries.
+
+## 9. CW player ISR design
+
+### 9.1 `player_start()` (main loop)
+
+1. `player_stop()`. From here the ISR returns at once for the player, so the shared values can change.
+2. Reject `length == 0` or `length > PLAYER_TEXT_MAX`: return false.
+3. For each character: `pattern = morse_encode(text[i])`. `MORSE_PATTERN_INVALID`: return false (the player stays
+   stopped). Else write the play form (section 5.4) to `player_codes[i]`.
+4. `cw_timing_compute(wpm, eff_wpm)`. Write `player_dit_ticks = dit`, `player_dah_ticks = 3 * dit`,
+   `player_char_gap_ticks = 3 * unit`. Write `player_code_count = length`.
+5. Set `player_is_start_requested` (one `SETB`), then `player_is_enabled` (one `SETB`). All shared values are
+   `volatile`, so C keeps the stores of steps 3 and 4 before step 5.
+6. Return true.
+
+`player_stop()`: clear `player_is_enabled`, clear `player_is_start_requested`, then `sidetone_set_on(false)`.
+
+`player_is_busy()`: return `player_is_enabled`.
+
+### 9.2 `player_service()` (ISR, one call)
+
+```
+if player_is_enabled == 0: return                       (menu path: one bit test)
+if player_is_start_requested:
+    clear player_is_start_requested
+    player_index = 0; player_code = player_codes[0]
+    start mark; return
+player_ticks = player_ticks - 1
+if player_is_mark:
+    if player_ticks == 0:                               (mark end)
+        player_code = player_code >> 1
+        if player_code != 1:  player_is_mark = 0; player_ticks = player_dit_ticks          (element gap)
+        else:
+            player_index = player_index + 1
+            if player_index == player_code_count:  clear player_is_enabled; return        (done)
+            player_code = player_codes[player_index]
+            player_is_mark = 0; player_ticks = player_char_gap_ticks                       (character gap)
+    else if player_ticks <= PLAYER_EARLY_RELEASE_TICKS:  PLAYER_SIDETONE_OFF()
+else if player_ticks == 0:  start mark                   (gap end)
+
+start mark: player_is_mark = 1; player_ticks = (player_code & 1) ? player_dah_ticks : player_dit_ticks;
+            PLAYER_SIDETONE_ON()
+```
+
+Countdown rule (the same as section 6.4 of `keyer_spec.md`): the call that starts a mark or a gap loads N. The phase
+lasts exactly N calls, the start call included. A mark that starts on call `s` covers calls `s`..`s + N - 1`. The
+gap after it covers calls `s + N`..`s + N + G - 1`, and the next mark starts on call `s + N + G`.
+
+Exact lengths, in calls:
+
+| Part | Length |
+| --- | --- |
+| Dit mark | `dit` |
+| Dah mark | `3 * dit` |
+| Gap between elements of one character | `dit` |
+| Gap between characters | `3 * unit`. Without Farnsworth, `unit` equals `dit`. |
+| After the last mark | none: `player_is_enabled` clears on the call after the last mark call |
+
+Early release: the request goes off on the call where `player_ticks` becomes 32. The sidetone runs after the player
+in the same ISR call, so the 32-step fall writes compare 0 on the last mark call. The mark keeps its full N calls.
+The shortest mark is 96 calls (dit at 50 WPM), longer than two 32-step ramps (static check in `timing.h`).
+
+Reference values:
+
+| WPM / eff | dit | dah | element gap | character gap |
+| --- | ---: | ---: | ---: | ---: |
+| 5 / 5 | 960 | 2880 | 960 | 2880 |
+| 20 / 20 | 240 | 720 | 240 | 720 |
+| 20 / 10 | 240 | 720 | 240 | 2616 |
+| 20 / 5 | 240 | 720 | 240 | 6405 |
+| 25 / 15 | 192 | 576 | 192 | 1587 |
+| 50 / 50 | 96 | 288 | 96 | 288 |
+| 50 / 5 | 96 | 288 | 96 | 7110 |
+
+All values fit `uint16_t`. The ISR only compares, counts, shifts and copies. It never multiplies or divides.
+
+### 9.3 Sharing the sidetone
+
+- The keyer and the player write the same request bit through their macros. D-T12 keeps only one of them enabled.
+- The Tone preview runs only in the Tone edit. No mode screen runs at that time.
+- The tone: `receiving_enter()` and `sending_enter()` call `sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ))`.
+- A stop during a mark gives the normal 8 ms fall, so no click.
+
+## 10. EEPROM progress record (page 1)
+
+### 10.1 Layout
+
+| Bytes | Content |
+| --- | --- |
+| 0 | `PROGRESS_MAGIC_0` (0x4B, 'K') |
+| 1 | `PROGRESS_MAGIC_1` (0x50, 'P') |
+| 2 | `PROGRESS_LAYOUT_VERSION` (1) |
+| 3..94 | Receiving levels, WPM 5..50: level of `wpm` at `3 + 2 * (wpm - 5)`, low byte first |
+| 95..186 | Sending levels, WPM 5..50: level of `wpm` at `95 + 2 * (wpm - 5)`, low byte first |
+| 187 | CRC-8 (`crc8_compute`) of bytes 0..186 |
+
+Total 188 bytes at IAP address 0x0200. Bytes 188..511 of page 1 stay erased. The code reads and writes the levels
+byte by byte. It never reads a `uint16_t` through a cast pointer (alignment on the host).
+
+### 10.2 Load (`progress_load`)
+
+Read the 188 bytes into `progress_record` (xdata). Check in this order: read status, magic, version, CRC. The first
+failure gives its status: `PROGRESS_READ_FAILED`, `PROGRESS_NO_RECORD`, `PROGRESS_BAD_VERSION` or
+`PROGRESS_BAD_CRC`. On any failure every level byte becomes 0. Then, in all cases, bytes 0..2 get the magic and the
+version. Load never writes the EEPROM.
+
+### 10.3 Save (`progress_save`)
+
+1. `eeprom_clear_low_supply()`.
+2. Byte 187 = CRC of bytes 0..186.
+3. `eeprom_erase_page(EEPROM_MAP_PROGRESS_PAGE)`.
+4. `eeprom_write(0x0202, &progress_record[2], 186)`.
+5. `eeprom_write(0x0200, progress_record, 2)`. The magic goes last, so an interrupted save never leaves a valid
+   record.
+6. Any status other than `EEPROM_OK` stops the sequence and returns `PROGRESS_SAVE_FAILED`. The levels in RAM stay.
+
+### 10.4 Rules
+
+- The engine saves only after a passed session that changed a level (section 11.4).
+- `progress_reset()` sets every level byte to 0, then saves. Also with all levels already at 0, it saves.
+- A failed save loses the stored record, because the erase came first. The next start then loads level 0 everywhere.
+  Risk R-T1.
+- An unknown mode returns level 0 and never advances. A WPM outside 5..50 is clamped.
+
+## 11. Session engine
+
+### 11.1 State (all `static MEM_XDATA` in `training.c`)
+
+- Session: phase, mode, wpm, kind, level, learned count, max word length.
+- Counters: item number, item count, score, pass threshold, wrong attempts, last check, outcome.
+- Time: phase start tick (`uint16_t`), phase duration (`uint16_t`), result hold flag (`bool`, D-T14).
+- Texts: item text and answer text (`TRAINING_TEXT_SIZE` each), item length, answer length.
+
+### 11.2 Transitions
+
+| From | Trigger | Actions | To | Event |
+| --- | --- | --- | --- | --- |
+| any | `training_start(mode, wpm, max)` | Read the level with `progress_level()`. Set kind, learned count, item count, threshold (`koch_pass_threshold(koch_kind(level), item count)`, D-T33). Item number 0, score 0. Empty answer. Duration `TRAINING_START_MS`. | GAP | - |
+| any | `training_stop()` | - | IDLE | - |
+| GAP | duration passed (poll) | Item number + 1. Wrong attempts 0. `koch_make_item()`. Empty answer. | ITEM | ITEM |
+| ITEM | `training_add_char()` gives CORRECT | First attempt (wrong attempts 0): score + 1. Duration `TRAINING_CORRECT_MS`. | RESULT | - |
+| ITEM | gives WRONG | Wrong attempts + 1 (now 1 or 2). Duration `TRAINING_WRONG_MS`. | RESULT | - |
+| ITEM | gives FAILED | Wrong attempts = 3. Duration `TRAINING_FAILED_MS`. | RESULT | - |
+| RESULT | `training_hold_result(true)` | Hold on. The delay does not run. | RESULT | - |
+| RESULT | `training_hold_result(false)` with the hold on | Hold off. Phase start = the tick of this call. | RESULT | - |
+| RESULT | duration passed with the hold off, last check WRONG | Empty answer. | ITEM | RETRY |
+| RESULT | duration passed with the hold off, CORRECT or FAILED, item number < item count | Duration `TRAINING_RECEIVING_GAP_MS` or `TRAINING_SENDING_GAP_MS` by mode. | GAP | GAP |
+| RESULT | duration passed with the hold off, CORRECT or FAILED, last item | Finish (11.4). No GAP after the last item. | END | END |
+| END, IDLE | poll | - | - | NONE |
+
+Time: `training_poll()` reads `tick_now()` once and compares `(uint16_t)(now - phase start) >= duration`. Each
+phase change sets the phase start to the tick of the call that makes the change. So `training_start()` and a
+`training_add_char()` that gives CORRECT, WRONG or FAILED also read the tick. Each phase change clears the hold.
+
+### 11.3 `training_add_char(c)`
+
+1. Phase not ITEM: return IGNORED. Nothing changes.
+2. Append `c` to the answer (the answer is shorter than the item in phase ITEM).
+3. Sending: compare `c` with the item character at the same position. A mismatch is a wrong attempt. A match with the
+   answer still shorter than the item gives PARTIAL. A match that completes the item gives CORRECT.
+   `TRAINING_CHAR_WORD_SPACE` never matches, so it always gives a wrong attempt (D-T31). The answer then ends with it.
+4. Receiving: with the answer shorter than the item, return PARTIAL. At full length, compare the whole answer. Equal
+   gives CORRECT, else a wrong attempt.
+5. A wrong attempt gives WRONG for wrong attempts 1 and 2, and FAILED for the third.
+6. CORRECT, WRONG and FAILED change the phase as in 11.2 and set the last check.
+
+`training_undo_char()`: in phase ITEM with a non-empty answer, remove the last character and return true. Else false.
+
+### 11.4 Finish
+
+1. `passed = score >= pass threshold`.
+2. Not passed: outcome FAIL. The level stays.
+3. Passed and `progress_advance(mode, wpm)` returns false (level 65535): outcome PASS_TOP. No save.
+4. Passed and changed: `progress_save()`. OK gives PASS. SAVE_FAILED gives PASS_NOT_SAVED.
+5. `training_new_shown_level()` = `min(progress_level(mode, wpm) + 1, 65535)`.
+
+The save stops the CPU for the erase (4-6 ms). The keyer and the player are idle or near their end at that time. The
+tick loses at most the stopped time, as with a settings save.
+
+## 12. Modes and menu integration
+
+### 12.1 Menu routing
+
+| Screen | Event | Action |
+| --- | --- | --- |
+| LIST, EDIT, DIALOG, MESSAGE | as today | As today. DIALOG Yes uses the result of `stats_reset()` (D-T11). |
+| FREE_INPUT | as today | as today |
+| RECEIVING | long `menu/back` | `receiving_leave()`, then LIST |
+| RECEIVING | every other event | `receiving_handle(event)`. A true result gives `receiving_leave()`, then LIST. |
+| SENDING | long `menu/back` | `sending_leave()`, then LIST |
+| SENDING | every other event | `sending_handle(event)`. A true result gives `sending_leave()`, then LIST. |
+
+- `menu_enter_item()`: mode Receiving shows MENU_SCREEN_RECEIVING and calls `receiving_enter()`. Sending likewise.
+- `menu_render()`: after the full clear, RECEIVING calls `receiving_render()` and SENDING calls `sending_render()`.
+- `menu_poll()`: with no redraw pending, RECEIVING calls `receiving_poll()` and SENDING calls `sending_poll()`.
+- `menu_show_message()`: on a mode screen it calls the leave function of that mode first. It keeps the menu stack
+  (D-T19).
+- A short or long `menu/back` that leaves a training screen shows the main menu with the cursor on the mode item. The
+  stack did not change on entry, so LIST shows it.
+- After the first `menu_render()`, the modes draw directly into `lcd_fb`. They redraw only the rows that change.
+
+### 12.2 Receiving (`ui-ux.md` sections 5.12, 5.14, 6.8)
+
+Entry (`receiving_enter()`), in this order: `rng_seed(tick_now())`. Read `RX Speed`, `RX Eff. Speed`, `Tone`,
+`Max Word Length` and `Prosigns` once into xdata (UX-49). `sidetone_set_tone_hz()`. `buttons_set_tap_mode(true)`.
+`training_start(TRAINING_MODE_RECEIVING, rx_wpm, max_word_len)`. `keyboard_reset(training_alphabet_count())`.
+The next session (`enter` at END) uses the stored values and calls `training_start()` and `keyboard_reset()` again.
+
+Tap mode is on for the whole screen, the end screen included. So `menu/back`, `prev`, `next` and `enter` (button
+or tip) arrive at the release (D-T7, D-T28).
+
+| Phase | Event | Action |
+| --- | --- | --- |
+| ITEM | `menu/back`, `prev`, `next`, `enter` (button or tip) | `keyboard_select()` of `KEYBOARD_GROUP_MENU`, `_PREV`, `_NEXT`, `_ENTER`. A pick goes to `training_add_char()`. Redraw the labels and the item line. An empty run: ignored, no redraw. |
+| ITEM | long `enter` (button or tip) | Replay: `player_start()` of the item. A running playback starts again. The picks and the current run stay. |
+| ITEM | long `prev` | Undo one step: first `keyboard_back()`. If it returns false, `training_undo_char()`. Redraw. |
+| GAP, RESULT | any | Ignored. No redraw. |
+| END | `enter` (button or tip) | Next session. |
+| END | `menu/back` | Return true (leave). |
+| END | `prev`, `next`, long `enter`, long `prev`, long `next` | Ignored. |
+| any | long `next` | Ignored. |
+
+Button to run, left to right: MENU -> 0, PREV -> 1, NEXT -> 2, ENTER -> 3. `BUTTON_EVENT_MENU - code` does not
+give the run for ENTER. `receiving.c` maps the code in any small form (a `MEM_CODE` table, a switch, or
+`(uint8_t)(BUTTON_EVENT_MENU - code) & 3U`). A compile-time check (`#if` or `_Static_assert`) proves the mapping for
+all four codes.
+
+Labels of the four runs (D-T27). `ui-ux-embedded-designer` owns the field positions, the alignment and the label text
+rule (task D1). The rule must stay inside these limits:
+
+| ID | Limit |
+| --- | --- |
+| LC-1 | One label per run, left to right in the button order. An empty run has a blank label. |
+| LC-2 | Labels use the 5 x 8 font in normal video, in row 7. If no one-row rule fits, a second label row is allowed in row 6 only. Then the key bar line moves, and rows 0-5 do not change. |
+| LC-3 | A field has a fixed position and width per run (compile-time constants). A field can start at any pixel x (`gfx_draw_text()` takes a pixel x). Pixels with x = 0, 1 and 127 stay off (`ui-ux.md` V-121). |
+| LC-4 | `receiving.c` builds the label text at run time. The inputs are `keyboard_group_first()`, `keyboard_group_size()` and `keyboard_char()`. The text comes from `morse_format()` in an existing style (`MORSE_STYLE_PUNCTUATION`, `_NAME`, `_BOTH`). It can derive a shorter text from that result (for example, drop `<` and `>`, or keep only the first text). No new `morse_format()` style and no label table in flash. A new style needs an `architector` decision, because `keyer_spec.md` section 17 owns `morse.h`. |
+| LC-5 | A label is at most its field width and at most `TRAINING_SCREEN_COLUMNS` cells (it is built in `training_screen_text`). |
+| LC-6 | The rule fits every run of every Koch prefix (2..43 characters, character and word sessions), for all three `Prosigns` values. D1 gives the script check result. Known hard cases: `7-<AR>` has 6 cells (whole set). For the run SK AR, the list `<SK><AR>` has 8 cells and the range `<SK>-<AR>` has 9. The full texts `<BT/=>` and `<AR/+>` have 6 cells. |
+| LC-7 | A label redraw writes only the label rows (row 7, and row 6 under LC-2). The key bar segments are drawn only in a full render (D-T29). |
+
+Each acted event calls `rng_mix(tick_now())`. Tap mode gives no repeat events.
+
+Check results (the return value of `training_add_char()`):
+
+| Result | Action |
+| --- | --- |
+| PARTIAL | Redraw the item line: the block moves to the next slot. |
+| CORRECT, WRONG | `player_stop()`. Status and item line of `ui-ux.md` 5.14. |
+| FAILED | `player_stop()`. Status `Wrong. The answer is:`, the item text on the item line. `player_start()` of the item. `training_hold_result(true)`. |
+
+Poll (`receiving_poll()`), in this order:
+
+1. In phase RESULT with the last check FAILED: `training_hold_result(player_is_busy())`.
+2. `training_poll()`, then the reaction to its event:
+
+| Event | Action |
+| --- | --- |
+| ITEM | Empty slots, block on the first slot, labels of the whole set, header number. `player_start()` of the item. |
+| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Empty slots, block on the first slot, labels of the whole set (`keyboard_top()`). `player_start()` of the item. |
+| GAP | Blank moment: rows 1-5 off, header shows `training_shown_item_number()`. The key bar segments and the labels of the whole set stay. |
+| END | `training_screen_draw_end()` and the header with `i` = `n`. |
+
+### 12.3 Sending (`ui-ux.md` sections 5.13, 5.14, 6.9)
+
+Entry (`sending_enter()`), in this order: `rng_seed(tick_now())`. Read `Key Type`, `Paddle`, `TX Speed`,
+`TX Eff. Speed`, `Tone`, `Max Word Length`, `Show CW Code` and `Prosigns` once into xdata (UX-49).
+`sidetone_set_tone_hz()`. `buttons_set_enter_enabled(false)`. `keyer_start()`. Clear the drop flag and the pattern.
+`training_start(TRAINING_MODE_SENDING, tx_wpm, max_word_len)`. Tap mode stays off.
+
+The keyer owns P3.2 during the session, so `enter` never comes then. The keyer runs in GAP, ITEM and RESULT.
+
+| Phase | Event | Action |
+| --- | --- | --- |
+| GAP, ITEM, RESULT | short events, repeats | Ignored. No redraw. |
+| any | long `prev`, long `next` | Ignored. |
+| END | `enter` (button or tip contact) | Next session: `buttons_set_enter_enabled(false)`, `keyer_start()` with the stored values, clear the drop flag, the armed flag and the pattern, `training_start()`, full redraw. |
+| END | `menu/back` | Return true (leave). |
+
+Mode state (`static MEM_XDATA`): the pattern, the drop flag `sending_is_dropping` (D-T15), the armed flag
+`tx_is_word_gap_armed` (D-T31), the code-row mark count (0..`TX_CODE_MAX_MARKS`) and the code-row x position.
+
+`#define TX_CODE_MAX_MARKS 12U` (`ui-ux.md` 6.10), in `sending.c`.
+
+Keyer events in `sending_poll()`, at most `KEYER_QUEUE_SIZE + 1` per call, in queue order. The drop flag comes first.
+Every event that the mode reads clears the armed flag, in every row. Only the CHAR_GAP row with the result PARTIAL
+sets it again. The WORD_GAP row reads the value that the flag had before this event.
+
+| Drop flag | Phase | Event | Action |
+| --- | --- | --- | --- |
+| set | any | CHAR_GAP | Clear the flag. Nothing else. |
+| set | any | other | Dropped. |
+| clear | not ITEM | DIT, DAH | Set the flag. Dropped. No mark. |
+| clear | not ITEM | other | Dropped. |
+| clear | ITEM | DIT, DAH | `rng_mix(tick_now())`. On the first element of a character, clear row 7. `morse_add_element()`. With `Show CW Code` on and fewer than 12 marks: draw the mark. |
+| clear | ITEM | CHAR_GAP | Empty pattern: nothing. Else `training_add_char(morse_decode(pattern))`, then the pattern is empty. React to the result (below). PARTIAL sets the armed flag. |
+| clear | ITEM | OVERFLOW | Empty the pattern, set the drop flag (D-T16). No check, no attempt, no status. |
+| clear | ITEM | WORD_GAP | Armed flag was set: `training_add_char(TRAINING_CHAR_WORD_SPACE)` and react to the result (WRONG or FAILED, below). Armed flag was clear: nothing (D-T30). |
+
+A pattern with more than 6 elements decodes as unknown (`*`), so it is a wrong character.
+
+Check results:
+
+| Result | Action |
+| --- | --- |
+| PARTIAL | Move the bar to the next character of the word. |
+| CORRECT | Status `Correct`. No bar. |
+| WRONG | Keyed character: status `Wrong: ` and the `morse_format()` text of the keyed character. Word space (the last answer character is `TRAINING_CHAR_WORD_SPACE`): status `Wrong: pause too long` (`ui-ux.md` 5.14, UX-52), a `MEM_CODE` constant. Row 7 keeps its marks (the last correct character). The bar stays under the failed position. |
+| FAILED | As WRONG. Row 5 shows the centered marks of the expected character (`morse_encode()` of the item character at the failed position), for every `Show CW Code` value. For a word space, the failed position is the character that the user had to key next. |
+
+`training_poll()` event reactions:
+
+| Event | Action |
+| --- | --- |
+| ITEM | Draw the item in the 8 x 16 font. Word item: bar under the first character. |
+| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Bar back to the first character. Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
+| GAP | Blank moment: rows 1-7 off, header shows `training_shown_item_number()`. |
+| END | `keyer_stop()`, `buttons_set_enter_enabled(true)`, `training_screen_draw_end()`. |
+
+Each 8 x 16 draw selects `FONTS_ID_8X16` and selects `FONTS_ID_5X8` again before it returns.
+
+Word-space edge cases (D-T30, D-T31). The keyer gives CHAR_GAP at 2 dits and WORD_GAP at 5 Farnsworth units after
+the end of the last mark, once per space, and a new mark before the threshold cancels both (AC-K15). So the user must
+start the next character of a word within 5 units of the end of the last mark. The standard space is 3 units.
+
+| Case | Result |
+| --- | --- |
+| WORD_GAP before the first character of the item, also at a retry | Armed flag clear: nothing. The keyer gives no gap event before the first mark after a start. |
+| WORD_GAP after the last character of the item | That CHAR_GAP gave CORRECT, WRONG or FAILED, so the phase is RESULT: dropped. |
+| WORD_GAP after a wrong character | The phase is RESULT: dropped. |
+| WORD_GAP in the start pause, RESULT or GAP | Dropped (phase not ITEM), also with the armed flag set. |
+| CHAR_GAP (PARTIAL) and WORD_GAP in the same poll | Read in order: wrong attempt. |
+| OVERFLOW, then WORD_GAP | OVERFLOW clears the armed flag. With the drop flag still set, the WORD_GAP is dropped. If a CHAR_GAP came first and cleared the drop flag, the armed flag is still clear: nothing. No attempt either way (D-T16). |
+| A character dropped by D-T15, then WORD_GAP | The dropped events clear the armed flag: nothing. |
+| DIT or DAH after the PARTIAL CHAR_GAP, then WORD_GAP | The real keyer cannot give this order. The DIT clears the armed flag: nothing. |
+| Lost WORD_GAP (queue overflow) | OVERFLOW rule (D-T16): no attempt. |
+| Late WORD_GAP of an earlier space | At a low `TX Eff. Speed`, 5 units can be longer than the delays (20/5 WPM: about 2669 ms, more than 600 + 300 ms or 1200 ms). The WORD_GAP of the space after the last character of an item, or after a wrong character, then comes in ITEM of the next item or of the retry. The CHAR_GAP of that space did not give PARTIAL, so the armed flag is clear: nothing. A mark before it cancels it. |
+| Straight key | The keyer counts the space from the key release in the same way (AC-K15 covers straight and iambic). Same rule. |
+| Farnsworth | The threshold is 5 units at `TX Eff. Speed`. 20/20 WPM: 1200 ticks, 300 ms after the mark end. 20/10 WPM: unit 872 ticks, threshold 4360 ticks, about 1090 ms. 50/50 WPM: 480 ticks, 120 ms. A lower effective speed gives more room. |
+| Character session | The item is complete after one character, so no WORD_GAP is armed in ITEM. |
+
+Limits for the word-space look. `ui-ux-embedded-designer` owns the text and the look (task D2), inside these limits:
+
+| ID | Limit |
+| --- | --- |
+| WS-1 | The status text is in row 1 in the 5 x 8 font, centered like every status text, at most `TRAINING_SCREEN_COLUMNS` (25) cells, ASCII 0x20-0x7E only (`ui-ux.md` V-121). |
+| WS-2 | The mode builds the text at run time from `training_answer_text()` (the accepted characters, then `TRAINING_CHAR_WORD_SPACE`) and `training_item_text()`, with `morse_format()` in the session `Prosigns` style, or uses a fixed text. No new `morse_format()` style. Word items hold no prosign (D-T4), so each word character is one cell. The worst case is 7 accepted characters. D2 result: the fixed text `Wrong: pause too long` (21 cells, column 2), chosen when the last answer character is `TRAINING_CHAR_WORD_SPACE`. |
+| WS-3 | No new delay and no sound: `TRAINING_WRONG_MS` and `TRAINING_FAILED_MS` as for a wrong character. |
+| WS-4 | The item line does not change: the same 8 x 16 text, and the bar under the failed position (the character expected next). A new glyph or another bar position on the item line needs an `architector` decision. |
+| WS-5 | FAILED: row 5 shows the code of the expected next character (the rule above). During RESULT, row 7 keeps the marks of the last accepted character, unless D2 asks for row 7 off at a word-space error. D2 result: row 7 keeps the marks. |
+| WS-6 | The retry screen is the ITEM screen plus the `Try 2 of 3` or `Try 3 of 3` status, for every kind of wrong attempt and every `Show CW Code` value (D-T30). |
+
+### 12.4 `main.c`
+
+`(void)progress_load();` right after `(void)settings_load();`. No other change.
+
+## 13. ISR rules and `check_asm.sh`
+
+### 13.1 Rules
+
+- `keyer_service()`, `player_service()` and `sidetone_service()` are leaves: no `lcall`, no `acall`, no jump to a
+  function, no library helper. All three use `#pragma nooverlay`.
+- The ISR has no `P_SW2` access, no `EA` or `IE` byte write and no port write. The player touches no pin.
+- The ISR frame does not grow. The three calls are at the same depth.
+- ISR time: count the whole Timer 0 ISR from the `.asm` with the STC8H instruction timing. Report three paths: the
+  disabled path (menu), the worst keyer path with the player disabled, the worst player path with the keyer
+  disabled. Name each path. Budget in section 14.
+
+### 13.2 `check_asm.sh` changes (developer task T5)
+
+A function body starts at its label line (`_name:` at column 0). It ends before the next column-0 label that starts
+with `_`, or at the end of the file.
+
+- **R6 (new), ISR call list.**
+  - Module `sidetone.c` has the label `_sidetone_timer0_isr:`. Without it, R6 reports a violation (fail closed).
+  - The ISR body has exactly three calls (`lcall` or `acall`). The order is `_keyer_service`, `_player_service`,
+    `_sidetone_service`.
+  - The ISR body has no `ljmp`, `ajmp` or `sjmp` to a label that starts with `_`. It has a `reti`.
+  - In any module, the bodies of `_keyer_service`, `_player_service` and `_sidetone_service` are leaves. They have
+    no `lcall` and no `acall`. They have no `ljmp`, `ajmp` or `sjmp` to a label that starts with `_`.
+  - R6 does not check other modules or other functions.
+- **R7 (new), no atomics.** A line of any `.asm` file that contains `sdcc_atomic` (any case) is a violation.
+- Update the header comment of the tool with R6 and R7.
+- Built-in self-test cases (names binding, text free):
+  - `accept_isr_three_calls` (sidetone.c, the three calls in order, `reti`, three leaf services).
+  - `r6_isr_two_calls` (no `_player_service` call), `r6_isr_wrong_order`, `r6_isr_extra_call` (a fourth `lcall`),
+    `r6_isr_tail_jump` (`ljmp _x`), `r6_isr_missing` (sidetone.c without the ISR label), `r6_service_calls`
+    (`_player_service` body with `lcall __mulint`), `r6_keyer_service_calls` (in another module name).
+  - `r7_sdcc_atomic` (a line with `sdcc_atomic_maybe_rollback`).
+- R7 stays strict (D-T20). The fixture `Tests/tools/check_asm/accept/real_image` comes from commit `7bf1aa7`, before
+  `--norestartseqatomics`. Its `main.c.asm` holds `sdcc_atomic_exchange_*` helper code. The developer regenerates
+  the whole fixture from the current build: the same seven files (`delay.c.asm`, `lcd.c.asm`, `lcd_fb.c.asm`,
+  `lcd_spi.c.asm`, `main.c.asm`, `tick.c.asm`, `tick_timer3.c.asm`), copied unchanged from one build. The commit
+  message names the source commit of the copy.
+- New accept fixture `Tests/tools/check_asm/accept/real_isr/sidetone.c.asm`: the unchanged `sidetone.c.asm` of the
+  same build. It proves R6 and R7 on real SDCC output.
+- R6 is fail-closed. So every built-in self-test case with the module name `sidetone.c` also holds the three leaf
+  services and the three-call ISR. The R5 meaning of these cases does not change: each `r5_` case still reports R5,
+  and each accept case stays clean.
+- The firmware build runs the tool as today, so a wrong ISR now fails the build.
+
+## 14. Memory placement and budget
+
+### 14.1 Placement
+
+| Variable | Qualifier | Writer | Readers |
+| --- | --- | --- | --- |
+| `player_is_enabled` | `volatile MEM_BIT`, `player.c` | Main sets and clears. ISR clears at the end. | both |
+| `player_is_start_requested` | `volatile MEM_BIT`, `player.c` | Main sets. ISR clears. | ISR |
+| `player_codes[8]`, `player_code_count` | `volatile MEM_XDATA uint8_t`, `player.c` | main, only while disabled | ISR |
+| `player_dit_ticks`, `player_dah_ticks`, `player_char_gap_ticks` | `volatile MEM_XDATA uint16_t`, `player.c` | main, only while disabled | ISR |
+| `player_is_mark` | `static MEM_BIT`, `player_service.h` | ISR | ISR (tests read it) |
+| `player_ticks` | `static MEM_DATA uint16_t`, `player_service.h` | ISR | ISR (tests) |
+| `player_code`, `player_index` | `static MEM_DATA uint8_t`, `player_service.h` | ISR | ISR (tests) |
+| `cw_timing_dit_ticks`, `cw_timing_unit_ticks` | `MEM_XDATA uint16_t`, `timing.c` | main | main |
+| Timing work values | `static MEM_XDATA`, `timing.c` (moved from `keyer.c`) | main | main |
+| RNG state | `static MEM_XDATA uint16_t`, `rng.c` | main | main |
+| `koch_order`, `koch_keyboard_order` | `static const MEM_CODE char[43]`, `koch.c` | - | main |
+| Keyboard list, range, history, depth | `static MEM_XDATA`, `keyboard.c` | main | main |
+| `progress_record[188]` | `static MEM_XDATA uint8_t`, `progress.c` | main | main |
+| Engine state (11.1) | `static MEM_XDATA`, `training.c` | main | main |
+| Mode state: pattern, settings read at entry, text buffers for `morse_format()` and `gfx_format_u16()` | `static MEM_XDATA`, mode files | main | main |
+| `buttons_is_tap_mode` | `static MEM_XDATA bool`, `buttons.c` | main | main |
+| Screen texts | `static const MEM_CODE char[]` | - | main |
+
+No new main-loop `bool` in `MEM_DATA`. No `bool` for an ISR flag. Every shared access is one bit or one byte, and the
+16-bit player values change only while the player is disabled.
+
+### 14.2 Budget
+
+| Resource | Baseline | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash added by the whole change | 19 055 B | at most 6144 B | 8192 B |
+| xdata added | 1400 B | at most 384 B (estimate 330 B) | 512 B |
+| New static internal RAM: DSEG + overlay + bit bytes | 52 B | at most 6 B (estimate 4 B DSEG, 3 bits) | 8 B |
+| Deepest main-loop stack | 65 B | at most 100 B | stack margin rule |
+| Stack margin: free stack minus (deepest main-loop use + largest ISR frame) | 112 B | | at least 64 B |
+| Timer 0 ISR, disabled path (menu) | not measured | baseline + at most 12 clocks | - |
+| Timer 0 ISR, worst path | keyer worst at most 420 clocks (`keyer_spec.md` 8) | at most 440 clocks | 800 clocks |
+
+xdata estimate: player 18, timing 4 net, RNG 2, keyboard 54, progress 188, engine 42, modes 20, buttons 1.
+
+Final (T10): flash 26 593 B (+7538), xdata 1811 B (+411), DSEG 47 B (+4). Stack: 191 B free, deepest main-loop
+chain 65 B, ISR frame 18 B, margin 108 B. ISR worst paths: keyer 403, player 186, disabled 63 clocks. D-T23 accepts the
+flash and xdata above target.
+
+Change D-T27/D-T28 (task T11). It is small: no new file, no new module.
+
+| Resource | Baseline (after T10) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 26 593 B | at most +300 B | +600 B |
+| xdata | 1811 B | at most +4 B (estimate: press time +2, run size +1, history -2) | +8 B |
+| DSEG | 47 B | +0 B | +0 B |
+| Stack | 191 B free, margin 108 B | no deeper main-loop chain | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged (no ISR file changes) | - |
+
+T11 measures the baseline again before the first change. It reports these values before and after, with the table
+below: flash, xdata, DSEG, overlay, bit bytes, stack start, stack free and the deepest main-loop chain.
+
+Change D-T30/D-T31 (task T12). It is small: no new file, no engine code, no ISR change.
+
+| Resource | Baseline (after T11) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 26 642 B | at most +150 B | +300 B |
+| xdata | 1810 B | at most +1 B (`tx_is_word_gap_armed`) | +2 B |
+| DSEG, overlay, bit bytes | 47 B DSEG | +0 B | +0 B |
+| Stack | 191 B free, margin 108 B | no deeper main-loop chain (the WORD_GAP path is the CHAR_GAP path) | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged (no ISR file changes) | - |
+
+T12 measures the baseline again before the first change and reports the same values before and after.
+
+Final (T12): flash 26 740 B (+98), xdata 1811 B (+1), DSEG, overlay and bit bytes unchanged, 191 B stack free,
+summed-push bound 66 B (+1, D-T32), margin 107 B.
+
+Change D-T33 (task T13). It is small: one function gets a parameter and a second rule.
+
+| Resource | Baseline (after T12) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 26 740 B | at most +40 B | +100 B |
+| xdata | 1811 B | at most +1 B (the second parameter `item_count` is `MEM_XDATA` per section 5; `kind` comes in a register) | +2 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | summed-push bound 66 B, margin 107 B | no deeper main-loop chain | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged | - |
+
+T13 measures the baseline again before the first change and reports the 14.2 table before and after.
+
+Final (T13): flash 26 781 B (+41, D-T34), xdata 1812 B (+1), DSEG, overlay and bit bytes unchanged, 191 B stack free,
+margin 107 B.
+
+Report table from `build.sh`, `.map` and `.mem`, before and after each task:
+
+| Task | Flash B | DSEG B | Overlay B | Bit bytes | xdata B | Stack start | Stack free B | Deepest main-loop stack B | Largest ISR frame B | Margin B |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Also report the flash per new file, the newly linked library helpers and the deepest main-loop chain by name.
+Candidates:
+
+- `menu_handle` -> `receiving_handle` -> `training_add_char` -> ...
+- `menu_poll` -> `receiving_poll` -> `training_poll` -> `progress_save` -> `eeprom_write` -> ...
+- `menu_poll` -> `sending_poll` -> `gfx_draw_text` (8 x 16) -> `font_u8g2_draw_glyph` -> `lcd_fb_set_pixel`
+
+## 15. Host test infrastructure
+
+### 15.1 `Tests/CMakeLists.txt`
+
+| Pattern | Group sources |
+| --- | --- |
+| `TIMING_TEST_PATTERN "^test_(qa_)?timing"` | `src/cw/timing.c`. `TARGET_DEFINITIONS`. |
+| `PLAYER_TEST_PATTERN "^test_(qa_)?player"` | `src/cw/player.c`, `src/cw/timing.c`, `src/cw/morse.c`, `src/sidetone/sidetone.c`, `fakes/fake_sidetone_pwm.c`, `fakes/fake_tick.c`, `src/settings/settings.c`, `src/util/crc8.c`, EEPROM sources. `TARGET_DEFINITIONS`. |
+| `RNG_TEST_PATTERN "^test_(qa_)?rng"` | `src/util/rng.c`. |
+| `KOCH_TEST_PATTERN "^test_(qa_)?koch"` | `src/koch/koch.c`, `src/koch/koch_item.c`, `src/koch/keyboard.c`, `src/util/rng.c`, `src/cw/morse.c` (D-T21). |
+| `PROGRESS_TEST_PATTERN "^test_(qa_)?progress"` | `src/progress/progress.c`, `src/util/crc8.c`, EEPROM sources. `TARGET_DEFINITIONS`. |
+| `TRAINING_TEST_PATTERN "^test_(qa_)?training"` | `src/modes/training.c`, koch group sources, progress group sources, `fakes/fake_tick.c`. |
+| `MODES_TEST_PATTERN "^test_(qa_)?(receiving\|sending)"` | The menu group sources, with `fakes/fake_koch_item.c` and `fakes/fake_player.c` (D-T25). The scenarios of `ui-ux.md` 9.4 start from the menu. |
+| menu group (existing) | Adds the modes group sources except the duplicates, with `fakes/fake_koch_item.c` and `fakes/fake_player.c`. |
+| keyer, sidetone, settings, free_input groups | Add `src/util/crc8.c` where they link `settings.c`. The keyer group adds `src/cw/timing.c`. |
+
+Add the new patterns to `MODULE_TEST_PATTERNS`. All host flags stay. No warning suppression.
+
+### 15.2 Fakes
+
+`Tests/fakes/fake_player.c/.h` implements `player.h`. Minimum API (names binding):
+
+```c
+void fake_player_reset(void);
+size_t fake_player_start_count(void);
+size_t fake_player_stop_count(void);
+bool fake_player_is_running(void);          /* after a successful start, before stop or finish */
+void fake_player_finish(void);              /* the playback ends: busy becomes false */
+void fake_player_set_start_result(bool is_accepted);
+const char* fake_player_last_text(void);    /* copy of the last text, NUL-terminated */
+uint8_t fake_player_last_wpm(void);
+uint8_t fake_player_last_eff_wpm(void);
+```
+
+`fake_stats.c`: `stats_reset()` returns the value of `fake_stats_set_reset_result(bool)`, default true. The existing
+counter API stays.
+
+`Tests/fakes/fake_koch_item.c/.h` implements `koch_make_item()` (D-T18). It is the "fake training source" of
+`ui-ux.md` section 9.4. Minimum API:
+
+```c
+void fake_koch_item_reset(void);
+void fake_koch_item_push(const char* text);  /* FIFO of at least 128 items; overflow fails the test */
+size_t fake_koch_item_count(void);           /* koch_make_item() calls so far */
+```
+
+`koch_make_item()` of the fake returns the next pushed item. After the last one it returns the last one again. With
+no item pushed, it fails the test.
+
+Owner of `Tests/support/` (`progress_fixture`, `training_harness.h`): `c-embedded-developer`. QA uses these files and
+reports a needed change to `architector`. The four-field `KEYS` helper of `training_harness.h` (T11) follows
+`ui-ux.md` 9.4 and is accepted by QA.
+
+`Tests/support/progress_fixture.c/.h`:
+
+```c
+/** Writes a valid progress record to the fake IAP: all levels 0, then @p level for (@p mode, @p wpm). */
+void progress_fixture_write(uint8_t mode, uint8_t wpm, uint16_t level);
+```
+
+Map from the `ui-ux.md` 9.4 notation to the level index (the real level model gives the set and the kind):
+
+| Notation | Level index | Set | Kind |
+| --- | ---: | --- | --- |
+| `("KM", chars)` | 0 (empty EEPROM) | K, M | chars, 50 items |
+| `("KMR", chars)` | 1 | K, M, R | chars |
+| `("KMRSUAPTLOWI.", words)` | 17 | 13 characters | words of 4 |
+| `(ALL, chars)` | 61 | 43 characters | chars |
+| `(ALL, words)` | 62 | 40 characters (D-T4) | words of `Max Word Length` |
+| V-109 | 65534, 65535 | 43 / 40 | final words, 100 |
+
+Player tests define `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()`, include `cw/player_service.h` and call
+`player_service()` once per tick. An integration test runs the real `sidetone_service()` after each call.
+
+### 15.3 Allowed changes of existing tests
+
+- `settings_crc.h` -> `util/crc8.h` and `settings_crc8` -> `crc8_compute` (D-T10). No other change in those lines.
+- Placeholder tests (`test_menu.c`, `test_menu_preview.c`, `test_qa_menu.c`) change to the Receiving and Sending
+  screens (D-T8).
+- `stats_reset()` returns `bool` (D-T11).
+- The `check_asm.sh` fixture `accept/real_image` is regenerated from the current build, and the built-in `sidetone.c`
+  cases get the valid ISR and services (section 13.2, D-T20).
+- D-T27/D-T28 (task T11): tests that expect three runs, the old run sizes, `KEYBOARD_GROUP_LEFT`, `_MIDDLE`,
+  `_RIGHT`, `KEYBOARD_DEPTH_MAX` = 4, the old labels, `enter` at the press in tap mode, or an `enter` replay change
+  to the new contract. This covers `test_koch_keyboard.c`, `test_buttons_tap.c`, `test_qa_buttons.c`,
+  `test_receiving.c`, `test_qa_receiving.c` and any menu test with a Receiving `enter`. Each changed expected value
+  traces to D-T27, D-T28 or a revised V-vector of `ui-ux.md` 9.4. Tests with tap mode off do not change.
+- D-T30/D-T31 (task T12): Sending tests that expect row 7 (or row 5) to keep its content at RETRY, or a WORD_GAP to do
+  nothing after an accepted character of an unfinished word, change to the new contract. This covers
+  `test_sending.c`, `test_qa_sending.c` and any menu test with these steps. Each changed expected value traces to
+  D-T30, D-T31 or a revised V-vector of `ui-ux.md` 9.4 (V-112, V-116 and the vectors of task D2).
+- D-T33 (task T13): the `koch_pass_threshold()` calls in `test_koch.c` and `test_qa_koch*.c` get the kind
+  argument. Expected thresholds and end-screen texts of word sessions change from `ceil(0.9 n)` to `ceil(0.8 n)`:
+  `test_training.c` (10 words: 9 -> 8, 100 words: 90 -> 80), V-121 in `test_sending.c` (`Not passed, need 90` ->
+  `need 80`), and every QA or menu test with a word-session threshold. Character-session values do not change.
+- No change removes a check or loosens an expected value.
+
+## 16. Acceptance criteria
+
+Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `test_rng.c`, `test_koch.c`,
+`test_koch_keyboard.c`, `test_progress.c`, `test_buttons_tap.c`, `test_training.c`, `test_receiving.c`,
+`test_sending.c`, `test_menu_training.c`. QA test files: `test_qa_<group>*.c`.
+
+| ID | Criterion |
+| --- | --- |
+| AC-T1 | Encode. For every index 2..127 with a table entry, `morse_encode(morse_decode(i)) == i`. Every other value 0..255 gives `MORSE_PATTERN_INVALID`, also `'\0'`, `' '`, `'*'` and lowercase letters. |
+| AC-T2 | Timing. `cw_timing_compute()` gives the dit and unit of the formula for every pair 5 <= eff <= wpm <= 50 and the clamps of AC-K20. All AC-K tests pass with no change (AC-K9, AC-K16 prove the keyer values). |
+| AC-T3 | RNG. Reference values of section 5.5. Period 65535 from seed 1. Never 0. Seed 0 and a mix to 0 give the fallback. `rng_below(n)` < n for n 1..255 over 65535 steps. `rng_below(0)` gives 0 and does not step. |
+| AC-T4 | Tables. Both Koch tables have `KOCH_CHAR_COUNT` entries, the same set, no duplicate, and every entry has a Morse code (`morse_encode`). The Koch order equals the list of section 5.6. `koch_index_of()` is the inverse of `koch_char()`. |
+| AC-T5 | Level model. For every `L` 0..`KOCH_FINAL_LEVEL + 1`: kind, learned count, new character, item count and word length for each `Max Word Length` 4..8 match section 6. Item count at `F`, `F + 1`, `F + 89`, `F + 90` and 65535: 10, 11, 99, 100, 100. Out-of-range `max_word_len` 0, 1, 9 and 255 clamp. |
+| AC-T6 | Threshold (D-T33). `koch_pass_threshold(KOCH_KIND_CHAR, n) == ceil(0.9 n)` and `koch_pass_threshold(KOCH_KIND_WORD, n) == ceil(0.8 n)` for n 1..100, computed by an independent integer reference in the test. Char: 50 -> 45, 10 -> 9, 100 -> 90. Word: 10 -> 8, 11 -> 9, 15 -> 12, 50 -> 40, 100 -> 80. n = 0 gives 0 and n = 255 gives 230 (char) and 204 (word). An unknown kind (2 and 255) gives the char value. |
+| AC-T7 | Item mix. The test makes 10 000 items for each of 5 seeds. At character levels 0, 1, 30 and 61, the new character share is 45..55 %. Each older character appears. Level 0 gives K and M at 45..55 % each. Word items have the level length. They use only the first `koch_alphabet_count()` Koch characters, so never BT, SK or AR. |
+| AC-T8 | Keyboard, for every count 2..43 given to `keyboard_reset()`. With `training_alphabet_count()` of a word level, the list has no prosign. The list is the learned set in keyboard order. The four group sizes follow section 8 (D-T27) in every range, not only the whole list. Every character is reachable with at most 3 selects, and with exactly the select count of section 8. `keyboard_depth()` never passes `KEYBOARD_DEPTH_MAX - 1`. Group 4 and 255 are unknown: size 0, no change. An empty group changes nothing. `keyboard_back()` restores the ranges in reverse order and returns false at the top. A pick returns to the top. |
+| AC-T9 | Progress load. An erased page, a wrong magic, version 0 and 2, a bad CRC and a read failure give their status and level 0 everywhere. A valid record gives its levels, including 0xFFFF. Load never writes. |
+| AC-T10 | Progress save. The written page equals the layout of 10.1. The magic is programmed last. A failure in the erase, the first write or the second write gives SAVE_FAILED and keeps the RAM levels. A power loss after any operation never leaves a valid record with wrong data. |
+| AC-T11 | Advance and reset. Advance at 65534 gives 65535 and true. At 65535 it gives false and no change. Each (mode, wpm) changes only its own two bytes. Reset sets all 92 levels to 0 and saves. Unknown mode: level 0, no advance. |
+| AC-T12 | Player timing. Speeds: 5, 20 and 50 WPM, and 20/10 and 50/5 Farnsworth. Texts: `E`, `T`, `K`, `5`, `0`, `PARIS`, a prosign and an 8-character word. Every mark and gap has the exact length of section 9.2. The request goes off on the call where 32 mark calls remain. Busy clears on the call after the last mark. |
+| AC-T13 | Player envelope. With the real `sidetone_service()` after each call, compare 0 is written on the last mark call of every element, for the speaker and the headphones. |
+| AC-T14 | Player control. `player_start()` rejects length 0, length 9 and a character without a code, and then plays nothing. A start during a playback restarts from the first element. `player_stop()` clears busy, and the next calls change no player state. A disabled service reads no shared value except `player_is_enabled`. |
+| AC-T15 | Tap mode (D-T28). A tap of `menu/back`, `prev`, `next` or `enter` gives its event at the debounced release. A hold gives only the long event at `BUTTONS_LONG_PRESS_MS` (long `enter` = 0x44), and nothing at the release. The edge case of D-T22 holds for `enter` too. No repeat in tap mode. Long events due in one poll come in the order `menu/back`, `enter`, `prev`, `next`. A hold that started before the switch gives no event, also an `enter` hold (the entry from the menu). `buttons_set_enter_enabled(false)` and `(true)` drop a long-pending `enter`. Off: `enter` gives its event at the press and never a long event (AC-K45), and all existing tap-off button tests pass unchanged. |
+| AC-T16 | Engine flow. Fake tick: start -> GAP -> ITEM after `TRAINING_START_MS` -> answers -> RESULT -> GAP or RETRY or END with the exact delays of 11.2. One event per poll. |
+| AC-T17 | Engine checks. Receiving: PARTIAL until the last character, then one whole-word check. Sending: a wrong character ends the attempt at once. Three wrong attempts give FAILED. A correct item after a wrong attempt does not count in the score. Characters out of phase ITEM give IGNORED and change nothing. Undo works only in ITEM. A held RESULT never ends. Hold off at tick P ends the RESULT exactly at P + `TRAINING_FAILED_MS`. A phase change clears the hold. Sending: `TRAINING_CHAR_WORD_SPACE` after k accepted characters (k = 1 and k = length - 1) gives WRONG for attempts 1 and 2 and FAILED for the third, with `TRAINING_WRONG_MS` and `TRAINING_FAILED_MS`. The answer ends with it, the answer length is k + 1, and the item does not count in the score (D-T31). |
+| AC-T18 | Engine finish. `training_pass_threshold()` is 45 at a character level, 8 at the first word level (10 words) and 80 at a final level of 100 words (D-T33). Score at threshold - 1 fails and keeps the level. Score at threshold passes, advances and saves. A failed save gives PASS_NOT_SAVED and the new level stays in RAM. A pass at 65535 gives PASS_TOP with no save. Shown levels follow D-T5. |
+| AC-T19 | Receiving scenarios. Basic steps: enter the mode, play, pick a character with each of the four buttons, undo, step out. Replay with a long `enter` and with a tip closure of 800 ms. A short tip closure selects the `enter` run. A long `enter` in GAP, RESULT and END does nothing. The `enter` that opens the mode gives no pick at its release. Results: three wrong attempts, pass, fail. Next session with `enter`. Leave with a short `menu/back` at END, and with a long `menu/back` in each phase. The player stops on every leave. Tap mode is off after every leave. |
+| AC-T20 | Sending scenarios. Keyed input: a correct character, a wrong character, an unknown pattern, an overflow, a word. Events in RESULT and GAP are dropped. A character that starts in a delay is dropped up to its CHAR_GAP, also after the delay ends (D-T15). An overflow uses no attempt (D-T16). The blank GAP shows also for a repeated item. END stops the keyer and gives P3.2 back. Next session with `enter`. Leave with a long `menu/back` in each phase. |
+| AC-T21 | Exclusive sidetone users. In every menu scenario of AC-T19, AC-T20 and the QA random walk, the fake keyer and the fake player never run at the same time. |
+| AC-T22 | Menu. Receiving and Sending items open their screens. `Reset Statistics` Yes: stored gives `Statistics reset`, failed gives `Not saved`. The placeholder screen is gone. `main.c` calls `progress_load()` after `settings_load()`. |
+| AC-T23 | UI. V-90 to V-127 of `ui-ux.md` section 9.4 pass, with the fakes and the fixture of section 15.2. |
+| AC-T24 | ISR. `check_asm.sh` R6 and R7 pass on the build. The self-test passes with the new cases. ISR times within section 14 with the named paths. |
+| AC-T25 | Memory within section 14 with the full report. |
+| AC-T27 | Change D-T27/D-T28. Memory within the T11 budget of section 14.2, with the before and after report. `check_asm.sh` passes. The revised and new V-vectors of task D1 pass. The labels meet LC-1 to LC-7 (section 12.2). A host test checks the button-to-run mapping for all four buttons. |
+| AC-T28 | Change D-T30/D-T31, through the menu with the fake keyer. (1) Retry screen: after a wrong character, an unknown pattern (`*`) and a word-space error, with `Show CW Code` `On` and `Off`, a character item and a word item: at RETRY, rows 5 and 7 are off, the status is `Try 2 of 3` (then `Try 3 of 3`), a word item has the bar under its first character, a character item has no bar. The first DIT after the retry draws its mark at x 2. During RESULT, row 7 keeps the marks of the keyed character. (2) Word space: in a word item, a WORD_GAP right after the PARTIAL CHAR_GAP of character k (k = 1 and k = length - 1) gives the word-space result of `ui-ux.md` 5.14 with `TRAINING_WRONG_MS`. Three in a row give FAILED with row 5 showing the code of item character k + 1. The retry is the whole item and the score does not count it. (3) No effect, with no status, no attempt and no redraw: a WORD_GAP before the first character of the item (also after a retry), after the last character, after a wrong character, in the start pause, RESULT and GAP, after OVERFLOW (with the drop flag set, and after the CHAR_GAP that clears it), after a character dropped by D-T15, and after a DIT that follows the PARTIAL CHAR_GAP. A WORD_GAP in a character session. (4) CHAR_GAP (PARTIAL) and WORD_GAP in one poll give the wrong attempt. (5) The revised and new V-vectors of task D2 pass. (6) Memory within the T12 budget of section 14.2, with the before and after report. `check_asm.sh` passes, and no ISR file changes. |
+| AC-T29 | Change D-T33. (1) AC-T6 and AC-T18 as revised. (2) Through the menu: a Receiving and a Sending word session of 10 items with 8 first-attempt correct pass (`Passed`, `New level`, progress saved), with 7 fail (`Not passed, need 8`, `Repeat level`, no EEPROM write). A character session with 44 of 50 still fails (`need 45`). A final level of 100 words with 79 fails (`need 80`) and with 80 passes. (3) The revised and new V-vectors of task D3 (`ui-ux.md` V-121, V-136 and any other) pass. (4) Memory within the T13 budget of section 14.2, with the before and after report. `check_asm.sh` passes. |
+| AC-T26 | `firmware/test.sh` and `firmware/build.sh` pass. All host tests pass under ASan and UBSan. No regression: existing tests change only as section 15.3 allows. |
+
+## 17. Tasks
+
+`c-embedded-developer` owns T0-T10. Each task ends with: `build.sh` passes with `check_asm.sh`, `test.sh` passes,
+the memory table of section 14.2, the assumptions and the open device checks.
+
+| Task | Content | Host tests | Depends on |
+| --- | --- | --- | --- |
+| T0 | Baseline. Measure section 4 again, with the deepest main-loop chain and the ISR frame and times from the `.asm`. | - | - |
+| T1 | `morse_encode()`. | `test_morse_encode.c`: AC-T1. | T0 |
+| T2 | `cw/timing` extraction, keyer change. | `test_timing.c`: AC-T2. All keyer tests unchanged. | T0 |
+| T3 | `util/rng`, `koch/koch`, `koch/koch_item`, `koch/keyboard`. | `test_rng.c`, `test_koch.c`, `test_koch_keyboard.c`: AC-T3 to AC-T8. | T1 |
+| T4 | `util/crc8` move, `progress`, EEPROM map, `stats_reset()` result, `fake_stats` change. | `test_progress.c`: AC-T9 to AC-T11. Changed settings tests (15.3). | T0 |
+| T5 | Player, `player_service.h`, three-call ISR, `check_asm.sh` R6 and R7 with self-test cases, `llm.md` check (already updated by `architector`). | `test_player.c`: AC-T12 to AC-T14. Self-test: AC-T24. ISR times. | T1, T2 |
+| T6 | Button tap mode. | `test_buttons_tap.c`: AC-T15. | T0 |
+| T7 | Session engine. | `test_training.c`: AC-T16 to AC-T18. | T3, T4 |
+| T8 | `training_screen`, Receiving mode, `fake_player`, `fake_koch_item`, `progress_fixture`. | `test_receiving.c`: AC-T19, V-90 to V-109 and V-120 of AC-T23. | T5, T6, T7 |
+| T9 | Sending mode. | `test_sending.c`: AC-T20, V-110 to V-119 and V-121 of AC-T23. | T7, T8 (shared screen and fakes) |
+| T10 | Menu wiring, placeholder removal, `main.c`, close-out report. | `test_menu_training.c`: AC-T21, AC-T22. Changed placeholder tests. AC-T25, AC-T26. | T8, T9 |
+
+Then `qa-embedded` (Q1) verifies independently, `architector` reviews, and `technical-writer` writes the user manual
+section for the two modes.
+
+### 17.1 Change D-T27/D-T28: four-button Receiving keyboard
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D1 | `ui-ux-embedded-designer` | `ui-ux.md` changes: the four-run keyboard and the label rule within LC-1 to LC-7. The `enter` tap, the long `enter`, the end screen and the shared tip. Revised and new V-vectors. A new UX decision. | - |
+| T11 | `c-embedded-developer` | Part A (done): `buttons` (D-T28), `keyboard` (section 8), the button-to-run mapping and the ITEM events, with their tests. Part B: labels and key bar segments of D-T29 and `ui-ux.md` 5.12.1, the end screen events, and the V-tests of AC-T23 for Receiving. Memory report. | Part A: -. Part B: D1, Part A |
+| Q2 | `qa-embedded` | Independent verification of AC-T8, AC-T15, AC-T19, AC-T23 and AC-T27. Mutation and fault cases on tap `enter`, long `enter`, the mapping and the four-run split. | T11 |
+| W2 | `technical-writer` | User manual: Receiving keyboard, replay, end screen, tip behavior. Tell the user to insert the plug before opening Receiving (R-T7). | `architector` approval |
+
+### 17.2 Change D-T30/D-T31: Sending retry screen and word space
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D2 | `ui-ux-embedded-designer` | Delivered as UX-52, V-128 to V-134 and D-34. Review fixes F-1 to F-3 are open (below). `ui-ux.md` changes: the retry screen (5.13.1, 5.14), the word-space rule in 5.13.1 and 5.13.2 (WORD_GAP row), the word-space status text and RESULT look within WS-1 to WS-6, the revisions of UX-45 and UX-46, a new UX decision. Revised V-112, V-115 (state that its WORD_GAP comes before the first character of item 2, so nothing still happens) and V-116 (rows 5 and 7 off at the retry). New V-vectors from V-128: a word-space error at k = 1 and at k = length - 1, three word-space errors to FAILED, a WORD_GAP before the first character and after the last character, OVERFLOW then WORD_GAP, the retry screen with `Show CW Code` = `On`. | - |
+| T12 | `c-embedded-developer` | Part A (can start now): `TRAINING_CHAR_WORD_SPACE` in `modes/training.h`. In `src/modes/sending.c`: the armed flag and the WORD_GAP row of section 12.3, the clear in `tx_start_session()`, and rows 5 and 7 off at RETRY. The engine case of AC-T17 in `test_training.c`. The behavior cases of AC-T28 (1), (3) and (4) in `test_sending.c`. Part B: in `training_screen_draw_status()` (`src/modes/training_screen.c`), the Sending RESULT branch shows `Wrong: pause too long` when the last answer character is `TRAINING_CHAR_WORD_SPACE`, else the current `Wrong: <text>`. No other RESULT change: the bar and row 5 already use the failed position (answer length - 1), and row 7 keeps its marks. Tests: V-112, V-113, V-115, V-116, V-121 (revised) and V-128 to V-132, V-134 and V-135 (after fix F-2) in `test_sending.c`. V-133 part A in `test_sending.c`, part B (real `keyer_service()`, 1199 and 1200 calls at 20/20, 4359 and 4360 calls at 20/10) in `test_keyer.c`, with no keyer code change. AC-T28 (2) and (5), and the existing tests that 15.3 lets change. Memory report (AC-T28 (6)). No change in `training.c`, the keyer, `keyer_service.h`, `sidetone.c` or Free Input. | Part A: -. Part B: D2, Part A |
+| Q3 | `qa-embedded` | Independent verification of AC-T17 (Sending word space), AC-T20, AC-T23 and AC-T28. Mutation and fault cases: the armed flag replaced by an answer-length test (must fail the OVERFLOW case), the armed flag not cleared by a dropped event or a DIT, the WORD_GAP acting in RESULT, GAP or before the first character, row 7 cleared at RESULT instead of RETRY, row 5 or row 7 kept at RETRY, the status of a word space shown as a keyed character, a random walk of keyer events that checks the attempt count. | T12 |
+| W3 | `technical-writer` | User manual, Sending: start the next character of a word within 5 units (a word space ends the attempt), a lower `TX Eff. Speed` gives more room, the retry screen. | `architector` approval |
+
+Review of D2 (2026-10-07). The retry screen, the status text, the bar, row 5, row 7, the timing table of 5.13.1,
+V-112, V-113, V-116, V-121 and V-128 to V-134 match D-T30 and D-T31. Open points of the designer: (1) yes, the
+status code chooses `Wrong: pause too long` when the last answer character is `TRAINING_CHAR_WORD_SPACE`. (2) Yes,
+row 5 shows the item character at answer length - 1, which is the character under the bar. (4) D-T31 stays: after
+OVERFLOW, a WORD_GAP never counts (D-T16). (5) Yes, a WORD_GAP after the retry or in the next item does nothing.
+(6) Accepted within the T12 flash budget.
+
+The arming rule of D-T31 and the D2 rule "the attempt has a correct character and the item is not complete" differ
+only after OVERFLOW. With the real keyer, CHAR_GAP comes at 2 dits and WORD_GAP at 5 units or more of the same
+space, and a mark cancels both. So no DIT or DAH can come between a CHAR_GAP and the WORD_GAP of the same space, and
+the last event before a WORD_GAP is always the CHAR_GAP of that space, or OVERFLOW. Fixes for `ui-ux.md`:
+
+| ID | Fix |
+| --- | --- |
+| F-1 | Arming condition, in the same words in 5.13.1 (bullet "Pause too long" and bullet "A WORD_GAP does nothing"), 5.13.2 (WORD_GAP row) and UX-52 item (2): a WORD_GAP in Item counts when it ends the space right after a correct character that is not the last one of the item. Add to the "does nothing" list: after OVERFLOW (a lost event is a device fault, D-T16). |
+| F-2 | 5.13.2, last bullet: remove "the dropped-character rule never drops it" and the "Proposed" text. Replace them with the decision: if the lost events held the CHAR_GAP, the drop flag is still set at the WORD_GAP, and the WORD_GAP is dropped with the rest of the character. If the CHAR_GAP came after OVERFLOW, the WORD_GAP of that space does nothing: the pause follows a lost character. New vector V-135, `TX("KMRSUAPTLOWI.", words, "KMRS")`. Run 1: `KEY("K")`, DIT, OVERFLOW, CHAR_GAP, WORD_GAP, then `KEY("MRS")`. Run 2: `KEY("K")`, DIT, OVERFLOW, WORD_GAP, then `KEY("M")` (dropped up to its CHAR_GAP), then `KEY("MRS")`. Both runs: `STATUS()` and `BAR(52)` up to the M that counts, no attempt, then `STATUS("Correct")`, and the score counts the item as first-attempt correct. Extend the global rule to V-135. |
+| F-3 | 5.13.1, bullet "A WORD_GAP does nothing": "a later WORD_GAP falls in the result delay" is not always true. At a low `TX Eff. Speed` (20/5: 5 units are about 2669 ms), the WORD_GAP of the last space can come in the next item or in the retry, before its first character. Say: in the result delay, the blank moment, or the next attempt before its first correct character, it does nothing. |
+
+### 17.3 Change D-T33: word pass rate 80 %
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D3 | `ui-ux-embedded-designer` | `ui-ux.md`: the 80 % rule for word sessions (5.15 and every 90 % statement), the end-screen example, the longest text (`Not passed, need 80` and `need 45`, 19 cells: `need 90` can no longer show), V-121 and a new word-session pass/fail vector (V-136). | - |
+| T13 | `c-embedded-developer` | `inc/koch/koch.h` and `src/koch/koch.c`: `koch_pass_threshold(koch_kind_t kind, MEM_XDATA uint8_t item_count)` as section 5.6 and the rule of section 6. `src/modes/training.c` `training_start()`: `koch_pass_threshold(koch_kind(training_level_value), training_item_count_value)`. No other production change: the end screen already prints `training_pass_threshold()`. Tests: `test_koch.c` (AC-T6), `test_training.c` (AC-T18), `test_receiving.c` or `test_sending.c` (AC-T29 (2), V-136), the 15.3 changes. The clang-tidy finding `bugprone-easily-swappable-parameters` on the new signature, if any, stays as in D-T21: no suppression. Memory report. | D3 for the V-vectors only |
+| Q4 | `qa-embedded` | Independent verification of AC-T6, AC-T18 and AC-T29. Mutation cases: the kind ignored, the kinds swapped, 0.8 rounded down, an unknown kind on the word rule, the old rule at final levels. | T13 |
+| W4 | `technical-writer` | User manual: the pass rule (`docs/user_manual.md` line ~415: 45 of 50 characters, 8 of 10 words, 80 of 100 words, 80 % rounded up for words), and every other 90 % statement for words. | `architector` approval |
+
+## 18. Device checks (unverified until the user tests on the device)
+
+| ID | Check |
+| --- | --- |
+| DC-T1 | Record the Receiving playback at 20/20 and 50/50 WPM and at 20/10 Farnsworth. Element and gap lengths match section 9.2 within the oscillator trim. No click at mark edges. |
+| DC-T2 | Sending: the blank before the next item is visible, also for a repeated character. The 8 x 16 text is readable. |
+| DC-T3 | Receiving: the four group labels sit above `menu/back`, `prev`, `next` and `enter` in this order (D-T27). |
+| DC-T4 | Tap mode. A tap feels prompt. A long `prev` undoes with no visible group change first. A long `enter` replays with no pick first. |
+| DC-T7 | Receiving with a paddle and a straight key on the tip: a short closure selects the `enter` run, a closure of 800 ms replays. Record whether a plug insertion selects a run. |
+| DC-T5 | Progress survives a power cycle. `Reset Statistics` gives level 1 after a power cycle. |
+| DC-T6 | The main loop keeps up: no keyer queue overflow during the Sending redraw at 50 WPM. |
+| DC-T8 | `ui-ux.md` D-34. Sending word session with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM: words keyed with the normal 3-unit space pass. A pause of about 6 units after a character gives `Wrong: pause too long`, a pause of about 4 units does not. At the retry, rows 5 and 7 are blank. |
+
+## 19. Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| R-T1: a power loss or a write failure during a progress save loses all stored levels (one page, erase first). | Magic last, so the next start sees no record and starts at level 1, never with wrong levels. The result screen shows `Not saved`. If the user wants it, a two-page scheme is a follow-up. |
+| R-T2: the third ISR call pushes the worst ISR path over 440 clocks. | The keyer and the player never run together. Report the three paths. Above 440 clocks, stop and report. |
+| R-T3: the 8 x 16 font draw is slow or deeper on the stack. | Stack report of section 14 and DC-T6. |
+| R-T4: SDCC turns the player shifts or the 16-bit compares into a helper call. | R6 rejects any call in a service. |
+| R-T6: tap mode adds the press duration to every Receiving answer. | U-11 and DC-T4. |
+| R-T7: the paddle tip shares P3.2 with `enter`. In Receiving, a short closure selects the `enter` run. A plug insertion can do the same (D-T27). When that run has one character and the pick fills the last slot, the check comes at once and uses an attempt. Long `prev` cannot undo a check. | Accepted by the user. A narrowing or a pick in an earlier slot can be undone with long `prev`. The user manual (W2) tells the user to insert the plug before opening Receiving. DC-T7. |
+| R-T8: the four labels do not fit one row for every run (LC-6). | D1 runs the script check over all Koch prefixes. LC-2 allows a second row. |
+| R-T9: a slow or uneven fist gets word-space errors at equal character and effective speeds (5 units leave 2 units above the normal space). | User decision (5 units, D-T30). The user can lower `TX Eff. Speed`. W3 tells the user. DC-T8. |
+
+## 20. Answered questions
+
+| ID | Question | User answer |
+| --- | --- | --- |
+| Q-T1 | The list has 43 entries, the plan says 44. | 43 is correct. The 44 was a counting error. `KOCH_CHAR_COUNT` = 43, final word phase from L = 63 (D-T3). |
+| Q-T2 | Prosigns in random words? | No. BT, SK and AR appear only in character sessions. Words and the word keyboard use the first 40 Koch characters. With fewer learned characters, they use the learned ones (D-T4). |
+
+No open question remains for this contract.
+
+## 21. UI reconciliation (`ui-ux.md`, final)
+
+All dependencies are resolved. T12 Part B can start. Fixes F-1 to F-3 of D2 change only wording and add V-135.
+
+| ID | Item | Resolution | Source in `ui-ux.md` |
+| --- | --- | --- | --- |
+| U-1 | `TRAINING_START_MS` | 1000 ms | 5.14, 6.10 |
+| U-2 | `TRAINING_RECEIVING_GAP_MS` | 500 ms | 5.14, 6.10 |
+| U-3 | `TRAINING_SENDING_GAP_MS` | 300 ms | 5.14, 6.10 |
+| U-4 | `TRAINING_CORRECT_MS` | 600 ms | 5.14, 6.10 |
+| U-5 | `TRAINING_WRONG_MS` | 1200 ms | 5.14, 6.10 |
+| U-6 | `TRAINING_FAILED_MS` | 2500 ms. Receiving counts from the end of the answer playback (D-T14). | 5.14, 6.10, Q-14 |
+| U-7 | Header | Tag, speed from column 3, level from column 9, item right-aligned to column 24. No short form. In a gap the header shows the next item number (`training_shown_item_number()`). | 5.11.1 |
+| U-8 | Receiving layout | Block and bar marks, slot x `68 - 8n + 16k`, key bar segments at y 55 (D-T29), label fields and label texts. | 5.11.1, 5.11.2, 5.12, 5.12.1 |
+| U-9 | Sending layout | Item line, bar under the next word character, status `Wrong: <text>`, code row 7, answer code row 5. `TX_CODE_MAX_MARKS` = 12. | 5.13, 5.13.3 |
+| U-10 | End screen | Score, `Passed` or `Not passed, need t`, `New level`, `Repeat level` or `Top level` (D-T17), `Not saved`, focused `Next`. | 5.15 |
+| U-11 | Tap mode | Adopted for the whole Receiving screen, end screen included. | 6.8 |
+| U-12 | Long `prev` | One step: step out one level, else undo the last pick, else nothing. | 6.8 |
+| U-13 | Replay on RETRY | At once, with empty slots. | 5.12.2 |
+| U-14 | Picks during playback | Allowed. A check stops the playback. | 5.12.2 |
+| U-15 | Sending retry | The whole item again (D-T6). | 5.13.1 |
+| U-16 | Score | First-attempt answers only (user decision). | 5.15, 12 |
+| U-17 | Failed reset | `Not saved` over Settings. `OK` returns to Settings (D-T11, D-T19). | 5.7, F-23 |
+| U-18 | Long `next`, repeats | Nothing on both training screens. | 6.8, 6.9 |
+| U-19 | Shown level | `L + 1`, saturated at 65535 (D-T5). | 5.11.1 |
+| U-20 | Sending long `prev`, long `next` | Nothing. | 6.9 |
+| U-21 | Sending keyer events in delays | Dropped-character rule (D-T15). OVERFLOW uses no attempt (D-T16). | 5.13.2, Q-15 |
+| U-22 | Word keyboard | No prosign (D-T4, `keyboard_reset(training_alphabet_count())`). | 5.12.1, V-102 |
+| U-23 | Four-run keyboard, tap `enter`, long `enter` replay, labels (D-T27, D-T28) | Resolved by D1 (UX-51) and D-T29. | 3.1, 5.12, 5.15, 6.1, 6.2, 6.4, 6.6, 6.8, 9.4 |
+| U-24 | Sending retry screen (D-T30) | Rows 5 and 7 off, `Try N of 3` kept, bar at the first character (WS-6). Resolved by D2 (UX-52). | 5.13.1, 5.13.3, 5.14 |
+| U-25 | Sending word-space result (D-T30, D-T31) | `Wrong: pause too long`, bar under the next character, row 5 at FAILED the code of that character, row 7 kept (WS-1 to WS-5). Resolved by D2 (UX-52). The arming condition text waits for fix F-1. | 5.13.1, 5.13.2, 5.14, 9.4 |
+
+## 22. Final review (2026-10-06)
+
+Verdict: `approved`. QA verdict: `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 70 of 70 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| `build.sh` | Passes. `check_asm.sh` reports no violation. |
+| ISR | `sidetone_timer0_isr` has exactly `lcall _keyer_service`, `lcall _player_service`, `lcall _sidetone_service`, then `reti`. `_player_service` has no call. No `sdcc_atomic` text in the build. `accept/real_isr/sidetone.c.asm` equals the build output. |
+| Memory | Flash 19 055 -> 26 593 B, xdata 1400 -> 1811 B, DSEG 43 -> 47 B, stack 191 B free, margin 108 B. Above target and below the hard limits, accepted (D-T23). |
+| ISR time | Worst paths: keyer 403, player 186, disabled 63 clocks. |
+| Contract | Engine, player, keyboard, progress, tap mode, Receiving, Sending and menu wiring match sections 5 to 12 and D-T14 to D-T26. |
+| QA | 70 mutants: 55 killed, 9 equivalent, 6 gaps closed by `test_qa_receiving.c`, `test_qa_sending.c` and `test_qa_player.c`. No product defect. |
+
+Open: device checks DC-T1 to DC-T6 and D-26 to D-33 of `ui-ux.md`. They stay unverified until the user tests on the
+device. Risk R-T1 stays accepted. Next: `technical-writer` writes the user manual section for the two modes.
+
+### 22.1 Final review of D-T27 to D-T29 (2026-10-06)
+
+Verdict: `approved`. QA verdict (Q2): `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `build.sh` | Passes. Run again by `architector`. `check_asm.sh` reports no violation. The Timer 0 ISR still has exactly the three calls of D-T1. |
+| `test.sh` | 71 of 71 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| Memory | Flash 26 593 -> 26 642 B (+49, target +300). xdata 1811 -> 1810 B (-1). DSEG 47 B. Stack 191 B free, deepest main-loop chain 65 B, ISR frame 18 B, margin 108 B. Within the T11 budget. |
+| Contract | `keyboard` matches section 8 (closed form, history of 2). `buttons` matches D-T28. Tap mode covers four buttons, and long `enter` (0x44) comes in tap mode only. One order table gives MENU, ENTER, PREV, NEXT. Both `buttons_set_enter_enabled()` values clear the long-pending ENTER. `receiving.c` matches 12.2, LC-1 to LC-7 and D-T29. `RX_GROUP_OF()` has a `_Static_assert` for all four codes. The fields start at x 2, 30, 58 and 87. Every label uses the short text. The key bars come only in a full render. |
+| Tests | AC-T8, AC-T15, AC-T19, AC-T23 (V-90 to V-127) and AC-T27 have tests. Tap-off button tests are unchanged. QA added `test_qa_koch_keyboard.c` and tap `enter` cases, and rewrote `test_qa_receiving.c` (label fit walk, R-T7 glitch cases). 17 mutants killed. |
+
+Open, not blocking:
+
+- Mutant M12 (undo the last pick before stepping out of a group) survives `test_receiving.c`, because V-94 cannot tell the two orders apart. `test_qa_receiving.c` kills it, so the suite covers the rule. A developer case is optional.
+- Device checks DC-T3, DC-T4 and DC-T7 stay unverified until the user tests on the device.
+- W2: the user manual (R-T7: insert the plug before you open Receiving).
+
+### 22.2 Final review of D-T30 to D-T32 (2026-10-07)
+
+Verdict: `approved`. QA verdict (Q3): `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `build.sh` | Passes. Run again by `architector`. Flash 26 740 B, xdata 1811 B, 191 B stack free. `check_asm.sh` reports no violation. |
+| `test.sh` | 72 of 72 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| Memory | Flash +98 B (target +150), xdata +1 B (target +1), DSEG, overlay and bit bytes +0. Stack bound 65 -> 66 B, margin 107 B, accepted (D-T32). |
+| Contract | `TRAINING_CHAR_WORD_SPACE` in `training.h`. `sending.c`: every event clears the armed flag, only a PARTIAL CHAR_GAP sets it, a WORD_GAP with the flag set in ITEM gives `training_add_char(' ')`, `tx_start_session()` clears it. The armed flag implies a clear drop flag, so the early WORD_GAP branch skips no needed drop step. RETRY clears rows 5 to 7. `training_screen.c` shows `Wrong: pause too long` for a last answer character `' '`. Bar and row 5 use answer length - 1. No change in `training.c`, the keyer or the ISR. |
+| Tests | AC-T17 (word space), AC-T28 (1) to (6), V-112, V-113, V-115, V-116, V-121, V-128 to V-135, V-133 part B in `test_keyer.c`. QA: `test_qa_sending_word_space.c`, 21 mutants, 17 killed, 4 equivalent (the phase check and the second row 5 clear), the armed-flag versus answer-length mutant killed. |
+| `ui-ux.md` | UX-52 with fixes F-1 to F-3 and V-135 in place. |
+| User manual (W3) | `approved`. The pause limit, the no-effect cases, the timing table, the retry screen and the trouble row match D-T30, D-T31 and UX-52. |
+
+Open, not blocking: device checks DC-T8 (`ui-ux.md` D-34) and DC-T6 (the extra page flush at ITEM and RETRY). They
+stay unverified until the user tests on the device. R-T9 stays accepted.
+
+### 22.3 Final review of D-T33 and D-T34 (2026-10-07)
+
+Verdict T13: `approved`. Verdict W4: `approved`. QA verdict (Q4): `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `build.sh` | Passes. Run again by `architector`. Flash 26 781 B, xdata 1812 B, 191 B stack free. No `check_asm.sh` violation. |
+| `test.sh` | 73 of 73 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| Memory | Flash +41 B (target +40, hard limit +100, accepted by D-T34). xdata +1 B (target +1). DSEG, overlay and bit bytes +0. Margin 107 B. |
+| Contract | `koch_pass_threshold(koch_kind_t kind, MEM_XDATA uint8_t item_count)` as section 5.6. Word kind 4/5, every other kind 9/10, `(p n + p) / q` in `uint16_t`. `training_start()` passes `koch_kind(level)`. No other production change. |
+| Tests | AC-T6 (n 0..255 against a counting reference), AC-T18 (`test_finish_thresholds`, a final level of 50 words gives 40), AC-T29 (V-121 `need 80`, V-136 in both modes). QA: `test_qa_sending_pass_rate.c`, levels 0..170 and 65533..65535, menu boundaries at 10, 11, 50 and 100 words and 50 characters, EEPROM write only on a pass, 14 of 14 mutants killed. |
+| `ui-ux.md` (D3) | Line 1180 and the user decision record state 80 % for word sessions, 45 of 50 for characters. |
+| User manual (W4) | The pass rules in `docs/user_manual.md` state 45 of 50 characters (90 %) and 8 of 10, 80 of 100 words (80 %, rounded up), for every word session. No other text states a word rule. |
+
+Open, not blocking: the rounding rule for the final levels is an assumption that the coordinator confirms with the
+user. Device checks from earlier changes stay open.

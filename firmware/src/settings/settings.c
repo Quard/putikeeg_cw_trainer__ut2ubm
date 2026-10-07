@@ -3,7 +3,7 @@
 #include "board/lcd_config.h"
 #include "eeprom/eeprom.h"
 #include "eeprom/eeprom_map.h"
-#include "settings_crc.h"
+#include "util/crc8.h"
 
 /* Record layout (references/internal/menu_subsystem_spec.md section 5.1). */
 #define RECORD_MAGIC_0 0U
@@ -50,25 +50,6 @@ static MEM_XDATA uint8_t settings_record[SETTINGS_RECORD_SIZE];
 /* Fields (record bytes 3..13) of the stored record, or of the defaults after a failed load. */
 static MEM_XDATA uint8_t settings_baseline[RECORD_FIELD_COUNT];
 static MEM_XDATA bool settings_is_edited_flag;
-
-uint8_t settings_crc8(const MEM_XDATA uint8_t* data, uint8_t length) {
-  uint8_t crc = 0U;
-  uint8_t bit;
-
-  while (length != 0U) {
-    crc ^= *data;
-    for (bit = 0U; bit < 8U; ++bit) {
-      if ((crc & 0x80U) != 0U) {
-        crc = (uint8_t)((uint8_t)(crc << 1) ^ 0x07U);
-      } else {
-        crc = (uint8_t)(crc << 1);
-      }
-    }
-    ++data;
-    --length;
-  }
-  return crc;
-}
 
 /* Effective speed id of base speed @p id, or SETTINGS_ID_COUNT for other ids. */
 static settings_id_t settings_effective_of(settings_id_t id) {
@@ -138,7 +119,7 @@ static settings_load_status_t settings_check_record(void) {
       (settings_record[RECORD_VERSION] != RECORD_LAYOUT_VERSION_1)) {
     return SETTINGS_LOAD_BAD_VERSION;
   }
-  if (settings_crc8(settings_record, RECORD_CRC) != settings_record[RECORD_CRC]) {
+  if (crc8_compute(settings_record, RECORD_CRC) != settings_record[RECORD_CRC]) {
     return SETTINGS_LOAD_BAD_CRC;
   }
   return SETTINGS_LOAD_OK;
@@ -188,7 +169,7 @@ settings_save_status_t settings_save_if_changed(void) {
     return SETTINGS_SAVE_NOT_NEEDED;
   }
   eeprom_clear_low_supply();
-  settings_record[RECORD_CRC] = settings_crc8(settings_record, RECORD_CRC);
+  settings_record[RECORD_CRC] = crc8_compute(settings_record, RECORD_CRC);
   /* The magic goes last, so an interrupted save never leaves a valid record. */
   if ((eeprom_erase_page(EEPROM_MAP_SETTINGS_PAGE) != EEPROM_OK) ||
       (eeprom_write(EEPROM_MAP_SETTINGS_ADDRESS + RECORD_VERSION, &settings_record[RECORD_VERSION],

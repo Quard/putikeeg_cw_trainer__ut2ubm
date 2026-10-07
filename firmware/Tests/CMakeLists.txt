@@ -76,8 +76,17 @@ add_library(eeprom_group STATIC ${EEPROM_SOURCES})
 target_include_directories(eeprom_group PUBLIC ${HOST_INCLUDE_DIRS})
 target_compile_definitions(eeprom_group PUBLIC ${TARGET_DEFINITIONS})
 
+set(PROGRESS_TEST_PATTERN "^test_(qa_)?progress")
+set(PROGRESS_SOURCES "${FIRMWARE_DIR}/src/progress/progress.c" "${FIRMWARE_DIR}/src/util/crc8.c")
+add_library(progress_group STATIC ${PROGRESS_SOURCES} ${EEPROM_SOURCES})
+target_include_directories(progress_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(progress_group PUBLIC ${TARGET_DEFINITIONS})
+
 set(SETTINGS_TEST_PATTERN "^test_(qa_)?settings")
-add_library(settings_group STATIC "${FIRMWARE_DIR}/src/settings/settings.c" ${EEPROM_SOURCES})
+add_library(settings_group STATIC
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    "${FIRMWARE_DIR}/src/util/crc8.c"
+    ${EEPROM_SOURCES})
 target_include_directories(settings_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
 target_compile_definitions(settings_group PUBLIC ${TARGET_DEFINITIONS})
 
@@ -103,6 +112,7 @@ add_library(sidetone_group STATIC
     fakes/fake_sidetone_pwm.c
     fakes/fake_tick.c
     "${FIRMWARE_DIR}/src/settings/settings.c"
+    "${FIRMWARE_DIR}/src/util/crc8.c"
     ${EEPROM_SOURCES})
 target_include_directories(sidetone_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
 target_compile_definitions(sidetone_group PUBLIC ${TARGET_DEFINITIONS})
@@ -111,14 +121,61 @@ target_compile_definitions(sidetone_group PUBLIC ${TARGET_DEFINITIONS})
 set(KEYER_TEST_PATTERN "^test_(qa_)?keyer")
 add_library(keyer_group STATIC
     "${FIRMWARE_DIR}/src/cw/keyer.c"
+    "${FIRMWARE_DIR}/src/cw/timing.c"
     fakes/fake_paddle_pins.c
     "${FIRMWARE_DIR}/src/sidetone/sidetone.c"
     fakes/fake_sidetone_pwm.c
     fakes/fake_tick.c
     "${FIRMWARE_DIR}/src/settings/settings.c"
+    "${FIRMWARE_DIR}/src/util/crc8.c"
     ${EEPROM_SOURCES})
 target_include_directories(keyer_group PUBLIC ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/settings")
 target_compile_definitions(keyer_group PUBLIC ${TARGET_DEFINITIONS})
+
+set(TIMING_TEST_PATTERN "^test_(qa_)?timing")
+add_library(timing_group STATIC "${FIRMWARE_DIR}/src/cw/timing.c")
+target_include_directories(timing_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(timing_group PUBLIC ${TARGET_DEFINITIONS})
+
+set(RNG_TEST_PATTERN "^test_(qa_)?rng")
+add_library(rng_group STATIC "${FIRMWARE_DIR}/src/util/rng.c")
+target_include_directories(rng_group PUBLIC ${HOST_INCLUDE_DIRS})
+
+# The Koch group also links the Morse table, so the tests can prove that every Koch character has a code.
+set(KOCH_TEST_PATTERN "^test_(qa_)?koch")
+set(KOCH_SOURCES
+    "${FIRMWARE_DIR}/src/koch/koch.c"
+    "${FIRMWARE_DIR}/src/koch/keyboard.c"
+    "${FIRMWARE_DIR}/src/util/rng.c")
+add_library(koch_group STATIC ${KOCH_SOURCES} "${FIRMWARE_DIR}/src/koch/koch_item.c" "${FIRMWARE_DIR}/src/cw/morse.c")
+target_include_directories(koch_group PUBLIC ${HOST_INCLUDE_DIRS})
+
+set(TRAINING_TEST_PATTERN "^test_(qa_)?training")
+add_library(training_group STATIC
+    "${FIRMWARE_DIR}/src/modes/training.c"
+    ${KOCH_SOURCES}
+    "${FIRMWARE_DIR}/src/koch/koch_item.c"
+    ${PROGRESS_SOURCES}
+    ${EEPROM_SOURCES}
+    fakes/fake_tick.c
+    support/progress_fixture.c)
+target_include_directories(training_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(training_group PUBLIC ${TARGET_DEFINITIONS})
+
+# The player tests include cw/player_service.h and run the real sidetone for the envelope tests.
+set(PLAYER_TEST_PATTERN "^test_(qa_)?player")
+add_library(player_group STATIC
+    "${FIRMWARE_DIR}/src/cw/player.c"
+    "${FIRMWARE_DIR}/src/cw/timing.c"
+    "${FIRMWARE_DIR}/src/cw/morse.c"
+    "${FIRMWARE_DIR}/src/sidetone/sidetone.c"
+    fakes/fake_sidetone_pwm.c
+    fakes/fake_tick.c
+    "${FIRMWARE_DIR}/src/settings/settings.c"
+    "${FIRMWARE_DIR}/src/util/crc8.c"
+    ${EEPROM_SOURCES})
+target_include_directories(player_group PUBLIC ${HOST_INCLUDE_DIRS})
+target_compile_definitions(player_group PUBLIC ${TARGET_DEFINITIONS})
 
 set(MORSE_TEST_PATTERN "^test_(qa_)?morse")
 add_library(morse_group STATIC "${FIRMWARE_DIR}/src/cw/morse.c")
@@ -132,6 +189,7 @@ add_library(free_input_group STATIC
     fakes/fake_keyer.c
     fakes/fake_sidetone.c
     "${FIRMWARE_DIR}/src/settings/settings.c"
+    "${FIRMWARE_DIR}/src/util/crc8.c"
     ${EEPROM_SOURCES}
     "${FIRMWARE_DIR}/src/buttons/buttons.c"
     fakes/fake_tick.c
@@ -142,14 +200,26 @@ target_include_directories(free_input_group PUBLIC
     ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings")
 target_compile_definitions(free_input_group PUBLIC ${TARGET_DEFINITIONS})
 
-# The menu group also links the buttons, so the start-up tests run the real recovery window.
+# The menu group also links the buttons, so the start-up tests run the real recovery window. The mode tests of
+# Receiving and Sending use the same group: their scenarios start from the menu (ui-ux.md section 9.4). Items come
+# from fake_koch_item.c (training_spec.md D-T18), the player and the keyer are fakes.
 set(MENU_TEST_PATTERN "^test_(qa_)?menu")
+set(MODES_TEST_PATTERN "^test_(qa_)?(receiving|sending)")
 file(GLOB MENU_SOURCES CONFIGURE_DEPENDS "${FIRMWARE_DIR}/src/menu/menu*.c")
 add_library(menu_group STATIC
     ${MENU_SOURCES}
     "${FIRMWARE_DIR}/src/modes/free_input.c"
+    "${FIRMWARE_DIR}/src/modes/receiving.c"
+    "${FIRMWARE_DIR}/src/modes/sending.c"
+    "${FIRMWARE_DIR}/src/modes/training.c"
+    "${FIRMWARE_DIR}/src/modes/training_screen.c"
+    ${KOCH_SOURCES}
+    fakes/fake_koch_item.c
+    ${PROGRESS_SOURCES}
+    support/progress_fixture.c
     "${FIRMWARE_DIR}/src/cw/morse.c"
     fakes/fake_keyer.c
+    fakes/fake_player.c
     ${GFX_SOURCES}
     "${FIRMWARE_DIR}/src/settings/settings.c"
     ${EEPROM_SOURCES}
@@ -168,12 +238,21 @@ target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS})
 
 set(MODULE_TEST_PATTERNS
     GFX_TEST_PATTERN EEPROM_TEST_PATTERN SETTINGS_TEST_PATTERN BUTTONS_TEST_PATTERN BACKLIGHT_TEST_PATTERN
-    MENU_TEST_PATTERN SIDETONE_TEST_PATTERN KEYER_TEST_PATTERN MORSE_TEST_PATTERN FREE_INPUT_TEST_PATTERN)
+    MENU_TEST_PATTERN SIDETONE_TEST_PATTERN KEYER_TEST_PATTERN MORSE_TEST_PATTERN FREE_INPUT_TEST_PATTERN
+    TIMING_TEST_PATTERN RNG_TEST_PATTERN KOCH_TEST_PATTERN PROGRESS_TEST_PATTERN
+    PLAYER_TEST_PATTERN TRAINING_TEST_PATTERN MODES_TEST_PATTERN)
 set(KEYER_TEST_PATTERN_LIBRARIES keyer_group)
+set(TIMING_TEST_PATTERN_LIBRARIES timing_group)
+set(RNG_TEST_PATTERN_LIBRARIES rng_group)
+set(KOCH_TEST_PATTERN_LIBRARIES koch_group)
+set(PROGRESS_TEST_PATTERN_LIBRARIES progress_group)
+set(PLAYER_TEST_PATTERN_LIBRARIES player_group)
+set(TRAINING_TEST_PATTERN_LIBRARIES training_group)
 set(MORSE_TEST_PATTERN_LIBRARIES morse_group)
 set(FREE_INPUT_TEST_PATTERN_LIBRARIES free_input_group)
 set(SIDETONE_TEST_PATTERN_LIBRARIES sidetone_group)
 set(MENU_TEST_PATTERN_LIBRARIES menu_group)
+set(MODES_TEST_PATTERN_LIBRARIES menu_group)
 set(BACKLIGHT_TEST_PATTERN_LIBRARIES backlight_group)
 set(BUTTONS_TEST_PATTERN_LIBRARIES buttons_group)
 set(SETTINGS_TEST_PATTERN_LIBRARIES settings_group)

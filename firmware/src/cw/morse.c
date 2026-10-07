@@ -45,6 +45,21 @@ char morse_decode(uint8_t pattern) {
   return morse_table[pattern];
 }
 
+uint8_t morse_encode(char character) {
+  uint8_t pattern;
+
+  /* Empty table slots hold MORSE_CHAR_UNKNOWN, so the search must not match it. */
+  if (character == MORSE_CHAR_UNKNOWN) {
+    return MORSE_PATTERN_INVALID;
+  }
+  for (pattern = 2U; pattern < MORSE_TABLE_SIZE; ++pattern) {
+    if (morse_table[pattern] == character) {
+      return pattern;
+    }
+  }
+  return MORSE_PATTERN_INVALID;
+}
+
 uint8_t morse_format(char decoded, uint8_t style, char MEM_XDATA* text) {
   /* char is signed on the host and unsigned on SDCC, so compare as uint8_t. Code 0 wraps to 255. */
   const uint8_t index = (uint8_t)((uint8_t)decoded - (uint8_t)MORSE_CHAR_SK);

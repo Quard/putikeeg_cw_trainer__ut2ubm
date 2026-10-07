@@ -7,6 +7,7 @@
 #include "fake_button_pins.h"
 #include "fake_delay.h"
 #include "fake_iap.h"
+#include "fake_koch_item.h"
 #include "fake_menu_outputs.h"
 #include "fake_tick.h"
 #include "fixtures/font_golden.h"
@@ -16,8 +17,8 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -41,7 +42,7 @@ static void put_record(uint8_t contrast, uint8_t backlight) {
   memcpy(record, default_record, sizeof(record));
   record[12] = backlight;
   record[13] = contrast;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   memcpy(fake_iap_memory(), record, sizeof(record));
 }
 
@@ -663,19 +664,16 @@ static void test_v18_menu_at_root(void) {
   }
 }
 
-static void check_placeholder(int index, const char* title) {
+/* D-T8: Receiving and Sending open their training screens. The start pause ignores the short and long events. */
+static void check_training_screen(int index, uint8_t screen, const char* header) {
   int r;
   start_empty();
   send_times(NEXT, (unsigned)index);
   send(ENTER);
-  TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
-  TEST_ASSERT(title_is(title));
-  TEST_ASSERT(centered_row_is(3, "Not ready"));
+  TEST_ASSERT_EQUAL(screen, menu_screen());
+  TEST_ASSERT(title_is(header));
   for (r = 1; r <= 7; ++r) {
     TEST_ASSERT(probe_plain(r));
-    if (r != 3) {
-      TEST_ASSERT(row_is_blank(r));
-    }
   }
   menu_handle(PREV);
   menu_handle(NEXT);
@@ -685,15 +683,18 @@ static void check_placeholder(int index, const char* title) {
   menu_handle(LONG(PREV));
   menu_handle(LONG(NEXT));
   TEST_ASSERT(!menu_needs_redraw());
-  TEST_ASSERT_EQUAL(MENU_SCREEN_PLACEHOLDER, menu_screen());
+  TEST_ASSERT_EQUAL(screen, menu_screen());
+  TEST_ASSERT(title_is(header));
   send(LONG(MENU));
   TEST_ASSERT(main_menu_is(index));
   TEST_ASSERT(probe_sel(index + 1));
 }
 
-static void test_v19_placeholders(void) {
-  check_placeholder(0, "Receiving");
-  check_placeholder(1, "Sending");
+static void test_v19_training_screens(void) {
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
+  check_training_screen(0, MENU_SCREEN_RECEIVING, "RX 32/32 L1          1/50");
+  check_training_screen(1, MENU_SCREEN_SENDING, "TX 20/20 L1          1/50");
 }
 
 static void open_dialog(void) {
@@ -784,7 +785,7 @@ static void test_v27_clamped_record(void) {
   record[4] = 0x05U;
   record[5] = 30U;
   record[6] = 40U;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   fake_iap_reset();
   memcpy(fake_iap_memory(), record, sizeof(record));
   (void)power_on(0U);
@@ -1231,7 +1232,7 @@ int main(void) {
   TEST_RUN(test_v16_no_save_without_change);
   TEST_RUN(test_v17_menu_leaves_edit_only);
   TEST_RUN(test_v18_menu_at_root);
-  TEST_RUN(test_v19_placeholders);
+  TEST_RUN(test_v19_training_screens);
   TEST_RUN(test_v20_dialog_no);
   TEST_RUN(test_v21_dialog_yes);
   TEST_RUN(test_v22_v23_dialog_menu_is_no);

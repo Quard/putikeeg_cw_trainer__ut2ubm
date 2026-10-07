@@ -21,8 +21,8 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define NEXT BUTTON_EVENT_NEXT
 #define ENTER BUTTON_EVENT_ENTER
@@ -243,7 +243,7 @@ static void test_prosigns_row_per_record(void) {
   TEST_ASSERT_EQUAL(MENU_KIND_CHOICE, item->kind);
   TEST_ASSERT_EQUAL(11U, item->field_width);
   for (which = 0U; which < 5U; ++which) {
-    TEST_ASSERT_EQUAL(records[which][14], settings_crc8(records[which], 14U));
+    TEST_ASSERT_EQUAL(records[which][14], crc8_compute(records[which], 14U));
     fake_iap_reset();
     memcpy(fake_iap_memory(), records[which], SETTINGS_RECORD_SIZE);
     power_on();

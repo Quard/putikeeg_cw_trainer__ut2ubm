@@ -907,6 +907,64 @@ static void test_gap_events(void) {
   gap_case(KEYER_KEY_IAMBIC_B, 5U, 5U, 4800U);
 }
 
+/*
+ * ui-ux.md V-133 part B (UX-52): a space of keyer_word_gap_ticks - 1 calls between two marks gives no WORD_GAP. A space
+ * of keyer_word_gap_ticks calls gives one, on the call where the space reaches it. The space starts on the call of the
+ * DIT event (AC-K15).
+ */
+static void word_space_case(uint8_t key_type, uint8_t wpm, uint8_t eff_wpm, uint16_t word_gap, bool is_long) {
+  const size_t space = is_long ? word_gap : (size_t)word_gap - 1U;
+  run_t marks[4];
+  size_t latency;
+  size_t mark_end;
+  size_t guard = 0U;
+
+  setup();
+  start(key_type, false, wpm, eff_wpm);
+  TEST_ASSERT_EQUAL(word_gap, keyer_word_gap_ticks);
+  set_contacts(true, false);
+  run(10U);
+  set_contacts(false, false);
+  while ((count_events(KEYER_EVENT_DIT) == 0U) && (guard < 1000U)) {
+    tick();
+    ++guard;
+  }
+  mark_end = event_call_of(KEYER_EVENT_DIT, 0U);
+  /* The contact closed before call 1; the input filter delays the mark start by the same count each time. */
+  if (!TEST_ASSERT(find_runs(is_mark_phase, marks, 4U) == 1U)) {
+    return;
+  }
+  latency = marks[0].start - 1U;
+  run(mark_end + space - latency - 1U - call_count);
+  set_contacts(true, false);
+  run(10U);
+  set_contacts(false, false);
+  run((size_t)dit_of(wpm) + 50U);
+  TEST_ASSERT_EQUAL(2U, find_runs(is_mark_phase, marks, 4U));
+  TEST_ASSERT_EQUAL(mark_end + space, marks[1].start);
+  TEST_ASSERT_EQUAL(1U, count_events(KEYER_EVENT_CHAR_GAP));
+  TEST_ASSERT_EQUAL(mark_end + (2U * dit_of(wpm)) - 1U, event_call_of(KEYER_EVENT_CHAR_GAP, 0U));
+  if (is_long) {
+    TEST_ASSERT_EQUAL(1U, count_events(KEYER_EVENT_WORD_GAP));
+    TEST_ASSERT_EQUAL(mark_end + word_gap - 1U, event_call_of(KEYER_EVENT_WORD_GAP, 0U));
+  } else {
+    TEST_ASSERT_EQUAL(0U, count_events(KEYER_EVENT_WORD_GAP));
+  }
+  TEST_ASSERT_EQUAL(2U, count_events(KEYER_EVENT_DIT));
+}
+
+static void test_word_space_threshold(void) {
+  static const uint8_t key_types[2] = {KEYER_KEY_STRAIGHT, KEYER_KEY_IAMBIC_B};
+  size_t index;
+
+  for (index = 0U; index < 2U; ++index) {
+    word_space_case(key_types[index], 20U, 20U, 1200U, false);
+    word_space_case(key_types[index], 20U, 20U, 1200U, true);
+    word_space_case(key_types[index], 20U, 10U, 4360U, false);
+    word_space_case(key_types[index], 20U, 10U, 4360U, true);
+  }
+}
+
 /* AC-K17: straight taps of 20 calls at 5 WPM give DIT events with no gap event between them. */
 static void straight_taps(size_t count) {
   size_t index;
@@ -1150,6 +1208,7 @@ int main(void) {
   TEST_RUN(test_overlap_tap);
   TEST_RUN(test_early_release);
   TEST_RUN(test_gap_events);
+  TEST_RUN(test_word_space_threshold);
   TEST_RUN(test_queue_overflow);
   TEST_RUN(test_queue_wrap);
   TEST_RUN(test_one_event_per_call);

@@ -39,6 +39,12 @@ uint8_t morse_add_element(uint8_t pattern, bool is_dah);
 char morse_decode(uint8_t pattern);
 
 /**
+ * Returns the pattern of @p character (a table character or a prosign code MORSE_CHAR_SK to MORSE_CHAR_AS), or
+ * MORSE_PATTERN_INVALID when the table has no such character. MORSE_CHAR_UNKNOWN gives MORSE_PATTERN_INVALID.
+ */
+uint8_t morse_encode(char character);
+
+/**
  * Writes the display text of @p decoded, a morse_decode() result, in @p style to @p text and returns its length,
  * 1 to MORSE_TEXT_MAX_LENGTH. @p text holds MORSE_TEXT_SIZE bytes.
  */

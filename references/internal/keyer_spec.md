@@ -66,14 +66,19 @@ Out of scope:
 
 ### 3.1 D-K1: ISR layout (revises D-R2-1 of `sidetone_spec.md`)
 
+Revision: decision D-T1 of `training_spec.md` (section 3.1) adds the CW player as a third service. The ISR body is
+`keyer_service(); player_service(); sidetone_service();`. `firmware/inc/cw/player_service.h` follows every rule of
+this section for `keyer_service.h`. `check_asm.sh` rules R6 and R7 check the call list and the absence of
+`sdcc_atomic`. The keyer behavior and timing do not change.
+
 Decision:
 
 - The ISR-side keyer code is one function, `static void keyer_service(void)`. The header
   `firmware/inc/cw/keyer_service.h` defines it, together with the ISR-private keyer state as `static` variables.
 - On the target, only `firmware/src/sidetone/sidetone.c` includes this header. The include is at the end of the file,
   inside `#if defined(__SDCC_mcs51)`, just before the ISR. So `keyer_service()` is a function of `sidetone.c`.
-- The ISR body becomes `keyer_service(); sidetone_service();` in this order. The keyer request then reaches the
-  envelope in the same call.
+- The ISR body is `keyer_service(); player_service(); sidetone_service();` in this order (D-T1 of
+  `training_spec.md`). The keyer request and the player request then reach the envelope in the same call.
 - `sidetone.c` defines two macros before the include. They are the ISR-side sidetone entry that
   `sidetone_spec.md` section 3.10 reserved for the keyer:
 
@@ -90,8 +95,8 @@ Decision:
 - Host tests include `keyer_service.h` directly. They define the two macros themselves and call `keyer_service()`
   once per simulated tick.
 - Stop and report to `architector` in these cases: the build shows an `sdcc_atomic` symbol, the link fails, or
-  `sidetone_timer0_isr` has an `lcall` to a function other than `_keyer_service` and `_sidetone_service`. Do not try
-  another layout.
+  `sidetone_timer0_isr` has a call list other than `_keyer_service`, `_player_service`, `_sidetone_service`
+  (`check_asm.sh` R6). Do not try another layout.
 
 Rationale:
 
@@ -894,13 +899,19 @@ Only the end of the file changes (D-K1):
 #define KEYER_SIDETONE_ON() (sidetone_is_on_requested = true)
 #define KEYER_SIDETONE_OFF() (sidetone_is_on_requested = false)
 #include "cw/keyer_service.h"
+#define PLAYER_SIDETONE_ON() (sidetone_is_on_requested = true)
+#define PLAYER_SIDETONE_OFF() (sidetone_is_on_requested = false)
+#include "cw/player_service.h"
 
 void sidetone_timer0_isr(void) __interrupt(TIMER0_INTERRUPT) {
   keyer_service();
+  player_service();
   sidetone_service();
 }
 #endif
 ```
+
+The player lines come from D-T1 of `training_spec.md`.
 
 The menu Tone preview and the keyer never write `sidetone_is_on_requested` at the same time. The preview runs only in
 the Tone edit, and the keyer only in Free Input. `keyer_stop()` clears `keyer_is_enabled` before it calls
@@ -940,8 +951,8 @@ Rules:
 - `keyer_service()` uses `#pragma nooverlay`. Its locals are in registers or DSEG, never in OSEG.
 - The ISR has no `P_SW2` access, no `EA` or `IE` byte write and no port 2 write. The keyer reads pin bits of P3 and P5
   only and never writes them.
-- The ISR frame does not grow. The two calls are at the same depth (`sidetone_spec.md` section 9: 14 pushes plus the
-  return addresses).
+- The ISR frame does not grow. The service calls are at the same depth (`sidetone_spec.md` section 9: 14 pushes plus
+  the return addresses). D-T1 of `training_spec.md` adds `player_service` at the same depth.
 - ISR time covers the whole Timer 0 ISR: entry, `keyer_service`, `sidetone_service`, exit. Count it from the `.asm`
   with the STC8H instruction timing. Target 400 clocks. Hard limit 800 clocks, of 6000 per 250 us.
 - Also report the keyer part alone. Also report the disabled path (menu). The disabled path must not grow by more than
@@ -1082,7 +1093,7 @@ Build and review:
 
 | ID | Criterion |
 | --- | --- |
-| AC-K60 | ISR calls. `sidetone_timer0_isr` has exactly the calls `lcall _keyer_service` and `lcall _sidetone_service`, in this order. Neither service has an `lcall` or a library helper. |
+| AC-K60 | ISR calls. `sidetone_timer0_isr` has exactly the calls `lcall _keyer_service`, `lcall _player_service` and `lcall _sidetone_service`, in this order (D-T1 of `training_spec.md`, `check_asm.sh` R6). No service has an `lcall` or a library helper. |
 | AC-K61 | ISR assembly rules. Locals of both services are not in OSEG. Neither service has a `P_SW2` access, an `EA` or `IE` byte write, or a write to port 2, P3 or P5. The ISR ends with `reti`. No `.asm` file has an `sdcc_atomic` symbol. |
 | AC-K62 | ISR time within section 8, with the counted path named. |
 | AC-K63 | Memory within section 12, with the full report. |

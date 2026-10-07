@@ -26,14 +26,7 @@ typedef uint8_t keyer_phase_t;
 #define KEYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS /* 32: the fall ends at the mark end */
 #define KEYER_CHAR_GAP_DITS 2U
 #define KEYER_WORD_GAP_UNITS 5U
-#define KEYER_DIT_TICKS_NUMERATOR 4800UL   /* KEYER_SERVICE_HZ * 1.2 s */
-#define KEYER_FARNSWORTH_C_FACTOR 240000UL /* KEYER_SERVICE_HZ * 60 */
-#define KEYER_FARNSWORTH_S_FACTOR 148800UL /* KEYER_SERVICE_HZ * 37.2 */
-#define KEYER_FARNSWORTH_DIVISOR 19UL
 
-#if KEYER_SERVICE_HZ != 4000U
-#error "The keyer timing factors assume 4000 service calls per second"
-#endif
 #if (KEYER_QUEUE_SIZE == 0U) || ((KEYER_QUEUE_SIZE & (KEYER_QUEUE_SIZE - 1U)) != 0U) || (KEYER_QUEUE_SIZE > 128U)
 #error "KEYER_QUEUE_SIZE must be a power of 2 and at most 128"
 #endif

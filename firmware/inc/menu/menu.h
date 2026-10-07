@@ -2,9 +2,10 @@
 #define MENU_MENU_H
 
 /*
- * Table-driven menu: lists, value edit, the Free Input and placeholder mode screens, the reset-statistics dialog
- * and message screens (references/internal/menu_subsystem_spec.md section 6, references/internal/keyer_spec.md
- * section 6.14, references/internal/ui-ux.md). Call from the main loop only; not reentrant.
+ * Table-driven menu: lists, value edit, the Free Input, Receiving and Sending mode screens, the reset-statistics
+ * dialog and message screens (references/internal/menu_subsystem_spec.md section 6, references/internal/keyer_spec.md
+ * section 6.14, references/internal/training_spec.md section 12.1, references/internal/ui-ux.md). Call from the main
+ * loop only; not reentrant.
  */
 
 #include <stdbool.h>
@@ -14,10 +15,12 @@
 
 #define MENU_SCREEN_LIST 0U
 #define MENU_SCREEN_EDIT 1U
-#define MENU_SCREEN_PLACEHOLDER 2U
+/* 2 is unused (training_spec.md D-T8). */
 #define MENU_SCREEN_DIALOG 3U
 #define MENU_SCREEN_MESSAGE 4U
 #define MENU_SCREEN_FREE_INPUT 5U
+#define MENU_SCREEN_RECEIVING 6U
+#define MENU_SCREEN_SENDING 7U
 
 #define MENU_NODE_MAIN 0U
 #define MENU_NODE_SETTINGS 1U
@@ -42,14 +45,15 @@
 void menu_init(void);
 
 /**
- * Applies @p event. A change of a visible item requests a redraw; BUTTON_EVENT_NONE does nothing. Mode screens
- * act only on long events; the other screens ignore long events.
+ * Applies @p event. A change of a visible item requests a redraw; BUTTON_EVENT_NONE does nothing. Free Input acts
+ * only on long events. Receiving and Sending get every event except a long menu/back, which leaves them. The other
+ * screens ignore long events.
  */
 void menu_handle(button_event_t event);
 
 /**
- * Runs the time-based menu work: the Free Input events once its frame is drawn, and the Tone preview timeout.
- * Main loop, each pass. Reads the tick only in a preview.
+ * Runs the time-based menu work: the mode screen work once its frame is drawn, and the Tone preview timeout.
+ * Main loop, each pass.
  */
 void menu_poll(void);
 

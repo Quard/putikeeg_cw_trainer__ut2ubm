@@ -5,8 +5,8 @@
 #include "eeprom/eeprom.h"
 #include "fake_iap.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -101,18 +101,18 @@ static bool flags_are(uint16_t show_cw_code, uint16_t paddle, uint16_t prosigns)
 static bool is_saved_record_valid(void) {
   const uint8_t* memory = fake_iap_memory();
   return (memory[0] == SETTINGS_MAGIC_0) && (memory[1] == SETTINGS_MAGIC_1) &&
-         (memory[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) && (memory[RECORD_CRC] == settings_crc8(memory, 14U));
+         (memory[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) && (memory[RECORD_CRC] == crc8_compute(memory, 14U));
 }
 
 static void test_vectors_have_valid_crc(void) {
   size_t index;
   for (index = 0U; index < V2_COUNT; ++index) {
-    TEST_ASSERT_EQUAL(v2_vectors[index].bytes[RECORD_CRC], settings_crc8(v2_vectors[index].bytes, 14U));
+    TEST_ASSERT_EQUAL(v2_vectors[index].bytes[RECORD_CRC], crc8_compute(v2_vectors[index].bytes, 14U));
   }
   for (index = 0U; index < V1_COUNT; ++index) {
-    TEST_ASSERT_EQUAL(v1_vectors[index].bytes[RECORD_CRC], settings_crc8(v1_vectors[index].bytes, 14U));
+    TEST_ASSERT_EQUAL(v1_vectors[index].bytes[RECORD_CRC], crc8_compute(v1_vectors[index].bytes, 14U));
   }
-  TEST_ASSERT_EQUAL(v3_record[RECORD_CRC], settings_crc8(v3_record, 14U));
+  TEST_ASSERT_EQUAL(v3_record[RECORD_CRC], crc8_compute(v3_record, 14U));
   TEST_ASSERT_EQUAL(2U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(15U, SETTINGS_RECORD_SIZE);
 }
@@ -232,7 +232,7 @@ static void test_version_2_vectors(void) {
   memcpy(expected, v2_vectors[0].bytes, sizeof(expected));
   expected[RECORD_TONE_LOW] = 0xBCU;
   expected[RECORD_TONE_HIGH] = 0x02U;
-  expected[RECORD_CRC] = settings_crc8(expected, 14U);
+  expected[RECORD_CRC] = crc8_compute(expected, 14U);
   TEST_ASSERT_EQUAL(0, memcmp(expected, fake_iap_memory(), sizeof(expected)));
 }
 
@@ -269,7 +269,7 @@ static void test_version_1_every_flags_value(void) {
     uint8_t record[SETTINGS_RECORD_SIZE];
     memcpy(record, v1_vectors[0].bytes, sizeof(record));
     record[RECORD_FLAGS] = (uint8_t)flags;
-    record[RECORD_CRC] = settings_crc8(record, 14U);
+    record[RECORD_CRC] = crc8_compute(record, 14U);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
     TEST_ASSERT(flags_are(flags & 0x01U, (flags >> 1) & 0x01U, SETTINGS_PROSIGN_BOTH));
     TEST_ASSERT_EQUAL(0U, write_operations());
@@ -292,7 +292,7 @@ static void test_version_1_clamp_and_bad_crc(void) {
   record[9] = 7U;
   record[11] = 1U;
   record[13] = 64U;
-  record[RECORD_CRC] = settings_crc8(record, 14U);
+  record[RECORD_CRC] = crc8_compute(record, 14U);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
   TEST_ASSERT_EQUAL(1000U, settings_get(SETTINGS_ID_TONE_HZ));
   TEST_ASSERT_EQUAL(30U, settings_get(SETTINGS_ID_RX_WPM));
@@ -348,7 +348,7 @@ static void test_other_versions(void) {
     }
     memcpy(record, v2_vectors[2].bytes, sizeof(record));
     record[RECORD_VERSION] = (uint8_t)version;
-    record[RECORD_CRC] = settings_crc8(record, 14U);
+    record[RECORD_CRC] = crc8_compute(record, 14U);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, load(record));
     TEST_ASSERT(are_defaults());
     TEST_ASSERT_EQUAL(0U, write_operations());

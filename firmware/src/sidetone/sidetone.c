@@ -231,18 +231,23 @@ void sidetone_service(void) {
 #endif
 
 #if defined(__SDCC_mcs51)
-/* The ISR-side sidetone entry for the keyer: one SETB or CLR (sidetone_spec.md section 3.10). */
+/* The ISR-side sidetone entry for the keyer and the player: one SETB or CLR (sidetone_spec.md section 3.10). */
 #define KEYER_SIDETONE_ON() (sidetone_is_on_requested = true)
 #define KEYER_SIDETONE_OFF() (sidetone_is_on_requested = false)
 #include "cw/keyer_service.h"
+#define PLAYER_SIDETONE_ON() (sidetone_is_on_requested = true)
+#define PLAYER_SIDETONE_OFF() (sidetone_is_on_requested = false)
+#include "cw/player_service.h"
 
 /*
- * keyer_service() and sidetone_service() are both functions of this file, so SDCC ends the ISR with a plain reti
- * (decisions D-R2-1 and D-K1). The keyer runs first, so its request reaches the envelope in the same call. Hardware
- * clears TF0 at the vector (datasheet section 13.2.1).
+ * keyer_service(), player_service() and sidetone_service() are functions of this file, so SDCC ends the ISR with a
+ * plain reti (decisions D-R2-1, D-K1 and training_spec.md D-T1). At most one of the keyer and the player is
+ * enabled. Both run before the sidetone, so a request reaches the envelope in the same call. Hardware clears TF0
+ * at the vector (datasheet section 13.2.1).
  */
 void sidetone_timer0_isr(void) __interrupt(TIMER0_INTERRUPT) {
   keyer_service();
+  player_service();
   sidetone_service();
 }
 #endif

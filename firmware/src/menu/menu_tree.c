@@ -66,7 +66,6 @@ const menu_message_t MEM_CODE menu_messages[MENU_MESSAGE_COUNT] = {
     {"Display Defaults", "Default contrast and", "backlight are in use."},
 };
 
-const char MEM_CODE menu_text_not_ready[] = "Not ready";
 const char MEM_CODE menu_text_reset_question[] = "Reset statistics?";
 const char MEM_CODE menu_text_no[] = "No";
 const char MEM_CODE menu_text_yes[] = "Yes";

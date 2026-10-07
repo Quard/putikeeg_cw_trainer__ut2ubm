@@ -5,8 +5,8 @@
 #include "eeprom/eeprom.h"
 #include "fake_iap.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -34,10 +34,10 @@ static settings_load_status_t load(const uint8_t* record) {
 }
 
 static void test_record_vectors_have_valid_crc(void) {
-  TEST_ASSERT_EQUAL(default_record[14], settings_crc8(default_record, 14U));
-  TEST_ASSERT_EQUAL(reversed_record[14], settings_crc8(reversed_record, 14U));
-  TEST_ASSERT_EQUAL(default_record_v2[14], settings_crc8(default_record_v2, 14U));
-  TEST_ASSERT_EQUAL(reversed_record_v2[14], settings_crc8(reversed_record_v2, 14U));
+  TEST_ASSERT_EQUAL(default_record[14], crc8_compute(default_record, 14U));
+  TEST_ASSERT_EQUAL(reversed_record[14], crc8_compute(reversed_record, 14U));
+  TEST_ASSERT_EQUAL(default_record_v2[14], crc8_compute(default_record_v2, 14U));
+  TEST_ASSERT_EQUAL(reversed_record_v2[14], crc8_compute(reversed_record_v2, 14U));
 }
 
 /* AC-K49 */
@@ -107,7 +107,7 @@ static void test_upper_flag_bits_ignored(void) {
 
   memcpy(record, default_record, sizeof(record));
   record[RECORD_FLAGS] = 0xFEU;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));

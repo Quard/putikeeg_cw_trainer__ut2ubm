@@ -3,8 +3,8 @@
 #include "eeprom/eeprom.h"
 #include "fake_iap.h"
 #include "settings/settings.h"
-#include "settings_crc.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
@@ -17,7 +17,7 @@ static void put_record(const uint8_t* record) { memcpy(fake_iap_memory(), record
 
 /* Writes @p record with a correct CRC into the fake EEPROM. */
 static void put_record_with_crc(uint8_t* record) {
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   put_record(record);
 }
 
@@ -41,9 +41,9 @@ static size_t write_operations(void) { return fake_iap_command_count(CMD_PROGRAM
 
 static void test_crc_check_value(void) {
   static const uint8_t check[9] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
-  TEST_ASSERT_EQUAL(0xF4U, settings_crc8(check, 9U));
-  TEST_ASSERT_EQUAL(0x03U, settings_crc8(default_record, 14U));
-  TEST_ASSERT_EQUAL(0x00U, settings_crc8(check, 0U));
+  TEST_ASSERT_EQUAL(0xF4U, crc8_compute(check, 9U));
+  TEST_ASSERT_EQUAL(0x03U, crc8_compute(default_record, 14U));
+  TEST_ASSERT_EQUAL(0x00U, crc8_compute(check, 0U));
 }
 
 static void test_empty_eeprom_gives_defaults(void) {
@@ -95,7 +95,7 @@ static void test_bad_records(void) {
 
   memcpy(record, default_record, sizeof(record));
   record[2] = 3U;
-  record[14] = settings_crc8(record, 14U);
+  record[14] = crc8_compute(record, 14U);
   check_load_failure(record, SETTINGS_LOAD_BAD_VERSION);
 
   memcpy(record, default_record, sizeof(record));
@@ -234,7 +234,7 @@ static void test_record_bytes_after_save(void) {
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   memcpy(expected, default_record, sizeof(expected));
   expected[11] = 6U;
-  expected[14] = settings_crc8(expected, 14U);
+  expected[14] = crc8_compute(expected, 14U);
   TEST_ASSERT(expected[14] != default_record[14]);
   TEST_ASSERT_EQUAL(0, memcmp(expected, fake_iap_memory(), sizeof(expected)));
   TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));

@@ -1,9 +1,11 @@
 #ifndef STATS_STATS_H
 #define STATS_STATS_H
 
-/* Training statistics. */
+/* Training statistics: the training levels of the progress record. */
 
-/** Clears the training statistics. Empty hook until statistics exist. */
-void stats_reset(void);
+#include <stdbool.h>
+
+/** Sets every training level back to level 1 and stores it. Returns true when the store succeeded. */
+bool stats_reset(void);
 
 #endif /* STATS_STATS_H */
