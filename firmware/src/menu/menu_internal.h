@@ -14,6 +14,7 @@
 #define MENU_KIND_VALUE 2U
 #define MENU_KIND_CHOICE 3U
 #define MENU_KIND_ACTION 4U
+#define MENU_KIND_ABOUT 5U
 
 #define MENU_MODE_RECEIVING 0U
 #define MENU_MODE_SENDING 1U
@@ -23,6 +24,8 @@
 
 #define MENU_NODE_COUNT 4U
 #define MENU_MESSAGE_COUNT 3U
+#define MENU_MESSAGE_NONE 0xFFU /* no message stored, spec D-A9 */
+#define MENU_ABOUT_LINK_ROWS 3U
 
 typedef const char MEM_CODE* menu_text_t;
 
@@ -59,6 +62,15 @@ extern const char MEM_CODE menu_text_reset_question[];
 extern const char MEM_CODE menu_text_no[];
 extern const char MEM_CODE menu_text_yes[];
 extern const char MEM_CODE menu_text_ok[];
+/* Startup and About texts (ui-ux.md sections 5.17 and 5.18). */
+extern const char MEM_CODE menu_text_brand[];
+extern const char MEM_CODE menu_text_product[];
+extern const char MEM_CODE menu_text_mod[];
+extern const char MEM_CODE menu_text_version_short[];
+extern const char MEM_CODE menu_text_version_long[];
+/* Character count of menu_text_version_short, so the render needs no version.h and no run-time measure. */
+extern const uint8_t MEM_CODE menu_text_version_short_length;
+extern const menu_text_t MEM_CODE menu_about_link_rows[MENU_ABOUT_LINK_ROWS];
 
 /* State. menu_depth is 1..MENU_STACK_DEPTH; level menu_depth - 1 is the top. */
 extern MEM_XDATA uint8_t menu_stack_nodes[MENU_STACK_DEPTH];

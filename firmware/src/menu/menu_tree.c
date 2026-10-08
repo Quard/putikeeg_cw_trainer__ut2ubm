@@ -2,6 +2,7 @@
 
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "version.h"
 
 /* Labels, values and field widths: references/internal/ui-ux.md section 5.3. */
 
@@ -19,6 +20,7 @@ static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Sending", NULL, NULL, MENU_KIND_MODE, MENU_MODE_SENDING, 0U},
     {"Free Input", NULL, NULL, MENU_KIND_MODE, MENU_MODE_FREE_INPUT, 0U},
     {"Settings", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_SETTINGS, 0U},
+    {"About", NULL, NULL, MENU_KIND_ABOUT, 0U, 0U},
 };
 
 static const menu_item_t MEM_CODE menu_settings_items[] = {
@@ -53,7 +55,7 @@ _Static_assert(MENU_ITEM_COUNT(menu_display_items) <= MENU_VISIBLE_ROWS, "Displa
 
 /* Indexed by MENU_NODE_*. */
 const menu_node_t MEM_CODE menu_nodes[MENU_NODE_COUNT] = {
-    {"CW Trainer", menu_main_items, MENU_ITEM_COUNT(menu_main_items), false},
+    {menu_text_product, menu_main_items, MENU_ITEM_COUNT(menu_main_items), false},
     {"Settings", menu_settings_items, MENU_ITEM_COUNT(menu_settings_items), true},
     {"Settings > CW", menu_cw_items, MENU_ITEM_COUNT(menu_cw_items), false},
     {"Settings > Display", menu_display_items, MENU_ITEM_COUNT(menu_display_items), false},
@@ -70,3 +72,26 @@ const char MEM_CODE menu_text_reset_question[] = "Reset statistics?";
 const char MEM_CODE menu_text_no[] = "No";
 const char MEM_CODE menu_text_yes[] = "Yes";
 const char MEM_CODE menu_text_ok[] = "OK";
+
+/* Startup and About texts: references/internal/ui-ux.md sections 5.17 and 5.18. */
+
+const char MEM_CODE menu_text_brand[] = "Putikeeg";
+const char MEM_CODE menu_text_product[] = "CW Trainer";
+const char MEM_CODE menu_text_mod[] = "mod by UT2UBM";
+const char MEM_CODE menu_text_version_short[] = "v" FIRMWARE_VERSION;
+const char MEM_CODE menu_text_version_long[] = "Version " FIRMWARE_VERSION;
+const uint8_t MEM_CODE menu_text_version_short_length = (uint8_t)(sizeof(menu_text_version_short) - 1U);
+
+/*
+ * "Version " + version ends in column 24 at most, "v" + version uses at most 18 cells (UX-63). The check uses the
+ * array, because SDCC puts a string literal in sizeof() into code memory.
+ */
+_Static_assert(sizeof(menu_text_version_short) - 2U <= 17U,
+               "the version must have at most 17 characters (ui-ux.md UX-63)");
+
+/* The link https://github.com/Quard/putikeeg_cw_trainer__ut2ubm, cut into rows of at most 25 characters. */
+const menu_text_t MEM_CODE menu_about_link_rows[MENU_ABOUT_LINK_ROWS] = {
+    "https://github.com/Quard/",
+    "putikeeg_cw_trainer__",
+    "ut2ubm",
+};

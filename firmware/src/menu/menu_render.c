@@ -1,5 +1,6 @@
 #include <stddef.h>
 
+#include "gfx/fonts.h"
 #include "gfx/gfx.h"
 #include "koch/koch.h"
 #include "lcd/lcd_fb.h"
@@ -38,6 +39,26 @@ _Static_assert((MENU_MODE_SPEED_ID(MENU_MODE_RECEIVING) == SETTINGS_ID_RX_WPM) &
 #define BUTTON_OK_FIRST_CELL 10U
 #define BUTTON_SHORT_CELLS 4U /* No, OK */
 #define BUTTON_LONG_CELLS 5U  /* Yes */
+
+/*
+ * Startup screen (ui-ux.md section 5.17.1). The 5 x 8 texts are on grid cells: "Putikeeg" (1, 16), "mod by UT2UBM"
+ * (4, 1) and the version ends in column 23. Only the 8 x 16 line uses pixel positions.
+ */
+#define SPLASH_BRAND_ROW 1U
+#define SPLASH_BRAND_COLUMN 16U
+#define SPLASH_MOD_ROW 4U
+#define SPLASH_MOD_COLUMN 1U
+#define SPLASH_VERSION_ROW 7U
+#define SPLASH_VERSION_END_COLUMN 24U /* the column after the last character */
+#define SPLASH_PRODUCT_X 7
+#define SPLASH_PRODUCT_Y 16
+
+/* About screen (ui-ux.md section 5.18.2). */
+#define ABOUT_NAME_ROW 1U
+#define ABOUT_PRODUCT_COLUMN 9U /* after "Putikeeg " */
+#define ABOUT_MOD_ROW 2U
+#define ABOUT_VERSION_ROW 3U
+#define ABOUT_LINK_FIRST_ROW 5U
 
 static MEM_XDATA char value_text[VALUE_TEXT_SIZE];
 static MEM_XDATA uint8_t value_length;
@@ -198,12 +219,43 @@ static void draw_message(void) {
   draw_button(BUTTON_OK_FIRST_CELL, BUTTON_SHORT_CELLS, menu_text_ok, true);
 }
 
+static void draw_plain(menu_text_t text, MEM_XDATA uint8_t column) { draw_text(column, text, GFX_TEXT_NORMAL); }
+
+/* Only CW Trainer uses the 8 x 16 font; every other screen expects the 5 x 8 font. */
+static void draw_splash(void) {
+  render_row = SPLASH_BRAND_ROW;
+  draw_plain(menu_text_brand, SPLASH_BRAND_COLUMN);
+  render_row = SPLASH_MOD_ROW;
+  draw_plain(menu_text_mod, SPLASH_MOD_COLUMN);
+  render_row = SPLASH_VERSION_ROW;
+  draw_plain(menu_text_version_short, (uint8_t)(SPLASH_VERSION_END_COLUMN - menu_text_version_short_length));
+  (void)gfx_set_font(FONTS_ID_8X16);
+  (void)gfx_draw_text(SPLASH_PRODUCT_X, SPLASH_PRODUCT_Y, menu_text_product, GFX_TEXT_NORMAL);
+  (void)gfx_set_font(FONTS_ID_5X8);
+}
+
+static void draw_about(void) {
+  render_row = ABOUT_NAME_ROW;
+  draw_plain(menu_text_brand, 0U);
+  draw_plain(menu_text_product, ABOUT_PRODUCT_COLUMN);
+  render_row = ABOUT_MOD_ROW;
+  draw_plain(menu_text_mod, 0U);
+  render_row = ABOUT_VERSION_ROW;
+  draw_plain(menu_text_version_long, 0U);
+  for (render_index = 0U; render_index < MENU_ABOUT_LINK_ROWS; ++render_index) {
+    render_row = (uint8_t)(ABOUT_LINK_FIRST_ROW + render_index);
+    draw_plain(menu_about_link_rows[render_index], 0U);
+  }
+}
+
 void menu_render(void) {
   gfx_fill_rect(0, 0, (int16_t)LCD_WIDTH, (int16_t)LCD_HEIGHT, LCD_PIXEL_OFF);
   if ((menu_current_screen == MENU_SCREEN_LIST) || (menu_current_screen == MENU_SCREEN_EDIT)) {
     draw_list();
   } else if (menu_current_screen == MENU_SCREEN_MESSAGE) {
     draw_message();
+  } else if (menu_current_screen == MENU_SCREEN_SPLASH) {
+    draw_splash();
   } else if (menu_current_screen == MENU_SCREEN_RECEIVING) {
     receiving_render();
   } else if (menu_current_screen == MENU_SCREEN_SENDING) {
@@ -215,6 +267,8 @@ void menu_render(void) {
       draw_centered(menu_text_reset_question);
       draw_button(BUTTON_NO_FIRST_CELL, BUTTON_SHORT_CELLS, menu_text_no, menu_current_choice == MENU_DIALOG_NO);
       draw_button(BUTTON_YES_FIRST_CELL, BUTTON_LONG_CELLS, menu_text_yes, menu_current_choice == MENU_DIALOG_YES);
+    } else if (menu_current_screen == MENU_SCREEN_ABOUT) {
+      draw_about();
     }
   }
   menu_is_redraw_pending = false;

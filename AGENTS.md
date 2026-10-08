@@ -27,6 +27,19 @@ These rules are mandatory for every firmware change.
 - `firmware/build.sh` builds the firmware. Use it for every build.
 - `firmware/flash.sh` downloads the firmware into the MCU.
 
+### Firmware version
+
+- `firmware/VERSION` holds the firmware version in the format `MAJOR.MINOR.PATCH` (semantic versioning). CMake
+  makes the `FIRMWARE_VERSION` macro from it. CI and scripts read the file as it is.
+- After every firmware change, ask the user whether to change the version. Propose the part to increment:
+  - PATCH: a fix with no new function.
+  - MINOR: a new function or a changed behavior.
+  - MAJOR: only on the decision of the user.
+
+  Reset the lower parts to 0.
+- To change the version, edit `firmware/VERSION` only. Then add the new version to `docs/release_notes.md`. Do not
+  write the version number in any other file.
+
 ### Software SPI for the LCD
 
 The PCB connects the LCD to P2.0 to P2.4 (see `references/internal/components_and_wiring.md`). These pins do not

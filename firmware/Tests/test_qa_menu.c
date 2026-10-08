@@ -18,6 +18,7 @@
 #include "menu_internal.h"
 #include "modes/training.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 
 #define CMD_ERASE 3U
@@ -66,6 +67,7 @@ static void start_empty(void) {
   fake_iap_clear_counters();
   gfx_init();
   menu_init();
+  menu_test_skip_splash();
   menu_render();
 }
 
@@ -242,7 +244,7 @@ static void test_random_walk_invariants(void) {
       TEST_ASSERT(menu_node() < MENU_NODE_COUNT);
       TEST_ASSERT(menu_cursor() < menu_nodes[menu_node()].item_count);
       TEST_ASSERT(menu_screen() <= MENU_SCREEN_SENDING);
-      TEST_ASSERT(menu_screen() != 2U);
+      TEST_ASSERT(menu_screen() != MENU_SCREEN_SPLASH);
       TEST_ASSERT(menu_dialog_choice() <= MENU_DIALOG_YES);
       if (menu_screen() == MENU_SCREEN_EDIT) {
         TEST_ASSERT((item_under_cursor()->kind == MENU_KIND_VALUE) || (item_under_cursor()->kind == MENU_KIND_CHOICE));

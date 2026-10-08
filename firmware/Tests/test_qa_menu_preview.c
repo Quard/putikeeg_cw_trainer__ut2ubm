@@ -20,6 +20,7 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 #include "util/crc8.h"
 
@@ -63,6 +64,9 @@ static void qa_cw_tone(uint16_t tone_hz) {
   fake_tick_set_advance_per_read(0U);
   (void)settings_load();
   menu_init();
+  menu_test_skip_splash();
+  /* Receiving -> About -> Settings: About is the last main menu item. */
+  menu_handle(BUTTON_EVENT_PREV);
   menu_handle(BUTTON_EVENT_PREV);
   menu_handle(BUTTON_EVENT_ENTER);
   menu_handle(BUTTON_EVENT_ENTER);

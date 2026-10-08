@@ -25,6 +25,8 @@ Status of the content:
   - Long presses (section 6.6) and the other button input.
   - The Reset Statistics dialog. It sets the training level of every mode and speed back to level 1.
   - The live effect of contrast and backlight, and the Tone preview (section 6.5).
+  - The startup screen at power-on (section 5.17) and the `About` screen of the main menu (section 5.18), both with
+    the firmware version.
 - Out of scope in this version: statistics other than the training levels, any sound other than the Tone preview,
   the keyer sidetone (Free Input and Sending) and the CW playback in Receiving. A level above the earned level
   cannot be selected (section 5.16).
@@ -51,6 +53,7 @@ Status of the content:
 | `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. Section 17: the prosign display setting (decoder codes, `morse_format()`, flags bits 2-3, record layout version 2). It refers to sections 5.9, 5.10, 6.6 and 6.7 of this file. |
 | `references/internal/paddle_keyer_research.md`, `paddle_keyer_howtoimplement_research.md` | Iambic A/B behaviour, squeeze release, entry mask, straight-key mode. |
 | Plan "Koch training modes Receiving and Sending" (approved by the user, 2026-10) | User decisions for the training modes: session sizes, pass rule, level model, Koch order, word length, attempts, Receiving input, progress key, button order on the case. |
+| Plan "Firmware version, startup screen and About item" (approved by the user, 2026-10-08) | User decisions: the startup screen mockup and its time. The plan gave 2 s. A later user decision (2026-10-08) changed it to 5 s. Any button skips it. The `About` item after `Settings` and its text rows. The version `0.1.0` comes from the build macro `FIRMWARE_VERSION` (file `firmware/VERSION`). |
 | `references/internal/training_spec.md` (owner `architector`) | Interface contract of the training modes: Koch tables, level model, item generation, player, progress record, session engine. This file gives the visible and audible behaviour. If the two differ, report it to `architector`. |
 | `firmware/inc/buttons/buttons.h` | Button events: press, repeat (`prev`, `next`), long (`menu/back`, `prev`, `next`, and `enter` in tap mode only, `training_spec.md` D-T28). There is no release event. In tap mode, the press event comes at the release. |
 | `firmware/inc/cw/keyer.h`, `firmware/inc/cw/morse.h` | Keyer events (DIT and DAH at the end of a mark, CHAR_GAP, WORD_GAP, OVERFLOW). Prosign codes and `morse_format()` texts. |
@@ -153,6 +156,8 @@ A glyph drawn with `gfx_draw_text()` at the cell top `y` uses these cell rows (`
   cursor move dirties two pages and a value change dirties one page.
 - Exception: the item line of the training screens uses the 8 x 16 font in pixel positions, not on this grid. It
   fills pages 3 and 4 (section 5.11.2).
+- Exception: the startup screen has no title bar, and its 8 x 16 line `CW Trainer` is in pixel positions. It fills
+  pages 2 and 3 (section 5.17).
 - Text never wraps. A string that is too long is cut at column 24. All strings in this file fit. A cut is a defect.
   The only exception is the decoded text in Free Input, which wraps per character (section 5.9).
 
@@ -211,7 +216,8 @@ not exist on this display. The band is a shape, not a shade.
 - Value item: value right-aligned, last character in column 22.
 - Submenu item: `>` in column 24, no value.
 - Mode item: `Receiving` and `Sending` show the earned level `L<n>`, right-aligned, last character in column 22
-  (section 5.16.6, UX-57). `Free Input` and the action item: label only, no marker.
+  (section 5.16.6, UX-57). `Free Input`, `About` and the action item: label only, no marker. The `>` marker means
+  "opens a list" (UX-61).
 - Selected row: highlight band over x 0-127. The label, value and marker of that row are inverted.
 - Rows below the last item are blank (all pixels off).
 
@@ -226,6 +232,7 @@ the value changes.
 | Main | `Sending` | mode, read-only level | `L1` .. `L65535`: the earned level at `TX Speed` (section 5.16.6) | 6 | `L1` |
 | Main | `Free Input` | mode | - | - | - |
 | Main | `Settings` | submenu | - | - | - |
+| Main | `About` | info screen (section 5.18) | - | - | - |
 | Settings | `CW` | submenu | - | - | - |
 | Settings | `Show CW Code` | choice | `Off`, `On` | 3 | `On` |
 | Settings | `Prosigns` | choice | `Punctuation`, `Prosign`, `Both` | 11 | `Both` (user) |
@@ -291,9 +298,9 @@ Examples at the limits:
 
 ### 5.5 Scrolling (decision UX-5)
 
-No list in this version has more than 7 items (main 4, Settings 6, CW 7, Display 2), so no list scrolls now. CW
-uses all 7 rows. Settings uses 6 rows, and row 7 stays blank. An eighth CW item or an eighth Settings item needs
-this scroll rule.
+No list in this version has more than 7 items (main 5, Settings 6, CW 7, Display 2), so no list scrolls now. CW
+uses all 7 rows. Settings uses 6 rows, and row 7 stays blank. The main menu uses 5 rows, and rows 6 and 7 stay
+blank. An eighth CW item or an eighth Settings item needs this scroll rule.
 The rule applies to later lists:
 
 - The window shows 7 items. Minimum movement: the window moves only by the rows that keep the cursor inside it.
@@ -1467,7 +1474,7 @@ A-L3 match D-T9, D-T36 and D-T38. If the interface differs, report it to `archit
 #### 5.16.6 Main menu level (UX-57)
 
 `Receiving` and `Sending` show the earned level at the current speed setting: Receiving at `RX Speed`, Sending at
-`TX Speed`. `Free Input` and `Settings` show nothing new.
+`TX Speed`. `Free Input`, `Settings` and `About` show nothing new.
 
 ```
     0         1         2
@@ -1477,7 +1484,7 @@ A-L3 match D-T9, D-T36 and D-T38. If the interface differs, report it to `archit
 2  |Sending              L1  | 'L1' in columns 21-22, normal video
 3  |Free Input               |
 4  |Settings                >|
-5  |                         |
+5  |About                    | no marker: it opens a screen, not a list (UX-61)
 6  |                         |
 7  |                         |
 ```
@@ -1496,9 +1503,178 @@ A-L3 match D-T9, D-T36 and D-T38. If the interface differs, report it to `archit
   `L1` although the user trained at another speed. The level of the other speed stays stored and shows again when
   the user sets that speed back. The user manual explains it (`technical-writer`).
 
+### 5.17 Startup screen (decision UX-58 to UX-60, UX-63)
+
+Purpose: each power-on shows the product name, the mod and the firmware version for 5 s. Then the main menu shows.
+The user can skip the screen with any button. Source: the plan "Firmware version, startup screen and About item"
+and the mockup of the user (2026-10-08).
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |                         | blank
+1  |                Putikeeg | columns 16-23, right-aligned to column 23
+2  | CW Trainer              | 8 x 16 font, cell top-left (7, 16), pages 2 and 3
+3  |                         |   (the 8 x 16 line is 80 px wide: this grid drawing is illustrative)
+4  | mod by UT2UBM           | columns 1-13
+5  |                         | blank
+6  |                         | blank
+7  |                  v0.1.0 | right-aligned to column 23: columns 18-23 for "v0.1.0"
+```
+
+#### 5.17.1 Layout (UX-58)
+
+All text is in normal video. The screen has no title bar and no highlight band.
+
+| String | Font | Cell top-left (x, y) | Cells and pixels | LCD page | Alignment |
+| --- | --- | --- | --- | --- | --- |
+| `Putikeeg` | 5 x 8 | (82, 8) | row 1, columns 16-23, x 82-121 | 1 | Right: the last character in column 23. |
+| `CW Trainer` | 8 x 16 (`FONTS_ID_8X16`) | (7, 16) | 10 cells of 8 px, x 7-86, y 16-31 | 2 and 3 | Left: x 7. |
+| `mod by UT2UBM` | 5 x 8 | (7, 32) | row 4, columns 1-13, x 7-71 | 4 | Left: column 1. |
+| `v` + `FIRMWARE_VERSION` | 5 x 8 | (122 - 5n, 56), `n` = length of the text. `v0.1.0`: (92, 56) | row 7, columns `24 - n` to 23 | 7 | Right: the last character in column 23 (UX-63). |
+
+Pixel facts (from a decode with `firmware/Tests/tools/gen_font_golden.py`, section 3.3.1):
+
+- `Putikeeg`: ink in y 8-15 (`k` uses cell row 0, `g` uses cell row 7), x 82-120.
+- `CW Trainer`: ink in y 18-27 (cell rows 2-11), x 7-85. The text has no descender. So y 16-17 and y 28-31 are off.
+- `mod by UT2UBM`: ink in y 32-39 (`d` and `b` use cell row 0, `y` uses cell row 7), x 7-71.
+- `v0.1.0`: ink in y 57-62, x 92-120.
+- The left ink edge is x 7 on both left lines. The right ink edge is x 120 on both right lines. So the blank margin
+  is 7 px on both sides (x 0-6 and x 121-127).
+- Pages 0, 5 and 6 have all pixels off. Pixels with x = 0, 1 and 127 are off in all rows.
+- The 8 x 16 line fills whole pages 2 and 3, as the item line of the training screens fills pages 3 and 4
+  (section 5.11.2).
+
+The screen does not change while it shows: no countdown, no animation, no sound. It is drawn once.
+
+#### 5.17.2 Time and skip (UX-59)
+
+| Name | Value | Use |
+| --- | --- | --- |
+| `MENU_SPLASH_MS` | 5000 ms | The time from `menu_init()` to the end of the startup screen. Tests can set another value. User decision 2026-10-08 (UX-59). |
+
+- The time counts on the 1 ms tick from `menu_init()`. The screen ends at the first `menu_poll()` that sees an
+  elapsed time of 5000 ms or more. Tolerance: +/- 2 ms against the tick, plus one main-loop pass.
+- Skip: the first button event of any kind ends the screen at once. This is a press, a repeat or a long event of
+  `menu/back`, `prev`, `next` or `enter`. The paddle tip is `enter` here.
+- The skip event does nothing else. It does not move the cursor, open an item or close the message that comes next.
+- The events after the skip event act on the next screen as usual. If the user keeps `next` held, its repeats from
+  400 ms move the cursor in the main menu, the same as in every list. A held `prev` stops on `Receiving` (no wrap on
+  a repeat, section 6.3). The long event of the hold does nothing in a list.
+- A button that is held at power-on gives no event until the user releases it and presses it again (section 6.2).
+  So it does not skip the screen. This includes the held `menu/back` of the display recovery gesture (section 8.1).
+- The keyer is off. Tap mode is off. Nothing sounds. A plug insertion can give one `enter` (D-5). It only skips the
+  screen.
+
+End of the screen:
+
+- Normal start: the main menu with the cursor on `Receiving`. The main menu is drawn in full.
+- Display recovery start: the `Display Defaults` message (section 5.8, UX-60). When the user closes the message, the
+  main menu shows.
+
+#### 5.17.3 Display recovery start order (UX-60)
+
+The order is: the startup screen, then the `Display Defaults` message, then the main menu. Reasons:
+
+- The default contrast and backlight apply before the first frame (section 8.1). So the startup screen is the first
+  readable frame, and it shows the user that the recovery worked.
+- The message must stay until the user closes it. If the message came first, the startup screen comes after the
+  `OK` and delays the main menu by 5 s.
+- Every start has the same first screen. One sequence is simpler to test and to explain.
+- The skip event does nothing else (UX-59). So a press that skips the startup screen never closes the message by
+  accident. The user always sees the message.
+
+Rejected: the message first and then the startup screen (5 s of delay after the user closed the message). No startup
+screen on a recovery start (two start sequences for a rare path, and the user does not see the version).
+
+#### 5.17.4 Version text (UX-63)
+
+- `FIRMWARE_VERSION` is `MAJOR.MINOR.PATCH`: digits and dots only, ASCII (UX-11). It is `0.1.0` in this version.
+- Maximum length: 17 characters. The `About` row `Version ` + version then ends in column 24 at most (section 5.18).
+  The startup text `v` + version is 2 to 18 cells, from column 6 at the earliest.
+- Start column of the startup text: `24 - n`. Examples: `v0.1.0` (n = 6) column 18, x 92. `v10.12.3` (n = 8)
+  column 16, x 82. 18 cells: column 6, x 32.
+- A longer version must stop the build. A cut text on the glass is a defect (section 4.1). `architector` decides
+  where the build checks the length (the CMake check of `firmware/VERSION` or a compile-time check in C).
+- Both screens build the text at compile time. The width is a constant, so the right alignment needs no run-time
+  measure.
+
+Reason for column 23 on the startup screen, not column 24 or 22: the screen has no title bar and no value fields.
+Column 1 on the left and column 23 on the right give the same blank margin on both sides. The mockup of the user
+also has blank space on both sides: a blank cell on the left of the left lines, and blank cells on the right of the
+right lines.
+
+### 5.18 About screen (decision UX-61, UX-62)
+
+Purpose: the user can read the name, the mod, the firmware version and the project link at any time. The text
+comes from the layout that the user chose (2026-10-08).
+
+#### 5.18.1 `About` item in the main menu (UX-61)
+
+- The fifth item of the main menu, after `Settings`, in row 5 (section 5.16.6). Label `About`. Kind: info screen.
+- No marker and no value. The `>` marker means "opens a list" (section 5.2). `Free Input`, `Receiving`, `Sending`
+  and `Reset Statistics` open a screen and have no marker. `About` also opens a screen.
+- Cursor: `prev` on `Receiving` wraps to `About`. `next` on `About` wraps to `Receiving`. A held `next` stops on
+  `About` (section 6.3).
+
+Rejected: `>` on the `About` row (it promises a list). A `...` suffix (no other item uses it).
+
+#### 5.18.2 Layout (UX-62)
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |About                    | title bar, inverted
+1  |Putikeeg CW Trainer      | columns 0-18
+2  |mod by UT2UBM            | columns 0-12
+3  |Version 0.1.0            | columns 0-12: "Version " + FIRMWARE_VERSION
+4  |                         | blank
+5  |https://github.com/Quard/| columns 0-24
+6  |putikeeg_cw_trainer__    | columns 0-20
+7  |ut2ubm                   | columns 0-5
+```
+
+| Row | Text | Cell top-left (x, y) | Columns | Video |
+| --- | --- | --- | --- | --- |
+| 0 | `About` | (2, 0) | 0-4 | Inverted title bar, x 0-127 (section 5.1). |
+| 1 | `Putikeeg CW Trainer` | (2, 8) | 0-18 | Normal. |
+| 2 | `mod by UT2UBM` | (2, 16) | 0-12 | Normal. |
+| 3 | `Version ` + `FIRMWARE_VERSION` | (2, 24) | 0-12 for `0.1.0`, at most 0-24 (UX-63) | Normal. |
+| 4 | none | - | - | All pixels off. |
+| 5 | `https://github.com/Quard/` | (2, 40) | 0-24 | Normal. |
+| 6 | `putikeeg_cw_trainer__` | (2, 48) | 0-20 | Normal. |
+| 7 | `ut2ubm` | (2, 56) | 0-5 | Normal. |
+
+- The text is left-aligned in column 0, not centered as on the message screen. Reason: the link uses three rows.
+  One left edge makes the three rows read as one text, and rows 1-3 keep the same edge.
+- The link is `https://github.com/Quard/putikeeg_cw_trainer__ut2ubm`. It breaks after column 24 and after `__`.
+  No hyphen is added, because a hyphen changes the link. The user manual gives the full link
+  (`technical-writer`).
+- The screen has no highlight band and no `OK` button. It has no choice, and the link uses the rows that a button
+  needs. The title tells the user where they are. `enter` and `menu/back` close the screen, the same as on the
+  message screen.
+- The text is static. When the screen opens, it is drawn in full. After that, it does not change.
+- Pixels with x = 0, 1 and 127 are off in rows 1-7.
+- `Putikeeg CW Trainer` and `mod by UT2UBM` are the same names as on the startup screen.
+
+#### 5.18.3 Controls (UX-62)
+
+| Event | Effect |
+| --- | --- |
+| `enter` press (also the paddle tip) | The main menu, cursor on `About`. |
+| `menu/back` press | Same as `enter`. |
+| `prev`, `next`: press and repeat | Nothing. |
+| Long `menu/back`, `prev`, `next` | Nothing. |
+| Long `enter` | No event (tap mode off). |
+
+- "Nothing" means the same as in section 6.1: no state change, no redraw, no dirty page, no sound.
+- The keyer is off. Nothing sounds on this screen.
+- The `enter` press that opens `About` acts at the press. Its release gives no event. So the screen stays open until
+  the next press.
+
 ## 6. Control mapping
 
-### 6.1 Per state (decision plan + UX-9, UX-23, UX-24)
+### 6.1 Per state (decision plan + UX-9, UX-23, UX-24, UX-59, UX-62)
 
 `press` = a debounced press event. `repeat` = an auto-repeat event (prev and next only, section 6.2). `long` = a
 long-press event (`menu/back`, `prev` and `next`, and `enter` in tap mode only, section 6.6). Tap mode is on only in
@@ -1509,7 +1685,7 @@ Short presses and repeats:
 
 | State | `prev` press | `next` press | `prev`/`next` repeat | `enter` | `menu/back` |
 | --- | --- | --- | --- | --- | --- |
-| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
+| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. Info screen: open the `About` screen (section 5.18). | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
 | List, edit | Decrease the value by one step, or the previous choice. Stops at the limit. Applies at once. | Increase, or the next choice. Stops at the limit. Applies at once. | Same as press, stops at the limit | Leave edit mode, keep the value. Cursor stays on the row. | Leave edit mode, keep the value (same as `enter`). Does not leave the list. |
 | Placeholder (no screen uses it in this version) | nothing | nothing | nothing | nothing | nothing |
 | Free Input | nothing | nothing | nothing | No event. The keyer owns P3.2: the `enter` button keys like the tip contact (section 6.7). | nothing |
@@ -1519,6 +1695,8 @@ Short presses and repeats:
 | Training start screen and session end screen (both modes, section 5.16.4) | Selected level down by one. Stops at L1. | Selected level up by one. Stops at the earned level. | Same as press, stops at the limit (no wrap) | Start a session at the selected level, at the press. The paddle tip does the same. | Main menu, cursor on the mode item, at the press. |
 | Dialog | Focus `No` (no wrap) | Focus `Yes` (no wrap) | Same as press | Activate the focused button. `No`: back to Settings. `Yes`: reset statistics, show the message screen. | Same as `No`. |
 | Message | nothing | nothing | nothing | `Statistics reset`: back to Settings, cursor on `Reset Statistics`. `Display Defaults`: the main menu, cursor on `Receiving`. | Same as `enter`. |
+| Startup screen (section 5.17) | End the startup screen. Nothing else. | Same as `prev`. | Same as a press: end the startup screen, nothing else. | End the startup screen, at the press. Nothing else. The paddle tip does the same. | Same as `enter`. |
+| About (section 5.18) | nothing | nothing | nothing | The main menu, cursor on `About`. The paddle tip does the same. | Same as `enter`. |
 
 Long presses:
 
@@ -1531,6 +1709,8 @@ Long presses:
 | Receiving: start pause, result, blank moment | Same as above. | nothing | nothing | nothing |
 | Sending: all states but the end screen | Stop the keyer. Drop the session. Main menu, cursor on `Sending` (section 6.9). | no event (the keyer owns P3.2) | nothing | nothing |
 | Training start screen and session end screen (both modes) | Nothing: the press of the same hold already opened the main menu. | no event (tap mode off) | nothing (the repeats of the hold act) | nothing (the repeats of the hold act) |
+| Startup screen | End the startup screen. Nothing else. In practice, the press of the same hold already ended it. | no event (tap mode off) | Same as long `menu/back`. | Same as long `menu/back`. |
+| About | nothing | no event (tap mode off) | nothing | nothing |
 
 "nothing" means: no state change, no redraw, no dirty page, no sound. In a list, the short press already acted on the
 press edge. The long event of the same press must not act again (UX-24).
@@ -1550,11 +1730,14 @@ Other rules:
   effective speed.
 - A list opened from its parent always starts with the cursor on its first item. Going back restores the cursor of
   the parent on the item that was opened.
-- After power-on the main menu shows with the cursor on `Receiving`. A display recovery start shows the
-  `Display Defaults` message first (section 8.1).
+- After power-on the startup screen shows (section 5.17). Then the main menu shows with the cursor on `Receiving`.
+  On a display recovery start, the `Display Defaults` message comes between the two (section 8.1, UX-60).
+- After the startup screen ends, the events of the same hold act on the next screen. Example: the repeats of a held
+  `next` move the main menu cursor (UX-59).
 - There is no inactivity timeout anywhere in this version. Free Input, the training start screen, a training session
   and the session end screen stay open until the user leaves. The Tone preview timeout (section 6.5) is not a menu timeout: it ends the
   sound and changes no screen. The training delays (section 6.10) are steps of a session, not timeouts.
+  The 5 s of the startup screen (section 5.17) are a step of the start-up, not a timeout.
 - Long presses act only in the mode screens (section 6.6). Lists, edit mode, the dialog and the message screen keep
   their short-press behaviour without a change.
 - Short presses act in the mode screens only in Receiving (the keyboard, UX-43), on the training start screen and on
@@ -1955,19 +2138,25 @@ with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one ma
 | Level step (`prev`, `next`, press or repeat) | The selector number and the description change. On the start screen, the header level and item count change too. No sound. | UX-55 |
 | Level at a limit (L1, or the earned level) | The `<` or `>` marker disappears. More presses change nothing. | UX-54 |
 | Main menu | `Receiving` and `Sending` show their earned level `L<n>` at the current speed. | UX-57 |
+| Power-on | The startup screen: `Putikeeg`, `CW Trainer` in the large font, `mod by UT2UBM` and the version. After 5 s, the main menu. No sound. | UX-58, UX-59 |
+| Button during the startup screen | The main menu at once (or the `Display Defaults` message on a recovery start). The button has no other effect. | UX-59, UX-60 |
+| `About` | The `About` screen with the name, the mod, the version and the link. `enter` or `menu/back` goes back to the main menu with the cursor on `About`. | UX-61, UX-62 |
 | Response time | Target: the change is visible within 100 ms after the press event (unverified, D-6). A redraw can be slower than 80 ms during auto-repeat. Then the screen skips an intermediate value, but no step is lost. The value advances once per event, and the last value shows within 100 ms after release. | UX-16 |
 
 ## 8. Start-up, faults and recovery
 
+Every power-on starts with the startup screen (section 5.17, F-24). In this table, "the main menu" after a power-on
+means: the main menu after the startup screen.
+
 | ID | Condition | What the user sees | Device behaviour | Recovery |
 | --- | --- | --- | --- | --- |
-| F-1 | First power-on, empty EEPROM | The main menu, no message. Settings show the defaults. | Defaults load. Nothing is written until the user changes a value and leaves Settings. | None needed. |
+| F-1 | First power-on, empty EEPROM | The startup screen, then the main menu, no message. Settings show the defaults. | Defaults load. Nothing is written until the user changes a value and leaves Settings. | None needed. |
 | F-2 | Record with a wrong magic, a layout version other than 1 or 2, or a wrong CRC (for example a power loss during a save) | Same as F-1, no message. | Defaults load. | The user sets the values again. |
 | F-3 | Valid record with a value out of range | The clamped value. | Each field is clamped. An effective speed above its base speed becomes the base speed. | None needed. |
 | F-4 | Power loss while inside Settings | After power-on, the values from before the visit. | Unsaved changes are lost (plan). | The user sets the values again. |
 | F-5 | Contrast set to a value that makes the screen unreadable | Blank or black screen. | The value applies at once. If the user leaves Settings, it is saved. | During the edit: press the opposite button. After a save: the display recovery start (section 8.1). |
 | F-6 | Backlight `Off` in the dark | No light. | Level 0 is a valid setting. | Same as F-5. |
-| F-8 | `menu/back` held at start-up | The message screen `Display Defaults`, then the main menu. | Section 8.1. | - |
+| F-8 | `menu/back` held at start-up | The startup screen, the message screen `Display Defaults`, then the main menu. | Section 8.1, UX-60. | - |
 | F-7 | EEPROM write fails (read-back mismatch, CMD_FAIL or low supply) | The message screen: title `Settings`, text `Not saved`, `OK`. `enter` or `menu/back` closes it to the main menu with the cursor on `Settings`. | `eeprom_write` reads back each byte. The save stops with `SETTINGS_SAVE_FAILED`. The values stay active. The magic is written last, so a stopped save leaves no valid record (`menu_subsystem_spec.md` sections 3.5 and 3.6). | The next exit from Settings tries the save again. If the user switches off first, the next power-on uses the defaults (F-2). |
 | F-9 | A mono plug is inserted while Free Input is open (the ring closes after the mode start). | `Straight`: a tone without end and no new character. Iambic: a stream of dahs (`Normal`) or dits (`Reversed`) and no new character until the plug is pulled. Then `*` shows. | The keyer sees a closed contact. The entry mask works only at the mode start. | Long `menu/back`, then open Free Input again: the mask now ignores the ring. The manual says: insert the plug before you open Free Input. No stuck-key timeout (UX-37). |
 | F-10 | A plug is inserted or removed while Free Input is open. | A short tone and maybe one extra character (`E`, `T` or `*`). | A short contact closure is a real element for the keyer. | Long `prev` clears the screen. |
@@ -1984,6 +2173,8 @@ with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one ma
 | F-21 | A plug is inserted or removed in Sending, or a mono plug closes the ring after the start. | As F-9 and F-10: a tone, extra elements, maybe a wrong character that uses an attempt. On the start screen and the end screen, a tip closure can start a session at the selected level. | The keyer sees a real contact. | Long `menu/back` and a new start. The manual says: insert the plug first. |
 | F-22 | Volume at its minimum in Receiving. | The screen works, but the playback is silent. | The player plays as usual. | Turn up the volume (C-7), then a long `enter` replays the item. |
 | F-23 | `Reset Statistics` `Yes`, and the progress save fails. | The message `Not saved` (section 5.8) in place of `Statistics reset`. | If the erase failed, the stored record keeps the old levels. If a write after the erase failed, no valid record remains, and after a power cycle every level is 1 (F-17). | `OK` goes back to Settings. The user can try the reset again. After a power cycle, the stored levels apply, or level 1 everywhere. |
+| F-24 | Every power-on (UX-58, UX-59) | The startup screen for 5 s, then the main menu with the cursor on `Receiving`. On a recovery start, the `Display Defaults` message comes between the two (F-8, UX-60). | Settings and progress load before the first frame. The screen is drawn once. Nothing is written to the EEPROM. The keyer is off, nothing sounds. | Any button press skips the screen. The press does nothing else. |
+| F-25 | `prev`, `next`, `enter` or the paddle tip is held closed at power-on (for example a key that is closed in the socket). | The startup screen for the full 5 s, then the main menu. The held contact does not skip the screen. | The held button gives no event until it is released and pressed again (section 6.2). | Release the button or open the key. The next press acts as usual. |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
@@ -2021,9 +2212,14 @@ Effect:
 
 What the user sees:
 
-1. The message screen `Display Defaults` / `Default contrast and` / `backlight are in use.` / `OK` (section 5.8).
-2. The held `menu/back` gives no event (section 6.2). After the release, `enter` or `menu/back` closes the message.
+1. The startup screen (section 5.17), already with the default contrast and backlight. It ends after 5 s, or at the
+   first new button press. The held `menu/back` and its release give no event (section 6.2), so they do not skip it.
+2. The message screen `Display Defaults` / `Default contrast and` / `backlight are in use.` / `OK` (section 5.8).
+   The press that skipped the startup screen does not close it (UX-59, UX-60). The next `enter` or `menu/back`
+   closes the message.
 3. The main menu with the cursor on `Receiving`.
+
+Order: decision UX-60 (section 5.17.3).
 
 How to keep the defaults: the user manual explains it (`technical-writer`). The screen has no space for the hint.
 
@@ -2049,12 +2245,16 @@ Probes (all coordinates are pixels in the framebuffer):
 Unless a scenario says otherwise, the start state is a power-on with an empty fake EEPROM, and "press X" means one
 debounced press and release.
 
+Outside section 9.5, "power-on" and "re-init" include the end of the startup screen (section 5.17). The test lets
+`MENU_SPLASH_MS` (5000 ms) pass with no button event. Then the scenario starts. A test helper can end the screen with one
+button event instead, because the result is the same (UX-59). Section 9.5 tests the startup screen itself.
+
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
-| V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`, `TEXT(1,21,"L1",inv)`. `TEXT(2,0,"Sending")`, `TEXT(2,21,"L1")` (UX-57), `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. Rows 5-7 have all pixels off. No EEPROM erase or write. |
+| V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`, `TEXT(1,21,"L1",inv)`. `TEXT(2,0,"Sending")`, `TEXT(2,21,"L1")` (UX-57), `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. `TEXT(5,0,"About")`, and cell (5,24) is blank (UX-61). Rows 6-7 have all pixels off. No EEPROM erase or write. |
 | V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `Both`, `5`. Display shows `8`, `32`. |
-| V-03 | Main menu: press prev, then press next. | After prev: `SEL(4)`, `PLAIN(1)`. After next: `SEL(1)`. |
-| V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `Settings` (`SEL(4)`). It does not wrap to `Receiving`. |
+| V-03 | Main menu: press prev, then press next. | After prev: `SEL(5)` on `About`, `PLAIN(1)`. After next: `SEL(1)`. |
+| V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `About` (`SEL(5)`). It does not wrap to `Receiving`. |
 | V-05 | Enter Settings. Enter CW. Press menu/back. | Title `Settings`, `SEL(1)` on `CW`. Then title `Settings > CW`, `SEL(1)` on `Tone`. Then title `Settings`, `SEL(1)` on `CW`. No EEPROM access. |
 | V-06 | CW: enter on Tone. Next. Prev. Prev. Enter. | `EDIT(1,7)`, `TEXT(1,14,"<",inv)`, `TEXT(1,24,">",inv)`, `TEXT(1,0,"Tone")` normal video. Values 610, 600, 590 Hz in turn. After enter: `SEL(1)`, `TEXT(1,17,"590 Hz",inv)`. |
 | V-07 | Tone at 1000 Hz in edit mode. Press next. Tone at 400 Hz. Press prev. | At 1000: cell (1,24) is blank inside the band, `<` shown. Next changes nothing. At 400: cell (1,14) blank inside the band, `>` shown. Prev changes nothing. |
@@ -2082,7 +2282,7 @@ debounced press and release.
 | V-29 | Main menu with the cursor on row 1. | All pixels with y = 8 are off. `TITLE` holds. |
 | V-30 | menu/back and next become stable in the same poll inside a list. | The menu/back event comes first. |
 | V-31 | Hold next until it repeats. Press prev and hold. Release prev. Keep next held for 500 ms. | prev gives a press and then repeats. After prev is released, next gives no repeat events. |
-| V-33 | Stored contrast 0, backlight 0. P0.2 low from `buttons_init()` for 60 ms and longer. | The fake LCD gets contrast 32 and the fake backlight gets level 8 before the first flush. The stored contrast 0 is never applied. Screen: title `Display Defaults`, `TEXT(2,2,"Default contrast and")`, `TEXT(3,2,"backlight are in use.")`, `BUTTON(52,71)` with `OK`. No EEPROM erase or write. |
+| V-33 | Stored contrast 0, backlight 0. P0.2 low from `buttons_init()` for 60 ms and longer. | The fake LCD gets contrast 32 and the fake backlight gets level 8 before the first flush. The stored contrast 0 is never applied. The first frame is the startup screen (V-152). After `MENU_SPLASH_MS`, the screen shows: title `Display Defaults`, `TEXT(2,2,"Default contrast and")`, `TEXT(3,2,"backlight are in use.")`, `BUTTON(52,71)` with `OK`. No EEPROM erase or write. |
 | V-34 | Continue V-33: hold P0.2 for 2 s, release, then press menu/back. | No event while held. After the press: main menu, `SEL(1)` on `Receiving`. Settings > Display shows `8` and `32`. |
 | V-35 | Stored contrast 0, backlight 0. P0.2 low for 30 ms after the first sample, then high. | Normal start: the fake LCD gets contrast 0, the backlight gets level 0, no message screen. |
 | V-36 | Recovery start as V-33. Enter Settings, open Display, leave without an edit step, go back to the main menu. Re-init without P0.2 low. | No EEPROM erase or write. After re-init: contrast 0, backlight 0. |
@@ -2310,6 +2510,45 @@ Notation:
 | V-150 | V-105, then `menu/back`. New run: Reset Statistics `Yes`, `OK`, back to the main menu. | First run: `TEXT(1,21,"L2",inv)`. After the reset: `TEXT(1,21,"L1")` and `TEXT(2,21,"L1")`. (UX-57) |
 | V-151 | Every screen of section 5.16 at every selected level from L1 to L65 (`EARN(RX, 64)`), each `Prosigns` value, `Max Word Length` 4 and 8. | Every selector line fits columns 2-22, every description fits columns 5-19. Only ASCII 0x20-0x7E. Rows 1-3 and 6 are blank on the start screen. Row 6 is blank on the end screen. |
 
+### 9.5 Startup screen and About tests (sections 5.17, 5.18)
+
+In this section, "power-on" does not skip the startup screen. The tests use `fake_tick.c` and send button events to
+the menu. `t` is in ms after `menu_init()`. A fake tick is exact, so the `+/- 2 ms` tolerance does not apply.
+
+Probes:
+
+- `TEXT5(x, y, s)`: the 5 x 8 cells from the pixel (x, y) match a reference rendering of `s`, normal video.
+- `BIG16(x, y, s)`: the 8 x 16 cells from the pixel (x, y) match a reference rendering of `s` in `FONTS_ID_8X16`,
+  normal video. It uses the golden pixels of the 8 x 16 font, as the training screen tests do.
+- `SPLASH(v)`: `TEXT5(82, 8, "Putikeeg")`, `BIG16(7, 16, "CW Trainer")`, `TEXT5(7, 32, "mod by UT2UBM")` and
+  `TEXT5(122 - 5 * len(v), 56, v)`. All other pixels of the screen are off. This includes pages 0, 5 and 6, and
+  x = 0, 1 and 127 in every row.
+- `ABOUT(v)`: `TITLE`, `TEXT(0,0,"About",inv)`, `TEXT(1,0,"Putikeeg CW Trainer")`, `TEXT(2,0,"mod by UT2UBM")`,
+  `TEXT(3,0,"Version " + v)`, all pixels of row 4 off, `TEXT(5,0,"https://github.com/Quard/")`,
+  `TEXT(6,0,"putikeeg_cw_trainer__")`, `TEXT(7,0,"ut2ubm")`. `PLAIN(r)` for r = 1..7: no highlight band.
+- `MAIN(r)`: the main menu of V-01 with the cursor on row `r`: `SEL(r)`, and `PLAIN` on the other item rows.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-152 | Power-on, empty EEPROM. No button event. Poll up to t = 4999. | `SPLASH("v0.1.0")`: `v0.1.0` from (92, 56). The menu reports the startup screen. No sidetone call, no keyer start, no EEPROM erase or write. After the first flush, no page is dirty up to t = 4999. |
+| V-153 | Continue V-152. Poll at t = 5000. Then poll up to t = 8000. | At t = 5000: `MAIN(1)`. Pages 0-5 and 7 change and are dirty. Page 6 is blank on both screens, so it is not dirty. After that, no change and no dirty page. |
+| V-154 | Power-on. At t = 500, one press event of `menu/back`. Repeat the test with `prev`, `next` and `enter`. | Each run: `MAIN(1)` at t = 500. No item opens, no edit mode, no cursor move, no EEPROM access, no sidetone call. At t = 5000 nothing changes and no page is dirty. |
+| V-155 | Power-on. At t = 500, send one repeat event of `next` as the first event. Repeat the test with a repeat of `prev`, and with the long event of `menu/back`, `prev` and `next`. | Each run: the same as V-154. The event ends the startup screen and does nothing else. |
+| V-156 | Power-on. P3.2 (paddle tip) low from t = 500 for 50 ms. | One `enter` press event. `MAIN(1)`. Receiving does not open. |
+| V-157 | Power-on. Hold `next` from t = 500 (press event) for 1000 ms. | At t = 500: `MAIN(1)`. The repeats of the hold move the cursor after the skip (UX-59): `SEL(2)` at t = 900, and the cursor stops on `About` (`MAIN(5)`), as V-04. The long event at t = 1300 changes nothing. |
+| V-158 | Power-on. Hold `prev` from t = 500 (press event) for 1000 ms. | `MAIN(1)` from t = 500 to the end. The repeats do not wrap (section 6.3). No page is dirty after t = 500. |
+| V-159 | P3.2 low from `buttons_init()`, P0.2 high. Keep P3.2 low for 6000 ms, then release. Then press `enter`. | `SPLASH("v0.1.0")` up to t = 4999. `MAIN(1)` at t = 5000. Nothing opens while P3.2 stays low or at the release. The new press opens the Receiving start screen. |
+| V-160 | Recovery start as V-33. Release P0.2 at t = 300. Press `enter` at t = 1000. Press `enter` again. Repeat the test with `next` and with `menu/back` as the first press. | Up to t = 999: `SPLASH("v0.1.0")`. The release gives no event. First press: the `Display Defaults` message of V-33. It stays open. Second press: `MAIN(1)`. |
+| V-161 | Recovery start as V-33. Release P0.2 at t = 300. No other button event. | `SPLASH("v0.1.0")` up to t = 4999. At t = 5000 the `Display Defaults` message of V-33. It stays open at t = 15000. |
+| V-162 | Main menu (`MAIN(1)`). Press prev. | `MAIN(5)`: `TEXT(5,0,"About",inv)`. Cell (5,24) is inside the band and has no `>` (UX-61). |
+| V-163 | Main menu, cursor on `About`. Press `enter`. | `ABOUT("0.1.0")`. No sidetone call, no keyer start, no EEPROM access. |
+| V-164 | Open `About` as V-163. Press `enter`. Open it again and press `menu/back`. Open it again and close P3.2 for 50 ms. | Each time: `MAIN(5)` with the cursor on `About`. No EEPROM access. |
+| V-165 | Open `About`. Press prev. Press next. Hold next for 1000 ms. Long `menu/back`, long `prev`, long `next`. | After each event: the framebuffer is unchanged, no page is dirty, the `About` screen stays open, no sidetone call. |
+| V-166 | Check the version macro. | `FIRMWARE_VERSION` is `"0.1.0"`. `SPLASH` uses `v0.1.0` from column 18 (x 92). `ABOUT` row 3 is `Version 0.1.0`, columns 0-12. |
+| V-167 | Test build with `FIRMWARE_VERSION` = `10.12.3`, then with the 17-character `12345.12345.12345`. | `10.12.3`: `TEXT5(82, 56, "v10.12.3")`, `TEXT(3,0,"Version 10.12.3")`. 17 characters: `TEXT5(32, 56, "v12345.12345.12345")`, and `About` row 3 ends in column 24. No ink at x 0, 1 or 127. |
+| V-168 | Build with an 18-character version, for example `123456.12345.12345`. | The build stops (UX-63). |
+| V-169 | Render the startup screen and the `About` screen. | No 5 x 8 text reaches past column 24. The 8 x 16 line is inside x 7-86 and y 16-31. Only ASCII 0x20-0x7E. |
+
 ## 10. Durable decisions
 
 | ID | Decision | Reason | Rejected alternatives |
@@ -2371,6 +2610,12 @@ Notation:
 | UX-55 | Selector controls on the start screen and the end screen, both modes: `prev` and `next` press and repeat step by one, stop at L1 and at the earned level, no wrap. `enter` or the tip starts a session at the selected level. A `menu/back` press opens the main menu, cursor on the mode item. Long events do nothing. Tap mode is off on both screens (Receiving turns it on at the session start, off when the end screen shows). A step redraws pages 0, 4 and 5 on the start screen and pages 4 and 5 on the end screen. A press at a limit redraws nothing. | User decision 2026-10-07: press and auto-repeat both act. Repeats need tap mode off. All buttons then act at the press, as in the lists. The limits match the value edit (UX-13). The page budget keeps a step fast during the 80 ms repeat. | Long `prev`/`next` = step of 10 (the fallback of the plan, only if the repeat costs too much flash). Wrap from L1 to the earned level (a surprise at a limit, UX-13). Tap mode on the end screen (no repeats). A long `menu/back` to leave (the screen holds no work to lose). |
 | UX-56 | Session end screen with the selector (section 5.15). Row 1 `Not saved` after a failed save. Row 2 score. Row 3 `Passed, new level` (the earned level went up), `Passed` (a replay pass, or a pass at index 65535), or `Not passed, need t`. Rows 4-5 the selector, preselected: pass = session level + 1, fail = session level. Row 7 `Start` (replaces `Next`). The header keeps the session that ended. A replay pass never changes the store. | User decision 2026-10-07: the same selector as the start screen, the preselect rule and the replay rule. The selector shows the next level, so the rows `New level L13` and `Repeat level L12` only repeated its number. Row 3 keeps the reward of a pass that advanced. `Not saved` goes to the status line of the frame. One button text for both screens saves a string, and `Start` is right for every selected level. The header still names the level that the score belongs to. | Keep `New level L<n>` and add the selector in rows 5-6 (a full screen and the same number twice). `Not saved` in row 6, next to the button. `Passed (replay)` or `Passed, level kept` (a new string, and `of <e>` already shows that the earned level stays). The header follows the selection (the score then has no level). `Next` on the end screen. |
 | UX-57 | Main menu: `Receiving` and `Sending` show the earned level `L<n>` at the current `RX Speed` or `TX Speed`, right-aligned to column 22, inverted with the selected row like any value. `Free Input` and `Settings` show nothing new. Read at each row draw from the progress image in RAM. | User decision 2026-10-07. Column 22 is the value column of every list (section 4.3), so the level reads as the value of the row. The band shows the selected row as a whole. The draw needs no EEPROM access (D-T9). | A level after the label in column 10 (a new column rule). The level of the effective speed (the progress key uses the character speed). A level in normal video inside the band (a hole in the highlight). |
+| UX-58 | Startup screen layout (section 5.17.1). No title bar, normal video. `Putikeeg` 5 x 8 at (82, 8), row 1, right-aligned to column 23. `CW Trainer` 8 x 16 at (7, 16), pages 2 and 3. `mod by UT2UBM` 5 x 8 at (7, 32), row 4, column 1. `v` + version 5 x 8 at (122 - 5n, 56), row 7, right-aligned to column 23. Pages 0, 5 and 6 blank. Drawn once. | Follows the mockup of the user. The 8 x 16 line fills whole pages, as the item line does. Columns 1 and 23 give the same 7 px margin on both sides. The version sits at the bottom, apart from the name. | Text at columns 0 and 24 (margins of 2 px: the text sits at the edge of the glass, and the mockup shows blank cells at both edges). `Putikeeg` in row 0 (no top margin). 8 x 16 line at y 15 (crosses a page edge). A title bar (the screen is not a menu). |
+| UX-59 | Startup screen time and skip (section 5.17.2). `MENU_SPLASH_MS` = 5000 ms from `menu_init()`. The first button event of any kind (press, repeat or long, any of the four buttons, also the tip) ends it and does nothing else. The later events of the same hold act on the next screen. A button held at power-on does not skip it. | User decisions: any button skips (plan), and 5 s (2026-10-08, it replaces the 2 s of the plan). The skip never changes a setting or opens an item. A held `next` that scrolls the main menu after 400 ms is a normal list hold. | Swallow the whole press up to the release (needs a new buttons function and flash for a rare case). Skip on `enter` only (the user asked for any button). A countdown or progress bar (redraws and noise for 5 s). 2 s (the value of the plan, replaced by the user on 2026-10-08). |
+| UX-60 | Display recovery start order (section 5.17.3): the startup screen, then the `Display Defaults` message, then the main menu. The press that skips the startup screen does not close the message. | The defaults apply before the first frame, so the startup screen shows that the screen works. The message stays until the user closes it. One start sequence for every start. | Message first, then the startup screen (5 s of delay after `OK`). No startup screen on a recovery start (two sequences, no version). |
+| UX-61 | `About` is the fifth main menu item, after `Settings`, in row 5. No marker, no value. Kind: info screen. | `>` means "opens a list". Items that open a screen have no marker. Five items fit with no scroll. | `>` on `About` (promises a list). A `...` suffix (not used anywhere else). |
+| UX-62 | `About` screen (section 5.18). Title `About`. Rows 1-3: the name, the mod and `Version ` + version. Row 4 blank. Rows 5-7: the link in three parts. All text is left-aligned in column 0, in normal video. No band and no `OK`. `enter` or `menu/back` goes to the main menu with the cursor on `About`. `prev`, `next`, repeats and long events do nothing. | User layout. The link needs three rows, and one left edge keeps it readable as one text. Closing with `enter` or `menu/back` matches the message screen. | Centered text (the link parts lose their common edge). An `OK` button (no free row). A hyphen at the link breaks (changes the link). |
+| UX-63 | Version text (section 5.17.4): `FIRMWARE_VERSION` is digits and dots, at most 17 characters. The startup screen shows `v` + version right-aligned to column 23. `About` shows `Version ` + version from column 0. A longer version stops the build. | 17 characters keep `Version ` + version inside 25 columns. A cut text is a defect. A build check finds it before the device does. | No limit (a cut on the glass). A run-time cut or a short form (hides the real version). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -2413,6 +2658,9 @@ Notation:
 | D-35 | Level selector feel (UX-55), Receiving and Sending: on the start screen and on the end screen, single `prev` and `next` presses, and holds over 20 or more levels. Try to stop on a given level. Measure the time from the release to the last change on the glass. | The number follows the hold at about 12.5 levels per second. The last level shows within 100 ms after the release (UX-16). The user stops on the target, or one level off, in 2 or 3 tries. At L1 and at the earned level, the marker disappears and nothing moves. |
 | D-36 | Session start from the start screen and the end screen (UX-55): the `enter` button, the dit lever and a straight key on the tip, in Receiving and Sending. Hold the contact for 2 s after the start. Insert a plug while the start screen shows. | One session per closure. Receiving: no pick, no narrowed group and no replay from the held contact. Sending: no element and no tone from the held contact. Record whether the plug insertion starts a session (F-20, F-21). |
 | D-37 | Legibility of the selector and the main menu level (UX-54, UX-57) at 30-60 cm, contrast 32, backlight 8 and 0: `<` and `>` next to `L5 of 20`, `New char .`, `New char ,`, `New char <AR/+>`, and `L12` inverted on the selected main menu row. | The user reads the level, the markers and the new character at a glance. `.` and `,` are visible as characters. The inverted `L12` is as readable as the label. |
+| D-38 | Startup screen on the glass (UX-58, UX-59). Contrast 32, backlight 8 and 0, 30-60 cm, straight and at an angle. Switch on 5 times. Measure the time from power-on to the first frame and from the first frame to the main menu. Press each of the four buttons once during the screen. | The user reads `Putikeeg`, `CW Trainer`, `mod by UT2UBM` and `v0.1.0` at a glance. The two right lines end at the same x, and the two left lines start at the same x. The screen shows for about 5 s. Each button press shows the main menu at once and changes nothing else. Record the time to the first frame for `architector`. |
+| D-39 | Display recovery start with the startup screen (UX-60). Set contrast 0 and backlight 0, save, switch off. Hold `menu/back` and switch on. Release it during the startup screen. Repeat, and press `enter` during the startup screen. | The startup screen is readable at once. The `Display Defaults` message follows and stays open. A press during the startup screen does not close the message. The next press closes it. |
+| D-40 | `About` screen on the glass (UX-62). Contrast 32, backlight 8 and 0, 30-60 cm. | The user reads all rows. The two `_` characters at the end of `putikeeg_cw_trainer__` show as two marks. The user can type the link from the three rows with no error. The `About` row in the main menu reads well inverted and normal. |
 
 ## 12. Open questions
 
@@ -2473,6 +2721,16 @@ Resolved by the user on 2026-10-07 (level selection, section 5.16, UX-53 to UX-5
   does not change the stored level.
 - The main menu shows the earned level next to `Receiving` and `Sending`, at the current `RX Speed` or `TX Speed`.
 
+Resolved by the user on 2026-10-08 (startup screen and `About`, sections 5.17 and 5.18, UX-58 to UX-63):
+
+- A startup screen shows for about 5 s after power-on, close to the mockup of the user, with `CW Trainer` in the
+  8 x 16 font. Any button skips it to the main menu and does nothing else.
+- Later on 2026-10-08, the user changed the time of the startup screen from 2 s to 5 s (`MENU_SPLASH_MS` 2000 ms
+  to 5000 ms, UX-59). The skip rules, the held button at power-on and the recovery order (UX-60) do not change.
+- The main menu has the item `About` after `Settings`. Its screen shows the name, the mod, the version and the link
+  in the layout that the user chose.
+- The version comes from the build macro `FIRMWARE_VERSION`. It is `0.1.0` in this version.
+
 Resolved by the user after the training specification:
 
 - Q-11: word items and the word keyboard hold no prosign (UX-48, `training_spec.md` D-T4).
@@ -2485,6 +2743,10 @@ item again (D-T6, U-15). A failed reset shows `Not saved` (D-T11, U-17). Also:
 - Q-14: `training_hold_result()` holds RESULT while the answer plays. `TRAINING_FAILED_MS` starts at the first poll
   that sees the player idle (`training_spec.md` D-T14).
 - Q-15: the Sending event rules of section 5.13.2 are adopted as proposed (`training_spec.md` D-T15 and D-T16).
+
+Resolved by `architector` on 2026-10-08: Q-16. `firmware/cmake/firmware_version.cmake` stops the configure step
+when the version has more than 17 characters, and a compile-time check in `menu_tree.c` stops the build too
+(`menu_subsystem_spec.md` D-A15).
 
 | ID | Question | Impact | Owner |
 | --- | --- | --- | --- |

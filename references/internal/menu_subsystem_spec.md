@@ -1,7 +1,8 @@
 # Menu subsystem: implementation specification
 
-Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-developer`, `qa-embedded`,
-`ui-ux-embedded-designer`, `technical-writer`.
+Owner: `architector`. Status: approved for implementation. Change request D-A1 to D-A15 (firmware version,
+start-up screen, `About` item, approved plan of 2026-10-08): specification published on 2026-10-08, section 17.
+Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
 
@@ -1401,3 +1402,453 @@ Items to tell the user, no decision needed:
 - `inc/u8g2_fonts.h` gets `static const` in place of `const static` (section 3.3).
 - The `stats` step comes before the `menu` step (section 3.4).
 - The main loop handles up to 4 button events before a redraw (section 3.5).
+
+## 17. Change request: firmware version, start-up screen and `About` (2026-10-08)
+
+Owner: `architector`. Status: A0-A3, QA-A, fixes R1-R3 and F2 are delivered. The final review on
+2026-10-08 gave `approved` (section 17.15). The 5 s start-up screen change (user decision, 2026-10-08) is
+approved (section 17.15). W-A and F1 are open.
+
+### 17.1 Sources and precedence
+
+| Source | Role |
+| --- | --- |
+| Approved plan `~/.claude/plans/quirky-wandering-quill.md` | User decisions: version `0.1.0` in a plain `firmware/VERSION` file for CI, a 2 s start-up screen that any button skips (a later user decision of 2026-10-08 changes it to 5 s, section 17.15, D-A6), the `About` item after `Settings` with the link on three text rows, a version rule in `AGENTS.md`. |
+| This section | Interfaces, screen ids, state machine, build path, memory budget, tasks and acceptance criteria. It refines the plan. It does not change a user decision. Where it differs from sections 4.10, 6.1 and 6.3, this section wins. |
+| `references/internal/ui-ux.md` sections 5.17 "Startup screen" and 5.18 "About screen" (owner `ui-ux-embedded-designer`, UX-58 to UX-63) | Pixel positions, fonts of each text, row strings, the `About` row marker in the main menu (none, UX-61), the reaction to buttons (UX-59), the recovery-start order (UX-60, section 8.1). |
+| `references/internal/training_spec.md` | D-T8 (screen id 2 free) and the mode screens that this section renumbers (D-A3). |
+
+The precedence rules of section 1 apply. If `ui-ux.md` describes a behavior that differs from section 17.5 (for
+example a different recovery order, or a reaction to a button), stop and report it to `architector`.
+
+### 17.2 Decisions
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| D-A1 | `firmware/VERSION` is the only place that holds the version. It has one line, `MAJOR.MINOR.PATCH`, for example `0.1.0`, with a final LF. No C file, test, script or CMake file contains the version digits. | User decision (plan). CI reads it with `cat firmware/VERSION` and needs no C parser. |
+| D-A2 | A shared CMake script `firmware/cmake/firmware_version.cmake` reads and checks the file and generates `version.h` in the build directory. The firmware project and the host-test project both include it (section 17.3). The template uses `@FIRMWARE_VERSION@`, not `@PROJECT_VERSION@`. | The host-test project is another CMake project. Its `PROJECT_VERSION` is not the firmware version. |
+| D-A3 | Screen ids: `MENU_SCREEN_SPLASH` 2, `MENU_SCREEN_ABOUT` 5. The mode screens move up by one: `MENU_SCREEN_FREE_INPUT` 6, `MENU_SCREEN_RECEIVING` 7, `MENU_SCREEN_SENDING` 8. This supersedes the numbers in `keyer_spec.md` section 6.14 and `training_spec.md` section 5. | Both new screens must be below `MENU_SCREEN_FREE_INPUT`, because `menu_handle()` takes every id from it on as a mode screen. Only id 2 is free (D-T8). Screen ids live only in RAM, so the renumber has no EEPROM or compatibility effect. |
+| D-A4 | Item kind `MENU_KIND_ABOUT` (5) with target 0. No generic "info screen" kind. | One info screen. A generic kind needs an id table and costs flash for no user benefit. |
+| D-A5 | `menu_init()` shows the splash, not the list. The list, the stack and the cursor (main menu, `Receiving`) are set as before, under the splash. | Plan. The splash end needs no stack work. |
+| D-A6 | The splash ends at `MENU_SPLASH_MS` (5000 ms) after `menu_init()`, measured with `(uint16_t)(tick_now() - menu_splash_start)` in `menu_poll()`, or at the first button event. The time counts from `menu_init()`, not from the first flush. | User decision of 2026-10-08 (the plan said 2 s). Same pattern as the Tone preview. The `uint16_t` difference wraps at 65 535 ms, far above 5000 ms. A flush takes a part of the 5 s; the device check DC-A2 measures it. |
+| D-A7 | Every event on the splash (each code, with or without the repeat or long flag) ends the splash and has no other effect. The event does not go to the list. | Plan: "any button skips it". |
+| D-A8 | Only the skip event has no other effect. The events after it act on the next screen as usual: the repeats of a held `next` move the main menu cursor from 400 ms, and the long event does nothing in a list. No skip-hold state. | `ui-ux.md` section 5.17.2, UX-59 (the designer owns the reaction to a button). It needs no state and no code. |
+| D-A9 | Recovery start order: the splash first, then `Display Defaults`. `menu_show_message()` on screen SPLASH stores the message id in `menu_current_message` and changes nothing else (no screen change, no redraw request). The splash end shows screen MESSAGE when a message id is stored, else screen LIST. A second call during the splash replaces the stored id. An unknown id is ignored, as before. `main.c` does not change. | Plan, recommended order. The stored id reuses the existing `menu_current_message` byte with the sentinel `MENU_MESSAGE_NONE`, so the deferral costs no xdata. `ui-ux.md` section 8.1 confirms the order; a different order there is a conflict for `architector`. |
+| D-A10 | `menu_render()` always ends with `FONTS_ID_5X8` selected. The splash code selects `FONTS_ID_8X16` only around the `CW Trainer` text, as `training_screen_draw_item_text()` does. | Every other screen assumes the 5 x 8 font. |
+| D-A11 | Text constants live in `menu_tree.c` as `MEM_CODE` arrays. The splash and `About` share them. The version strings are compile-time literal joins: `"v" FIRMWARE_VERSION` and `"Version " FIRMWARE_VERSION`. Only `menu_tree.c` includes `version.h`. | Plan. One copy of each string in code memory; no run-time formatting. |
+| D-A12 | `About` controls: the existing final branch of `menu_handle_other_screen()`. `enter` or `menu/back` shows screen LIST with the stack unchanged, so the cursor stays on `About`. `prev`, `next` and long events do nothing and request no redraw. | Plan. No new handler code. |
+| D-A13 | `firmware/build.sh` prints `Firmware version: <x>` (the first line of `firmware/VERSION`) after the memory report. It does not copy the image to a versioned file name. | CI can name the artifact with `cat firmware/VERSION`. A versioned copy leaves stale images in `build/`. |
+| D-A14 | No host test contains the version digits. The version test reads `firmware/VERSION` at run time and compares it with `FIRMWARE_VERSION` (section 17.8). | D-A1 and the `AGENTS.md` rule ("never write the version anywhere else"). A test with `"0.1.0"` breaks at each version change. This replaces the plan item "`FIRMWARE_VERSION` is `"0.1.0"`" and still proves that the header follows the file. |
+| D-A15 | The version has at most 17 characters (`ui-ux.md` UX-63, Q-16). Two checks stop the build: (1) `firmware_version.cmake` stops the configure step when `string(LENGTH)` of the version is above `FIRMWARE_VERSION_MAX_LENGTH` (17), next to the format check; (2) `menu_tree.c` has `_Static_assert(sizeof(FIRMWARE_VERSION) - 1U <= 17U, ...)`. | The CMake check is the primary one: it fails first, with a clear message, for the firmware, the host tests and CI. The C check guards the screen code itself, also when a build gets `version.h` some other way. Both cost no flash. |
+
+### 17.3 Version build path
+
+New file `firmware/VERSION`: the line `0.1.0` and LF.
+
+New file `firmware/cmake/version.h.in`:
+
+```c
+#ifndef FIRMWARE_VERSION_H
+#define FIRMWARE_VERSION_H
+
+/* Generated by CMake from firmware/VERSION. Do not edit. */
+#define FIRMWARE_VERSION "@FIRMWARE_VERSION@"
+
+#endif /* FIRMWARE_VERSION_H */
+```
+
+New file `firmware/cmake/firmware_version.cmake`. It uses no command that needs `project()`, so the firmware can
+include it before `project()`. It does these steps:
+
+1. `FIRMWARE_VERSION_FILE` = `${CMAKE_CURRENT_LIST_DIR}/../VERSION`, as an absolute normalized path.
+2. `file(STRINGS "${FIRMWARE_VERSION_FILE}" FIRMWARE_VERSION LIMIT_COUNT 1)`. Also read the raw bytes of the file
+   (`file(READ)`). When they are not exactly the version plus at most one LF (a UTF-8 BOM, a CR, a second line or
+   spaces): `message(FATAL_ERROR ...)` with the file path and the reason (review decision R1, section 17.15).
+   `file(STRINGS)` drops a BOM and a CR, but `cat firmware/VERSION` in CI and `build.sh` prints them.
+3. When `FIRMWARE_VERSION` does not match `^[0-9]+\.[0-9]+\.[0-9]+$`: `message(FATAL_ERROR ...)` with the file
+   path, the value read and the expected format `MAJOR.MINOR.PATCH`. When its length is above
+   `FIRMWARE_VERSION_MAX_LENGTH` (17, set in this script): `message(FATAL_ERROR ...)` with the file path, the value,
+   its length and the limit (D-A15).
+4. `set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${FIRMWARE_VERSION_FILE}")`, so an edit of the
+   file reconfigures the build at the next `cmake --build`.
+5. `FIRMWARE_VERSION_INCLUDE_DIR` = `${CMAKE_CURRENT_BINARY_DIR}/generated`.
+6. `configure_file("${CMAKE_CURRENT_LIST_DIR}/version.h.in" "${FIRMWARE_VERSION_INCLUDE_DIR}/version.h" @ONLY)`.
+   `configure_file` does not touch an unchanged output, so an unchanged version causes no rebuild.
+
+Results for the includer: `FIRMWARE_VERSION`, `FIRMWARE_VERSION_FILE`, `FIRMWARE_VERSION_INCLUDE_DIR`.
+
+`firmware/CMakeLists.txt`:
+
+- `include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/firmware_version.cmake")` before `project()`.
+- `project(putikeeg_cw_trainer VERSION ${FIRMWARE_VERSION} LANGUAGES C)`.
+- `target_include_directories(putikeeg_cw_trainer PRIVATE "${FIRMWARE_VERSION_INCLUDE_DIR}")`.
+
+`firmware/Tests/CMakeLists.txt`:
+
+- `include("${FIRMWARE_DIR}/cmake/firmware_version.cmake")` after `FIRMWARE_DIR` is set.
+- `menu_group` gets `"${FIRMWARE_VERSION_INCLUDE_DIR}"` as a PUBLIC include directory and the PUBLIC compile
+  definition `FIRMWARE_VERSION_FILE="${FIRMWARE_VERSION_FILE}"` (a path, not the version).
+- No other group changes. Host flags stay as they are.
+
+No generated file goes into the source tree. `version.h` is not added to `.gitignore`, because it is only in build
+directories, which are ignored already.
+
+`firmware/build.sh`: after `cat ... .mem`, one line `echo "Firmware version: $(head -n 1 "${firmware_dir}/VERSION")"`.
+No other change (D-A13). `firmware/flash.sh` and `firmware/test.sh` do not change.
+
+### 17.4 Interfaces
+
+`firmware/inc/menu/menu.h` (public):
+
+```c
+#define MENU_SCREEN_LIST 0U
+#define MENU_SCREEN_EDIT 1U
+#define MENU_SCREEN_SPLASH 2U
+#define MENU_SCREEN_DIALOG 3U
+#define MENU_SCREEN_MESSAGE 4U
+#define MENU_SCREEN_ABOUT 5U
+#define MENU_SCREEN_FREE_INPUT 6U
+#define MENU_SCREEN_RECEIVING 7U
+#define MENU_SCREEN_SENDING 8U
+
+#ifndef MENU_SPLASH_MS
+#define MENU_SPLASH_MS 5000U /* ui-ux.md section 5.17.2, UX-59 */
+#endif
+```
+
+- The comment "2 is unused (training_spec.md D-T8)" goes away.
+- No function signature changes. The doc comments of `menu_init()`, `menu_handle()`, `menu_poll()` and
+  `menu_show_message()` change to tell the splash behavior (D-A5 to D-A9).
+- `menu.c` extends its `#error` check: `MENU_SCREEN_SPLASH`, `MENU_SCREEN_ABOUT`, `MENU_SCREEN_MESSAGE` and
+  `MENU_SCREEN_DIALOG` are below `MENU_SCREEN_FREE_INPUT`, and `MENU_SCREEN_RECEIVING` and `MENU_SCREEN_SENDING` are
+  above it.
+
+`firmware/src/menu/menu_internal.h` (private):
+
+```c
+#define MENU_KIND_ABOUT 5U
+#define MENU_MESSAGE_NONE 0xFFU /* no message stored, D-A9 */
+#define MENU_ABOUT_LINK_ROWS 3U
+
+extern const char MEM_CODE menu_text_brand[];         /* "Putikeeg" */
+extern const char MEM_CODE menu_text_product[];       /* "CW Trainer" */
+extern const char MEM_CODE menu_text_mod[];           /* "mod by UT2UBM" */
+extern const char MEM_CODE menu_text_version_short[]; /* "v" FIRMWARE_VERSION */
+extern const char MEM_CODE menu_text_version_long[];  /* "Version " FIRMWARE_VERSION */
+extern const menu_text_t MEM_CODE menu_about_link_rows[MENU_ABOUT_LINK_ROWS];
+```
+
+- The comments above give the plan strings. The binding strings and their rows are in `ui-ux.md` sections
+  5.17 and 5.18. The plan link rows are `https://github.com/Quard/`, `putikeeg_cw_trainer__` and `ut2ubm`.
+- The main node title may use `menu_text_product` in place of its own `"CW Trainer"` literal. It is optional; do it
+  when it saves flash.
+- `menu_tree.c` has `_Static_assert(sizeof(FIRMWARE_VERSION) - 1U <= 17U, ...)` with a reason that names UX-63
+  (D-A15). Then `Version ` + version ends in column 24 at most, and `v` + version is at most 18 cells.
+- The splash version text is right-aligned with its last character in column 23 (`ui-ux.md` section 5.17.4). Its
+  length is a compile-time constant (`sizeof(menu_text_version_short) - 1U` where the array is visible, or a
+  macro in `menu_internal.h`), so no run-time measure is needed.
+
+`firmware/src/menu/menu_tree.c`: the row `{"About", NULL, NULL, MENU_KIND_ABOUT, 0U, 0U}` after `Settings` in
+`menu_main_items`. The main menu has 5 items (index 4 is `About`), below `MENU_VISIBLE_ROWS`.
+
+New private state in `menu.c`, all `MEM_XDATA`:
+
+| Name | Type | Use |
+| --- | --- | --- |
+| `menu_splash_start` | `uint16_t` | `tick_now()` at `menu_init()` |
+
+`main.c` does not change. The start-up order of section 4.11 stays.
+
+### 17.5 Behavior
+
+Additions to the state table of section 6.3. The SPLASH step runs in `menu_handle()` after the `BUTTON_EVENT_NONE`
+check and before the long-event filter, so a long event also ends the splash.
+
+| Screen | Event | Action |
+| --- | --- | --- |
+| SPLASH | any event | End the splash. The event has no other effect (D-A7, D-A8). |
+| SPLASH | `menu_poll()` with `(uint16_t)(tick_now() - menu_splash_start) >= MENU_SPLASH_MS` | End the splash. |
+| LIST | ENTER on `About` | Screen ABOUT with a redraw request. This branch comes before the branch that opens EDIT. |
+| ABOUT | ENTER or MENU | Screen LIST, stack and cursor unchanged (cursor on `About`). |
+| ABOUT | PREV, NEXT, every long event | Nothing, no redraw. |
+
+End the splash: show screen MESSAGE when `menu_current_message != MENU_MESSAGE_NONE`, else screen LIST. Both
+request a redraw.
+
+`menu_init()`: stack as before, `menu_current_message = MENU_MESSAGE_NONE`, `menu_splash_start = tick_now()`,
+then screen SPLASH with a redraw request. It reads `tick_now()` exactly once.
+
+`menu_poll()`: the splash check runs on each call while the screen is SPLASH, before the early return of the Tone
+preview part. On other screens, the splash check reads no tick.
+
+`menu_show_message(id)`: unknown id, ignore (as before). Screen SPLASH: `menu_current_message = id`, then return
+(D-A9). Other screens: as before.
+
+`menu_render()`:
+
+- SPLASH: draw the start-up screen as `ui-ux.md` section 5.17 says. Use `gfx_draw_text()` with the pixel
+  positions given there. Select `FONTS_ID_8X16` for `CW Trainer` only, then `FONTS_ID_5X8` again (D-A10).
+- ABOUT: title bar `About` with `draw_title()` (the final branch of `menu_render()` already draws the label of the
+  item under the cursor, which is `About`). Then the text rows of `ui-ux.md` section 5.18 with `draw_text()` and
+  `render_row`. A row may be drawn with more than one `draw_text()` call, for example `menu_text_brand` and
+  `menu_text_product` on one row.
+- The `About` row in the main menu: its label only, no marker and no value (`ui-ux.md` UX-61).
+- Both screens paint every pixel (the full clear at the start of `menu_render()` stays).
+
+The splash does not call the Tone preview, the modes, the sidetone or the settings. Interrupt code does not change.
+`check_asm.sh` rules do not change.
+
+### 17.6 Memory budget
+
+Baseline (`firmware/build/putikeeg_cw_trainer.mem`, before this change): flash 27 576 / 61 440 B, xdata 1814 /
+3072 B, stack starts at 0x41 with 191 B free. A0 measures it again.
+
+| Resource | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- |
+| Flash change | at most +600 B | +1024 B |
+| xdata change | +2 B (`menu_splash_start`) | +6 B |
+| New internal RAM (DSEG, overlay, bits) | 0 B, stack start stays 0x41 | +4 B |
+| Stack margin (free stack minus the deepest main-loop use minus the largest ISR frame, `llm.md`) | | at least 64 B |
+| Strings and the tree | code memory only | no string in xdata or internal RAM |
+
+The deepest new path is `menu_render` -> splash draw -> `gfx_draw_text` -> `font_u8g2_draw_glyph` ->
+`lcd_fb_set_pixel`. It must not be deeper than the list text path of section 11. Count it from the generated
+`.asm` and tell how you counted it.
+
+Each task report has the table of section 11 before and after the task, and the line `Firmware version:` of
+`build.sh`.
+
+### 17.7 Changed and new files
+
+| File | Change |
+| --- | --- |
+| `firmware/VERSION` | new |
+| `firmware/cmake/firmware_version.cmake`, `firmware/cmake/version.h.in` | new |
+| `firmware/CMakeLists.txt`, `firmware/Tests/CMakeLists.txt`, `firmware/build.sh` | section 17.3 |
+| `firmware/inc/menu/menu.h` | screen ids, `MENU_SPLASH_MS`, doc comments |
+| `firmware/src/menu/menu_internal.h`, `menu.c`, `menu_tree.c`, `menu_render.c` | sections 17.4 and 17.5 |
+| `firmware/Tests/support/menu_splash.h` | new test helper (section 17.8) |
+| `firmware/Tests/test_menu*.c`, `test_qa_menu*.c`, `support/training_harness.h` | setup uses the helper |
+| `firmware/Tests/test_menu_splash.c`, `firmware/Tests/test_menu_about.c` | new |
+
+No change to `main.c`, the ISR files, `check_asm.sh`, `firmware/drivers/`, `ui-ux.md` or `AGENTS.md`.
+
+### 17.8 Tests
+
+Setup helper, `firmware/Tests/support/menu_splash.h`:
+
+```c
+/** Ends the start-up screen with a menu/back press and draws the result, as the main loop does. */
+static inline void menu_test_skip_splash(void);
+```
+
+- It checks that the screen is SPLASH, calls `menu_handle(BUTTON_EVENT_MENU)`, checks that the screen is not
+  SPLASH, then calls `menu_render()` when a redraw is pending.
+- It reads no tick, so the time base of each test stays as it is.
+- Each existing setup calls it after `menu_init()` and after the optional `menu_show_message()`, before the
+  setup's own render and counter resets. The sites are: `test_menu.c` (two), `test_menu_free_input.c`,
+  `test_menu_preview.c`, `test_menu_prosign.c`, `test_qa_menu.c`, `test_qa_menu_preview.c`,
+  `test_qa_menu_prosign.c` and `support/training_harness.h`. After it, each setup has the same state as before
+  this change: the main menu on `Receiving`, or the `Display Defaults` message on a recovery start.
+- `menu_init()` now reads the tick once. Tests that count `fake_tick_read_count()` reset or adjust their count after
+  setup. Report each such change.
+- Expected values that change because the tree has a fifth item (for example, a `prev` press on `Receiving` now
+  goes to `About`, index 4) are updated, and each is listed in the report. No test is deleted, skipped or weakened.
+
+New host tests, `firmware/Tests/test_menu_splash.c`:
+
+1. After `menu_init()`: screen SPLASH, a redraw is pending, `menu_node()` is MAIN, `menu_cursor()` is 0.
+2. `menu_poll()` at `MENU_SPLASH_MS - 1` ms keeps SPLASH and requests no redraw; at `MENU_SPLASH_MS` it shows LIST
+   with a redraw request. Also with a start tick near 65535 (wrap).
+3. Each of the 4 codes, each as a press, a repeat and a long event: the splash ends, the screen is LIST on
+   `Receiving`, no setting, sidetone, contrast, backlight or stats call happens, and no mode starts.
+4. Held button after a skip (UX-59): a `next` press skips; the following `next` repeats move the cursor from
+   `Receiving`; the long `next` changes nothing. A `prev` press skips; its repeats stay on `Receiving` (no wrap on a
+   repeat).
+5. Recovery order: the section 4.11 start sequence with MENU held: SPLASH shows, `menu_message()` is
+   `MENU_MESSAGE_DISPLAY_DEFAULTS`; at the timeout, and in a second run at a button event, screen MESSAGE
+   `Display Defaults` shows; `enter` then shows the main menu on `Receiving`. Run it once with real button pins
+   (held `menu/back`, release, press).
+6. `menu_show_message()` with an unknown id on the splash changes nothing; two calls keep the last id.
+7. Render: the splash frame matches `ui-ux.md` section 5.17: the 5 x 8 texts with the existing text probes, the
+   `CW Trainer` cells with 8 x 16 golden pixels from `fixtures/font_golden.h` (the method of the training-screen
+   tests), all other pixels off. After the splash, a list render matches the existing list goldens (the font is
+   5 x 8 again).
+
+New host tests, `firmware/Tests/test_menu_about.c`:
+
+1. The main menu has 5 items; item 4 is `About` with kind `MENU_KIND_ABOUT`.
+2. `enter` on `About` shows ABOUT with a redraw request, and no EDIT, dialog or mode starts.
+3. `enter` and `menu/back` on ABOUT return to LIST with the cursor on `About`. `prev`, `next`, repeats and long
+   events on ABOUT change nothing and request no redraw.
+4. `menu_show_message()` on ABOUT shows the message; `enter` returns to the list on `About`.
+5. Render: the title bar and the rows of `ui-ux.md` section 5.18, cell by cell; the version row is
+   `"Version " FIRMWARE_VERSION`. The main-menu row `About` has no `>` in cell (5,24) (UX-61, V-162).
+6. Version: `FIRMWARE_VERSION` matches `MAJOR.MINOR.PATCH` (digits and two dots), and it equals the first line of
+   the file `FIRMWARE_VERSION_FILE`, read at run time (D-A14). The splash short text is `"v" FIRMWARE_VERSION`.
+
+Scenarios: the two files together cover V-152 to V-169 of `ui-ux.md` section 9.5, with its probes (`TEXT5`,
+`BIG16`, `SPLASH`, `ABOUT`, `MAIN`). Three scenarios run in a fixed way:
+
+- V-166: the expected texts are built from `FIRMWARE_VERSION`, and the version check is item 6 (D-A14). No test
+  holds `"0.1.0"`.
+- V-167: the probes compute the start x of the splash text from the length of `FIRMWARE_VERSION`. A1 runs
+  `test.sh` with `firmware/VERSION` = `10.12.3` and = `12345.12345.12345`, and both runs pass.
+- V-168: an A1 build step, not a host test (D-A15).
+
+### 17.9 Tasks
+
+`c-embedded-developer` owns A0-A3. Each task ends with the items of section 12 (build, tests, memory table,
+assumptions, open device checks). Comments follow the project rules.
+
+#### A0 Baseline
+
+- Outputs: the memory table and the stack estimate of the current tree, the `test.sh` result.
+- Acceptance: both scripts pass. The numbers are recorded.
+
+#### A1 Version build path
+
+- Inputs: sections 17.2 (D-A1, D-A2, D-A13, D-A14) and 17.3.
+- Outputs: `VERSION`, `firmware_version.cmake`, `version.h.in`, the two `CMakeLists.txt` changes, `build.sh`.
+- Acceptance:
+  - `build.sh` and `test.sh` pass and print `Firmware version: 0.1.0`.
+  - Edit `firmware/VERSION` to `0.1.1`, run only `cmake --build firmware/build` and `cmake --build
+    firmware/Tests/build`: both reconfigure without a manual step. The firmware `.asm` of `menu_tree.c` (after A2)
+    holds the new strings, and the version test passes.
+  - `firmware/VERSION` = `0.1`: the configure step stops with the message of section 17.3.
+  - `firmware/VERSION` = `10.12.3`, then `12345.12345.12345` (17 characters): `build.sh` and `test.sh` pass (V-167).
+  - `firmware/VERSION` = `123456.12345.12345` (18 characters): the configure step of `build.sh` and of `test.sh`
+    stops with the length message (V-168). With the CMake length check removed in a scratch copy, the
+    `_Static_assert` of `menu_tree.c` stops the compile.
+  - `firmware/VERSION` is `0.1.0` again at the end.
+  - `grep -rn "0\.1\.0" firmware --exclude-dir=build --exclude-dir=drivers` finds only `firmware/VERSION`.
+
+#### A2 Start-up screen and `About`
+
+- Inputs: sections 17.4 and 17.5, `ui-ux.md` sections 5.17 and 5.18.
+- Dependency: the logic, the ids and the tests 17.8 items without pixels can start at once. The render waits for
+  the two `ui-ux.md` sections. If they are not published, or they conflict with section 17.5, report `blocked` to
+  `architector`.
+- Outputs: the menu files, the helper, the setup changes, `test_menu_splash.c`, `test_menu_about.c`.
+- Acceptance: the tests of section 17.8 pass; all earlier tests pass with only the changes that section 17.8
+  allows; strings and the tree are in code memory (`.asm` or `.map`); the memory table is in the limits of 17.6.
+
+#### A3 Developer close-out
+
+- Output: the final report: memory tables of A0-A2, the stack count, the list of changed test expectations,
+  `clang-format --dry-run --Werror` on the changed C files, assumptions, and the open device checks of 17.11.
+
+### 17.10 QA checks by `qa-embedded` (QA-A)
+
+QA runs after A3. QA adds its tests as `firmware/Tests/test_qa_menu_splash.c` and `test_qa_menu_about.c`.
+
+- An independent check of each item of section 17.12.
+- Boundaries: `MENU_SPLASH_MS - 1`, `MENU_SPLASH_MS`, tick wrap, a build with `-DMENU_SPLASH_MS=` another value.
+- Event fuzz on the splash and on ABOUT (random codes and flags): the splash always ends on the first event; no
+  call to settings, sidetone, contrast, backlight, stats or a mode.
+- A held `prev` or `next` after the skip, with real button pins: the press only skips, the repeats act on the list
+  as `ui-ux.md` section 5.17.2 says.
+- Recovery start with real button pins: release before and after the 5 s timeout.
+- An independent decode of the 8 x 16 `CW Trainer` cells from the `u8g2_fonts.h` bytes.
+- The version path checks of A1, run again by QA, and a review that no file other than `firmware/VERSION` holds
+  the version.
+- A review of the screen-id renumber: no code or test uses a screen number literal.
+- Verdict: `approved`, `changes_requested` or `blocked`.
+
+### 17.11 Device checks (open until the user tests on the device)
+
+| ID | Check |
+| --- | --- |
+| DC-A1 | The start-up screen looks like the mockup; the 8 x 16 `CW Trainer` is legible. |
+| DC-A2 | The start-up screen shows for about 5 s, measured from power-on with a stopwatch or the logic analyzer. Note the full-frame flush time. |
+| DC-A3 | Each button skips the screen, and the skip press has no other effect. |
+| DC-A4 | The `About` text and the link rows are legible and complete. |
+| DC-A5 | Recovery start: the start-up screen, then `Display Defaults`, then the main menu. |
+
+### 17.12 Acceptance criteria
+
+1. `firmware/VERSION` is the only source of the version (D-A1, A1 grep).
+2. An edit of `firmware/VERSION` reaches the firmware and the host tests without a manual reconfigure. A bad format
+   or a version longer than 17 characters stops the build (D-A15, V-168).
+3. The behavior of section 17.5, proved by the tests of section 17.8 and QA-A.
+4. The screens match `ui-ux.md` sections 5.17 and 5.18.
+5. All earlier host tests pass; changed expectations are only those that section 17.8 allows.
+6. `build.sh`, `test.sh` and `check_asm.sh` pass. Host flags unchanged, no new warning suppression.
+7. Memory and stack in the limits of section 17.6.
+8. QA verdict `approved`, then the `architector` review `approved`.
+
+### 17.13 Other work
+
+- W-A (`technical-writer`, after the `architector` approval): `docs/user_manual.md` (start-up screen, skip,
+  `About`) and `docs/release_notes.md` (version 0.1.0).
+- The version rule in `AGENTS.md` (plan section "Version rule") is a user-maintained file. The coordinating session
+  adds it with the user's approval. No firmware agent edits `AGENTS.md`.
+- After the work, ask the user if the version must change (the new rule). This change keeps `0.1.0`.
+
+### 17.14 Risks
+
+| Risk | Handling |
+| --- | --- |
+| `ui-ux.md` gives another recovery order or button reaction | Stop and report to `architector` (section 17.1). |
+| The SDCC build does not rebuild `menu_tree.c` after a version change | A1 acceptance checks the `.asm`. If it fails, report to `architector`; the fallback is an explicit `OBJECT_DEPENDS` on `version.h`. |
+| Older specs show the old screen numbers | D-A3 supersedes them. Code and tests use only the macros (QA-A review). |
+| One stored message slot during the splash | Only `main.c` calls `menu_show_message()` before the first event; the last id wins (D-A9). |
+| The flush shortens the visible splash time | DC-A2 measures it. A change needs a user decision. |
+
+### 17.15 Final review decisions (2026-10-08)
+
+Verdict: `changes_requested`. The review ran `build.sh` (flash 28 083 B, xdata 1817 B, stack start 0x41 with
+191 B free), `test.sh` (79 of 79 pass), `tools/check_asm.sh` on the firmware objects (no violations) and the
+version grep (only `firmware/VERSION`). A clean SDCC build gives no warnings.
+
+Deviations of the developer:
+
+| ID | Item | Decision |
+| --- | --- | --- |
+| DV-1 | SDCC 4.6.0 gives only warning 215 for a failed `_Static_assert` and still links. | Accepted for this change. The CMake length check is the binding guard for the target build. The `_Static_assert` of `menu_tree.c` stops the host build (`-Werror`). Follow-up F1. |
+| DV-2 | The check is `sizeof(menu_text_version_short) - 2U <= 17U`. | Accepted. It is the same limit as D-A15 (the array holds `v`, the version and NUL). |
+| DV-3 | The extra code-memory constant `menu_text_version_short_length`. | Accepted. It keeps `version.h` out of `menu_render.c` (D-A11) and costs 1 byte of flash. |
+| DV-4 | The 5 x 8 splash texts use grid cells. | Accepted. The cells give the pixel positions of `ui-ux.md` section 5.17.1 (x = 2 + 5 x column). |
+| DV-5 | V-153 checks only the pages that change. | Accepted. Page 6 is blank on both screens, so the dirty-page logic does not send it. The full-frame compare proves the result. Follow-up F2. |
+| DV-6 | The test helper `support/menu_frame.h` and the new 8 x 16 glyphs in `font_golden.h`. | Accepted. The 5 x 8 data and the 3 old 8 x 16 glyphs do not change. |
+
+QA findings:
+
+| ID | Finding | Decision |
+| --- | --- | --- |
+| L1 | The `MEM_XDATA` parameter of `draw_plain()` adds a third xdata byte. | Accepted. +3 B is in the +6 B limit of section 17.6. It keeps internal RAM at 0 B, and other modules use the same pattern. |
+| L2 | `file(STRINGS)` accepts a CRLF line or a UTF-8 BOM, but `cat` prints them. | Fix R1. |
+| Info | `test_menu_training.c:204` and `test_qa_menu.c:247` compare `menu_screen()` with `2U`. | Fix R2 and R3 (section 17.10: no screen number literal). |
+| Info | `test_menu_training.c:92-93` expect 7 and 8. | Accepted. The two lines pin the D-A3 values on purpose. They do not compare a run-time screen with a literal. |
+
+Required fixes:
+
+| ID | Owner | Fix | Evidence |
+| --- | --- | --- | --- |
+| R1 | `c-embedded-developer` | `firmware_version.cmake` checks the raw bytes as section 17.3 step 2 says. | The configure step stops for a CRLF file and for a BOM file, and passes for `0.1.0` with LF and without LF. `build.sh` and `test.sh` pass, with the memory table. |
+| R2 | `c-embedded-developer` | `test_menu_training.c:204` uses `MENU_SCREEN_SPLASH`. | `test.sh` passes. |
+| R3 | `qa-embedded` | `test_qa_menu.c:247` uses `MENU_SCREEN_SPLASH`. | `test.sh` passes. |
+
+Follow-ups. Each needs a ticket before work starts.
+
+- F1: make SDCC stop on a failed `_Static_assert` for the whole target build, for example with `--Werror`. It
+  changes the build of all modules and the 24 other `_Static_assert` checks in `src/`, so it is a separate change.
+  The clean build has no warnings now, so the cost is low.
+- F2: `ui-ux-embedded-designer` changes V-153 in `ui-ux.md` section 9.5 from "all 8 pages redrawn" to "every
+  changed page sent, full frame equal to `MAIN(1)`".
+
+Re-review (2026-10-08): `approved`. R1: the review ran `firmware_version.cmake` on test files. `0.1.0` with LF and
+without LF passes. CRLF, BOM, two LF and a trailing space stop the script. R2 and R3 use `MENU_SCREEN_SPLASH`. F2:
+V-153 in `ui-ux.md` section 9.5 names pages 0-5 and 7. `build.sh` gives flash 28 083 B, xdata 1817 B and stack
+start 0x41 with 191 B free. `test.sh` passes 79 of 79 tests. `tools/check_asm.sh` finds no violations. F1 stays
+open and needs a ticket.
+
+Change (2026-10-08, user decision): the start-up screen time changes from 2 s to 5 s. `MENU_SPLASH_MS` in `menu.h`
+changes from `2000U` to `5000U`. D-A6, the section 17.4 listing, the QA-A recovery-start check and DC-A2 now say
+5 s. Nothing else changes: the tests use the macro, and the `uint16_t` tick difference wraps only at 65 535 ms.
+
+Review of the 5 s change (2026-10-08): `approved`. QA verdict `approved`. `menu.h` sets `5000U`; the `menu.c`
+object compares with `0x1388`. The splash tests use times relative to `MENU_SPLASH_MS`. `build.sh` gives flash
+28 083 B, xdata 1817 B and stack start 0x41 with 191 B free, as before. `test.sh` passes 79 of 79 tests and the
+168 `check_asm` self-test cases. `ui-ux.md` (UX-59, V-152 to V-161), `docs/user_manual.md` and
+`docs/release_notes.md` say 5 s; the other 2 s values there are unrelated hold times. DC-A2 stays open.

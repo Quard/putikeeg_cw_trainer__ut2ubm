@@ -13,7 +13,8 @@
 
 /* menu_handle() takes every screen from MENU_SCREEN_FREE_INPUT on as a mode screen. */
 #if (MENU_SCREEN_RECEIVING <= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_SENDING <= MENU_SCREEN_FREE_INPUT) || \
-    (MENU_SCREEN_MESSAGE >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_DIALOG >= MENU_SCREEN_FREE_INPUT)
+    (MENU_SCREEN_MESSAGE >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_DIALOG >= MENU_SCREEN_FREE_INPUT) ||    \
+    (MENU_SCREEN_SPLASH >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_ABOUT >= MENU_SCREEN_FREE_INPUT)
 #error "The mode screens must have the highest screen numbers"
 #endif
 
@@ -34,6 +35,9 @@ static MEM_XDATA uint16_t edit_value;
 /* Tone preview, references/internal/ui-ux.md section 6.5. */
 static MEM_XDATA bool menu_is_preview_running;
 static MEM_XDATA uint16_t menu_preview_start;
+
+/* Startup screen, references/internal/ui-ux.md section 5.17. */
+static MEM_XDATA uint16_t menu_splash_start;
 
 #define MENU_TOP ((uint8_t)(menu_depth - 1U))
 
@@ -119,6 +123,8 @@ static void menu_enter_item(void) {
   } else if (item->kind == MENU_KIND_ACTION) {
     menu_current_choice = MENU_DIALOG_NO;
     menu_show_screen(MENU_SCREEN_DIALOG);
+  } else if (item->kind == MENU_KIND_ABOUT) {
+    menu_show_screen(MENU_SCREEN_ABOUT);
   } else {
     menu_show_screen(MENU_SCREEN_EDIT);
     if (item->target == SETTINGS_ID_TONE_HZ) {
@@ -241,8 +247,20 @@ static void menu_handle_mode_screen(button_event_t event) {
   }
 }
 
-/* Lists, edit mode, the dialog and messages ignore long events: the press of the same hold already acted (UX-24). */
+/* A message stored during the startup screen shows at its end (spec D-A9, ui-ux.md UX-60). */
+static void menu_end_splash(void) {
+  menu_show_screen((menu_current_message != MENU_MESSAGE_NONE) ? MENU_SCREEN_MESSAGE : MENU_SCREEN_LIST);
+}
+
+/*
+ * Any event only ends the startup screen (UX-59). Lists, edit mode, the dialog, messages and About ignore long
+ * events: the press of the same hold already acted (UX-24).
+ */
 static void menu_handle_other_screen(void) {
+  if (menu_current_screen == MENU_SCREEN_SPLASH) {
+    menu_end_splash();
+    return;
+  }
   if (handle_is_long) {
     return;
   }
@@ -262,9 +280,10 @@ void menu_init(void) {
   menu_stack_cursors[0] = 0U;
   menu_depth = 1U;
   menu_current_choice = MENU_DIALOG_NO;
-  menu_current_message = MENU_MESSAGE_STATS_RESET;
+  menu_current_message = MENU_MESSAGE_NONE;
   menu_is_preview_running = false;
-  menu_show_screen(MENU_SCREEN_LIST);
+  menu_splash_start = tick_now();
+  menu_show_screen(MENU_SCREEN_SPLASH);
 }
 
 void menu_handle(button_event_t event) {
@@ -282,6 +301,9 @@ void menu_handle(button_event_t event) {
 }
 
 void menu_poll(void) {
+  if ((menu_current_screen == MENU_SCREEN_SPLASH) && ((uint16_t)(tick_now() - menu_splash_start) >= MENU_SPLASH_MS)) {
+    menu_end_splash();
+  }
   /* After the frame: the mode never draws before its frame is drawn. */
   if (!menu_is_redraw_pending) {
     if (menu_current_screen == MENU_SCREEN_FREE_INPUT) {
@@ -317,8 +339,11 @@ void menu_show_message(uint8_t message_id) {
   if (message_id >= MENU_MESSAGE_COUNT) {
     return;
   }
+  menu_current_message = message_id;
+  if (menu_current_screen == MENU_SCREEN_SPLASH) {
+    return;
+  }
   menu_leave_tone_edit();
   menu_leave_mode();
-  menu_current_message = message_id;
   menu_show_screen(MENU_SCREEN_MESSAGE);
 }

@@ -10,4 +10,5 @@ cmake -S "${firmware_dir}" -B "${build_dir}" \
 cmake --build "${build_dir}" --parallel
 
 cat "${build_dir}/putikeeg_cw_trainer.mem"
+echo "Firmware version: $(head -n 1 "${firmware_dir}/VERSION")"
 echo "Firmware image: ${build_dir}/putikeeg_cw_trainer.ihx"

@@ -13,8 +13,9 @@
 #define WALK_COUNT 200U
 #define WALK_STEPS 300U
 
-/* Main menu: Settings is the last item; Settings: Reset Statistics is the last item. */
+/* Main menu: Settings is before the last item About; Settings: Reset Statistics is the last item. */
 static void confirm_reset(void) {
+  harness_event(BUTTON_EVENT_PREV);
   harness_event(BUTTON_EVENT_PREV);
   harness_event(BUTTON_EVENT_ENTER);
   harness_event(BUTTON_EVENT_PREV);
@@ -72,7 +73,7 @@ static void test_fake_default_result(void) {
   TEST_ASSERT_EQUAL(MENU_MESSAGE_STATS_RESET, menu_message());
 }
 
-/* AC-T22: the mode items open their screens; screen 2 (the placeholder) no longer exists. */
+/* AC-T22: the mode items open their screens. Screen ids follow menu_subsystem_spec.md D-A3. */
 static void test_mode_items_open_screens(void) {
   start();
   fake_koch_item_reset();
@@ -88,8 +89,8 @@ static void test_mode_items_open_screens(void) {
   harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_FREE_INPUT, menu_screen());
-  TEST_ASSERT_EQUAL(6U, MENU_SCREEN_RECEIVING);
-  TEST_ASSERT_EQUAL(7U, MENU_SCREEN_SENDING);
+  TEST_ASSERT_EQUAL(7U, MENU_SCREEN_RECEIVING);
+  TEST_ASSERT_EQUAL(8U, MENU_SCREEN_SENDING);
 }
 
 /* A message shown over a mode screen stops the mode first (training_spec.md section 12.1). */
@@ -200,7 +201,7 @@ static void test_random_walk_keyer_and_player_exclusive(void) {
         TEST_ASSERT(!fake_player_is_running());
       }
       TEST_ASSERT(!(fake_keyer_is_running() && fake_player_is_running()));
-      TEST_ASSERT(menu_screen() != 2U);
+      TEST_ASSERT(menu_screen() != MENU_SCREEN_SPLASH);
     }
   }
   printf("receiving steps %u, sending steps %u, overlaps %u\n", (unsigned)receiving_visits, (unsigned)sending_visits,

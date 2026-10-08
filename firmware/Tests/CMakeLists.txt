@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 enable_testing()
 
 set(FIRMWARE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+include("${FIRMWARE_DIR}/cmake/firmware_version.cmake")
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror -g -fsanitize=address,undefined -fno-sanitize-recover=all
                     -fno-omit-frame-pointer)
@@ -233,8 +234,10 @@ add_library(menu_group STATIC
     fakes/fake_lcd_pins.c
     fakes/fake_button_pins.c)
 target_include_directories(menu_group PUBLIC
-    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/menu" "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings")
-target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS})
+    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/menu" "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings"
+    "${FIRMWARE_VERSION_INCLUDE_DIR}")
+# The version test reads the file at run time and compares it with FIRMWARE_VERSION.
+target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS} FIRMWARE_VERSION_FILE="${FIRMWARE_VERSION_FILE}")
 
 set(MODULE_TEST_PATTERNS
     GFX_TEST_PATTERN EEPROM_TEST_PATTERN SETTINGS_TEST_PATTERN BUTTONS_TEST_PATTERN BACKLIGHT_TEST_PATTERN

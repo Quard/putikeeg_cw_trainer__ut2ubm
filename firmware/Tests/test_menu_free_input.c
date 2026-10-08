@@ -25,6 +25,7 @@
 #include "menu/menu.h"
 #include "settings/settings.h"
 #include "support/free_input_screen.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 
 #define LOG_CAPACITY 4096U
@@ -80,6 +81,7 @@ static void power_on(void) {
   backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
   gfx_init();
   menu_init();
+  menu_test_skip_splash();
   menu_render();
   event_count = 0U;
   render_count = 0U;

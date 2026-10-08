@@ -16,6 +16,8 @@ DEFAULT_FONT_HEADER = FIRMWARE_DIR / "inc" / "u8g2_fonts.h"
 DEFAULT_OUTPUT = FIRMWARE_DIR / "Tests" / "fixtures" / "font_golden.h"
 
 HEADER_SIZE = 23
+# 8 x 16 glyphs: decoder samples, then the startup screen text "CW Trainer" (ui-ux.md section 5.17).
+LARGE_GLYPHS = "Ag0CWTraine"
 SIMPLE_ESCAPES = {
     "n": 10, "t": 9, "r": 13, "a": 7, "b": 8, "f": 12, "v": 11,
     "\\": 92, '"': 34, "'": 39, "?": 63,
@@ -166,7 +168,7 @@ def main():
         "#define FONT_GOLDEN_8X16_WIDTH 8U",
         "#define FONT_GOLDEN_8X16_ROWS 16U",
         f"#define FONT_GOLDEN_8X16_CELL_HEIGHT {large.bbox_height}U",
-        "#define FONT_GOLDEN_8X16_COUNT 3U",
+        f"#define FONT_GOLDEN_8X16_COUNT {len(LARGE_GLYPHS)}U",
         "",
         "typedef struct {",
         "  uint8_t rows[FONT_GOLDEN_5X8_ROWS];",
@@ -188,7 +190,7 @@ def main():
     lines.append("};")
     lines.append("")
     lines.append("static const font_golden_8x16_t font_golden_8x16[FONT_GOLDEN_8X16_COUNT] = {")
-    for char in "Ag0":
+    for char in LARGE_GLYPHS:
         rows, pitch = large.render(ord(char), 8, 16)
         lines.append(f"    {{0x{ord(char):02X}U, {{{c_rows(rows)}}}, {pitch}}}, /* '{char}' */")
     lines.append("};")

@@ -402,22 +402,22 @@ static void test_golden_end_top(void) {
 static void test_golden_main_menu(void) {
   static const golden_t empty = {
       {"CW Trainer", "Receiving            L1", "Sending              L1", "Free Input", "Settings                >",
-       NULL, NULL, NULL},
+       "About", NULL, NULL},
       false,
       1};
   static const golden_t levels = {
       {"CW Trainer", "Receiving           L12", "Sending              L1", "Free Input", "Settings                >",
-       NULL, NULL, NULL},
+       "About", NULL, NULL},
       false,
       1};
   static const golden_t top_on_sending = {
       {"CW Trainer", "Receiving        L65535", "Sending          L65535", "Free Input", "Settings                >",
-       NULL, NULL, NULL},
+       "About", NULL, NULL},
       false,
       2};
   static const golden_t on_free_input = {
       {"CW Trainer", "Receiving        L65535", "Sending          L65535", "Free Input", "Settings                >",
-       NULL, NULL, NULL},
+       "About", NULL, NULL},
       false,
       3};
 

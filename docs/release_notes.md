@@ -3,20 +3,146 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
-## Unreleased: level selection in Receiving and Sending
+## Version 0.1.0 (in development)
 
-Changes since commit `5916c0f` (Koch training modes Receiving and Sending).
+Version 0.1.0 is the first version of the custom firmware. It is not released. Work on it continues, and the next
+changes go into this version too. All functions below are new.
 
 > **Not tested on the device.** This version passed the host tests, the build checks, the QA review and the
 > architecture review. Nobody tested it on the device yet. See
-> [Not checked on the device: level selection](#not-checked-on-the-device-level-selection).
+> [Not checked on the device](#not-checked-on-the-device).
 
-### New
+### Menu and buttons
 
-- **Start screen.** `Receiving` and `Sending` open on a start screen. No session starts until you press `enter`.
-  The screen shows the level selector `<  L20 of 20` and a description line. The first number is the level that
-  you choose. The second number is your earned level, the level that the device stores for the mode at the current
-  speed. The start screen always shows your earned level first.
+- **Main menu.** The main menu `CW Trainer` has five items: `Receiving`, `Sending`, `Free Input`, `Settings` and
+  `About`. `Receiving` and `Sending` show your level at the right side of the row, for example `L12`. `Settings`
+  has a `>` marker, because it opens a list. `About` has no marker, because it opens a screen.
+- **Four buttons.** From left to right: `menu/back`, `prev`, `next` and `enter`. In a list, `prev` and `next` move
+  the cursor, `enter` opens the item, and `menu/back` goes back one level.
+- **Auto-repeat.** Hold `prev` or `next` to repeat the action. The first repeat comes after 0.4 s, then 12.5 steps
+  per second.
+- **Wrap in lists.** A press of `next` on the last item goes to the first item, and a press of `prev` on the first
+  item goes to the last item. When you hold the button, the cursor stops at the end of the list.
+- **Hold a button in a mode screen.** In Free Input and in a training session, hold a button for about 0.8 s to
+  give a command. For example, hold `menu/back` to leave. The screen shows no hint for these holds.
+- **The tip contact is `enter`.** The tip contact of the key/paddle socket is connected to `enter`. In the menu, a
+  dit lever or a straight key acts as `enter`.
+- The menu has no timeout.
+
+### Startup screen and About
+
+- **Startup screen.** Each power-on shows a startup screen for about 5 s: `Putikeeg`, `CW Trainer` in large
+  characters, `mod by UT2UBM` and the version, for example `v0.1.0`. Then the main menu shows with the cursor on
+  `Receiving`. The screen makes no sound.
+- **Skip the startup screen.** A press of any of the four buttons shows the main menu at once. The press does
+  nothing else: it does not move the cursor and does not open an item. A closure of the tip contact skips the
+  screen too. A button that you hold while you switch on the device does not skip it.
+- **`About` screen.** The last item of the main menu. Its screen shows `Putikeeg CW Trainer`, `mod by UT2UBM`,
+  `Version 0.1.0` and the project link <https://github.com/Quard/putikeeg_cw_trainer__ut2ubm> in three parts.
+  Press `enter` or `menu/back` to go back to the main menu. `prev` and `next` do nothing on this screen.
+- **Firmware version.** The version has the format `MAJOR.MINOR.PATCH`. The startup screen and the `About` screen
+  show it.
+
+### Settings
+
+| Menu | Setting | Values | Default |
+| --- | --- | --- | --- |
+| Settings > CW | `Tone` | 400 to 1000 Hz, step 10 Hz | 600 Hz |
+| Settings > CW | `RX Speed` | 5 to 50 WPM | 32 WPM |
+| Settings > CW | `RX Eff. Speed` | 5 WPM to the current `RX Speed` | Same as `RX Speed` |
+| Settings > CW | `TX Speed` | 5 to 50 WPM | 20 WPM |
+| Settings > CW | `TX Eff. Speed` | 5 WPM to the current `TX Speed` | Same as `TX Speed` |
+| Settings > CW | `Key Type` | `Straight`, `Iambic A`, `Iambic B` | `Iambic B` |
+| Settings > CW | `Paddle` | `Normal`, `Reversed` | `Normal` |
+| Settings | `Show CW Code` | `Off`, `On` | `On` |
+| Settings | `Prosigns` | `Punctuation`, `Prosign`, `Both` | `Both` |
+| Settings | `Max Word Length` | 4 to 8 | 5 |
+| Settings > Display | `Backlight` | `Off`, 1 to 10 | 8 |
+| Settings > Display | `Contrast` | 0 to 63 | 32 |
+
+- **Edit a value.** Press `enter` to start editing. `<` and `>` show which directions are possible. Values do not
+  wrap. Press `enter` or `menu/back` to end editing.
+- **Effective-speed rule.** An effective speed is never higher than its base speed. When you decrease a base speed
+  below its effective speed, the effective speed decreases with it.
+- **When a setting takes effect.** `Backlight` and `Contrast` change the display at each step while you edit them.
+  The other settings take effect the next time you open Free Input, `Receiving` or `Sending`.
+- **`Reset Statistics`.** In `Settings`, this item sets all training levels back to L1, after a `Yes` in the dialog
+  `Reset statistics?`. It does not change the settings.
+
+### Sidetone and Tone preview
+
+- **Sidetone.** The device plays the sidetone in Free Input and in Sending, and the Morse playback in Receiving. The
+  pitch is the `Tone` setting. The sidetone rises in 8 ms and falls in 8 ms, to prevent clicks.
+- **Volume and headphones.** The volume knob sets the loudness. With headphones plugged in, the headphones play
+  instead of the speaker.
+- **Tone preview.** At the start of a `Tone` edit, the device plays the tone for about 0.3 s. Each change of the
+  value plays the new tone again. At the end of the edit, the tone stops at once.
+
+### Free Input and the keyer
+
+- **Free Input mode.** Key Morse code with a paddle or a straight key. The device plays the sidetone and shows each
+  decoded character in a text area of 7 lines of 25 characters. A full screen moves up by one line.
+- **Key types.** `Settings > CW > Key Type` sets `Straight`, `Iambic A` or `Iambic B`. In the iambic modes, dits,
+  dahs and spaces have exact lengths. A squeeze gives dits and dahs in turn. At the release of a squeeze,
+  `Iambic B` adds one more element.
+- **`Paddle` setting.** `Normal` gives dits on the tip and dahs on the ring. `Reversed` swaps them.
+- **Speeds.** `TX Speed` sets the dit length. `TX Eff. Speed` sets the pause for a word space. For a straight key,
+  a mark of 2 dits or longer is a dah.
+- **Decoded text.** The decoder knows `A` to `Z`, `0` to `9`, the signs `.` `,` `?` `/` `=` `+` `-` `(` `)` `&`
+  `_` `"` `@` `'` `;` `!` `:`, and the prosigns AR, BT, KN, AS and SK. An unknown pattern shows as `*`.
+- **Holds in Free Input.** Hold `menu/back` for about 0.8 s to leave, hold `prev` to clear the text, and hold
+  `next` to draw a line under the text.
+- **`enter` in Free Input.** The `enter` button keys like the tip contact of the paddle socket. The `enter` press
+  that opens Free Input gives no dit.
+
+### Prosigns
+
+`Settings > Prosigns` sets how the device shows the prosigns AR, BT, KN and AS. These four prosigns have the same
+code as a punctuation mark.
+
+| Prosign | `Punctuation` | `Prosign` | `Both` (default) |
+| --- | --- | --- | --- |
+| AR | `+` | `<AR>` | `<AR/+>` |
+| BT | `=` | `<BT>` | `<BT/=>` |
+| KN | `(` | `<KN>` | `<KN/(>` |
+| AS | `&` | `<AS>` | `<AS/&>` |
+
+- SK has no punctuation mark. It always shows as `<SK>`.
+- `<` opens a prosign text and `>` closes it. A text has up to 6 characters, and it can split at a line end.
+- Free Input uses the setting. `Receiving` and `Sending` use it for BT, SK and AR in the items, in the keyboard
+  labels, in the `Wrong:` text and in the description line of the level selector.
+
+### Koch training: Receiving and Sending
+
+- **Koch method.** Both modes teach 43 characters in Koch order, from K and M up to the prosigns BT, SK and AR.
+  Two character sessions of 50 characters add two new characters. Then a word session of 10 words uses all
+  characters that you learned. From L64, the final word sessions add one word for each level, up to 100 words.
+- **Pass rules.** The score counts only the items that you answer correctly on the first attempt. A character
+  session needs 90 %. A word session needs 80 % of the words, rounded up. You have 3 attempts for each item.
+- **`Max Word Length`.** It sets the longest word, 4 to 8 characters.
+- **Receiving.** The device plays an item at `RX Speed` and `RX Eff. Speed`. You pick its characters with a group
+  keyboard of four labels, one above each button. A tap acts at the release. One pick needs 3 taps at most. Hold
+  `enter` for about 0.8 s to hear the item again. Hold `prev` to undo one step.
+- **Sending.** The device shows an item, and you key it with the keyer of Free Input. The device decodes and checks
+  each character at once. One wrong character ends the attempt, and the status line shows `Wrong:` and the keyed
+  character. In a word, a pause of more than 5 units of the `TX Eff. Speed` spacing between two characters shows
+  `Wrong: pause too long`. A retry starts the whole item again from its first character.
+- **Code row.** With `Show CW Code` = `On`, the bottom row of Sending shows the dots and dashes that you key. After
+  the third wrong attempt, the code of the expected character shows, also with `Off`.
+- **Session end screen.** It shows the score and one result text: `Passed, new level` after a pass at your earned
+  level, `Passed` after a replay pass or a pass at L65535, or `Not passed, need <t>`. Below the result, it shows the
+  level selector and `Start`. After a failed save of the level, row 1 shows `Not saved`.
+- **Leave a session.** Hold `menu/back` for about 0.8 s. The session is lost, and your level does not change.
+
+### Levels and level selection
+
+- **Earned level.** The device stores one level for each mode and each character speed from 5 to 50 WPM.
+  `Receiving` uses the level of the current `RX Speed`, and `Sending` uses the level of the current `TX Speed`. The
+  main menu shows the earned level next to `Receiving` and `Sending`.
+- **Start screen.** `Receiving` and `Sending` open on a start screen. No session starts until you press `enter` or
+  close the tip contact. The screen shows the level selector `<  L20 of 20` and a description line. The first
+  number is the level that you choose. The second number is your earned level. The start screen always shows your
+  earned level first. Press `menu/back` to go back to the main menu.
 - **Choose a level.** `prev` goes one level down and `next` goes one level up, from L1 up to your earned level. A
   hold repeats the step: the first repeat after 0.4 s, then 12.5 levels per second. The level stops at L1 and at
   your earned level. It does not wrap. `<` and `>` show which steps are possible.
@@ -25,170 +151,75 @@ Changes since commit `5916c0f` (Koch training modes Receiving and Sending).
   the `Prosigns` setting, for example `New char <BT/=>`.
 - **Replay a lower level.** A pass below your earned level keeps the stored level. The device saves nothing.
   Example: your earned level is L20. You pass L5. The next session preselects L6, and the store keeps L20.
-- **Level in the main menu.** `Receiving` shows your earned level at the current `RX Speed`, for example `L12`.
-  `Sending` shows it at the current `TX Speed`.
+- **Level after a session.** After a pass, the selector on the session end screen shows the next level. After a
+  fail, it shows the same level. You can change it before you start the next session.
+- **Buttons on the start screen and the session end screen.** Every button acts at the push, in both modes. The
+  end screen ignores a button that you hold from the session. Release the button, and then press it again.
 
-### Changed
+### Saved settings and levels
 
-- **Opening a mode does not start a session.** Press `enter`, or close the tip contact, on the start screen to
-  start the session. To leave the start screen, press `menu/back`.
-- **New session end screen.** After a failed save, row 1 shows `Not saved`. Then come the score and one result
-  text: `Passed, new level` after a pass at your earned level, `Passed` after a replay pass or a pass at L65535, or
-  `Not passed, need <t>`. Below the result, the end screen shows the same selector as the start screen, and `Start`.
-  The texts `New level`, `Repeat level`, `Top level` and `Next` are gone.
-- **Preselection after a session.** After a pass, the selector shows the next level. After a fail, it shows the
-  same level. You can change it before you start the next session.
-- **Buttons on the session end screen.** `prev` and `next` change the level. In both modes, every button acts at
-  the push. In Receiving, the end screen buttons are no longer taps. A short press of `menu/back` opens the main
-  menu.
-- **A held button does not change the selection.** The end screen ignores a button that you hold from the session.
-  Release the button, and then press it again.
+- **Settings.** To save the settings, leave `Settings` for the main menu. A save needs a change of at least one
+  value. If the save fails, the message `Not saved` shows.
+- **Levels.** The device saves a level only after a pass at your earned level. A replay pass, a failed session and
+  a session that you leave save nothing.
+- **Empty or damaged memory.** With no saved settings, or with damaged settings, the device uses the default
+  values. With no stored levels, or with damaged levels, every level is L1. The device shows no message.
+- The startup screen and `About` write nothing.
 
-### Saved levels
+### Display recovery start
 
-The stored levels and their format do not change. A replay pass writes nothing. Only a pass at your earned level
-saves, as before.
+Hold `menu/back` while you switch on the device. The startup screen shows first, with the default contrast 32 and
+the default backlight 8. Then the `Display Defaults` message shows. The press that skips the startup screen does
+not close the message. Press `enter` or `menu/back` to close it. The recovery start does not change the saved
+settings.
 
 ### Known limits
 
-- **Insert the plug before you open `Receiving` or `Sending`.** On the start screen and the session end screen, a
-  closure of the tip contact starts a session at once. A plug insertion can do the same. Hold `menu/back` for about
-  0.8 s to leave such a session. Your level does not change.
+- **Insert the plug before you open Free Input, `Receiving` or `Sending`.** A plug that you insert while Free Input
+  is open can close a contact. Then the tone does not stop, or the keyer sends without end. On the start screen and
+  the session end screen, a closure of the tip contact starts a session at once. A plug insertion can do the
+  same. Hold `menu/back` for about 0.8 s to leave. Your level does not change. The device has no time limit for a
+  closed contact.
+- **The device does not store the Free Input text.** The end of Free Input or a power loss deletes it.
+- `Show CW Code` has no effect on Free Input.
+- The decoder does not adapt to your speed. Key at the speed of the settings.
 - A far level takes time to reach: from L1 to L150 takes about 12 s.
 - The level that you choose is not stored. When you open the mode again, the selector shows your earned level.
-
-### Not checked on the device: level selection
-
-The firmware design and the host tests give the behavior above. These items need a check on the device:
-
-- The feel of the selector with auto-repeat, on the start screen and the end screen, in both modes, up to an earned
-  level above L50. The last level must show within 0.1 s after the release.
-- The start of a session with the `enter` button and with the tip contact (dit lever and straight key). A held
-  contact must give no pick in Receiving, and no element and no tone in Sending.
-- A plug insertion while the start screen or the end screen shows. It can start a session.
-- The legibility of the selector, the description line and the level in the main menu.
-
-The device checks are in `references/internal/training_spec.md` section 18 (DC-T9) and
-`references/internal/ui-ux.md` section 11 (D-35 to D-37).
-
-## Unreleased: Prosigns setting
-
-Changes since commit `ee4eedd` (paddle keyer and Free Input).
-
-> **Not tested on the device.** This version passed the host tests, the build checks, the QA review and the
-> architecture review. Nobody tested it on the device yet. See
-> [Not checked on the device: Prosigns](#not-checked-on-the-device-prosigns).
-
-### New
-
-- **`Prosigns` setting.** `Settings > Prosigns` sets how Free Input shows the prosigns AR, BT, KN and AS. These four
-  prosigns have the same code as a punctuation mark. The default is `Both`.
-
-  | Prosign | `Punctuation` | `Prosign` | `Both` (default) |
-  | --- | --- | --- | --- |
-  | AR | `+` | `<AR>` | `<AR/+>` |
-  | BT | `=` | `<BT>` | `<BT/=>` |
-  | KN | `(` | `<KN>` | `<KN/(>` |
-  | AS | `&` | `<AS>` | `<AS/&>` |
-
-  SK has no punctuation mark. It always shows as `<SK>`. A change applies the next time you open Free Input.
-
-### Changed
-
-- **AR, BT, KN and AS show a new text by default.** With the default `Both`, AR shows as `<AR/+>`, not as `+`. To
-  see only the marks, set `Prosigns` to `Punctuation`.
-- **`<` and `>` mark every prosign text.** In Free Input, `<` opens a prosign text and `>` closes it. Before, they
-  appeared only in `<SK>`.
-- **A prosign text can split at a line end.** A text has up to 6 characters, and each character wraps on its own,
-  as `<SK>` did before. For example, `<AR` can end one line and `/+>` can start the next line.
-- **`Settings` has 6 items.** `Prosigns` is the new third item, after `Show CW Code`.
-
-### Saved settings
-
-- After the update, all earlier settings stay as they were. `Prosigns` is `Both`. The device shows no message.
-  This is true if the firmware download keeps the saved settings.
-- The settings have a new saved format. The device writes it at the first save, after you change a setting. The
-  update alone writes nothing.
-- **A return to an earlier firmware resets all settings.** After this version saved the settings, an earlier
-  firmware cannot read them. It uses all default values and shows no message. Set the values again.
-
-### Not checked on the device: Prosigns
-
-The firmware design and the host tests give the behavior above. These items need a check on the device:
-
-- The text of AR, BT, KN, AS and SK for each `Prosigns` value, and its legibility. Can the user read `<AR/+>`,
-  `<KN/(>` and `<AS/&>` at a glance, tell `(` from `<`, and tell the `/` inside a text from a keyed `/`? Can the
-  user join a text that splits at a line end?
-- The update from the earlier firmware with saved settings that are not the defaults. The settings must stay, and
-  `Prosigns` must show `Both`.
-- A power cycle keeps each `Prosigns` value.
-
-The device checks are in `references/internal/keyer_spec.md` section 17.10 (DC-P1 to DC-P3) and
-`references/internal/ui-ux.md` section 11 (D-25).
-
-## Unreleased: paddle keyer and Free Input
-
-Changes since commit `4e9b9d2` (PWM sidetone and Tone preview).
-
-> **Not tested on the device.** This version passed the host tests, the build checks, the QA review and the
-> architecture review. Nobody tested it on the device yet. See
-> [Not checked on the device](#not-checked-on-the-device).
-
-### New
-
-- **Free Input mode.** Open `Free Input` from the main menu. Key Morse code with a paddle or a straight key. The
-  device plays the sidetone and shows each decoded character in a text area of 7 lines of 25 characters. A full
-  screen moves up by one line.
-- **Keyer with three key types.** `Settings > CW > Key Type` now has an effect: `Straight`, `Iambic A` or
-  `Iambic B`. In the iambic modes, dits, dahs and spaces have exact lengths. A squeeze gives dits and dahs in turn.
-  At the release of a squeeze, `Iambic B` adds one more element.
-- **Speeds from the settings.** `TX Speed` sets the dit length. `TX Eff. Speed` sets the pause for a word space.
-  For a straight key, a mark of 2 dits or longer is a dah. The decoder does not adapt to your speed.
-- **Decoded text.** The decoder knows `A` to `Z`, `0` to `9` and the signs `.` `,` `?` `/` `=` `+` `-` `(` `)`
-  `&` `_` `"` `@` `'` `;` `!` `:`. AR shows as `+`, BT as `=` and SK as `<SK>`. An unknown pattern shows as `*`.
-- **`Paddle` setting.** `Settings > CW > Paddle` has the values `Normal` (tip = dit, ring = dah) and `Reversed`.
-  The default is `Normal`.
-- **Hold a button in a mode screen.** In Free Input, hold `menu/back` for about 0.8 s to leave, hold `prev` to
-  clear the text, and hold `next` to draw a line under the text. The screen shows no hint for these holds.
-- **`enter` in Free Input.** While Free Input is open, the `enter` button keys like the tip contact of the paddle
-  socket. The `enter` press that opens Free Input gives no dit.
-
-### Changed
-
-- **`Receiving` and `Sending` close with a hold.** To leave the `Not ready` screen, hold `menu/back` for about
-  0.8 s. A short press does nothing on this screen now.
-- **`Settings > CW` has 7 items.** `Paddle` is the new last item.
-- **More settings take effect.** `Tone`, `TX Speed`, `TX Eff. Speed`, `Key Type` and `Paddle` take effect the next
-  time you open Free Input. `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` still have no effect.
-
-### Saved settings
-
-The `Paddle` setting uses a free bit of the saved settings. The layout of the saved settings does not change. If
-the device keeps the settings of the earlier firmware, `Paddle` is `Normal`, and all other settings stay as they
-were. Free Input does not save anything.
-
-### Known limits
-
-- **Insert the plug before you open Free Input.** A plug that you insert while Free Input is open can close a
-  contact. Then the tone does not stop, or the keyer sends without end. Hold `menu/back` to leave, then open Free
-  Input again. The device has no time limit for a closed contact.
-- **The device does not store the text.** The end of Free Input or a power loss deletes it.
-- `Receiving` and `Sending` are not available yet.
-- `Show CW Code` has no effect on Free Input.
+- A firmware download can keep or delete the saved settings and levels. Nobody checked this on the device yet.
 
 ### Not checked on the device
 
 The firmware design and the host tests give the behavior above. These items need a check on the device:
 
+- The legibility of the screens, the contrast range and the backlight levels. The button response time.
+- The sidetone and the Tone preview: no clicks, the route to the speaker or the headphones, the pitch.
 - The internal pull-up of the paddle ring input (P5.5). The reference manual of the processor is not clear about
   it. If the pull-up does not work, the dah lever does nothing, or the keyer sends with no lever pressed.
-- The polarity of the tip and ring contacts.
-- The element and space lengths, and the difference between `Iambic A` and `Iambic B` with a real paddle.
-- The bounce of a real paddle, and the decoding of a straight key.
-- The feel of the 0.8 s hold.
+- The polarity of the tip and ring contacts, the bounce of a real paddle, and a mono plug.
+- The element and space lengths, and the difference between `Iambic A` and `Iambic B` with a real paddle. The
+  decoding of a straight key.
+- The feel of the 0.8 s hold, and of a Receiving tap that acts at the release.
 - No tone at the start of Free Input, and no menu item at its end, with a closed contact.
 - The legibility and the speed of the Free Input text, and the sidetone while the text moves up.
-- A mono plug inserted before and during Free Input.
+- The text of AR, BT, KN, AS and SK for each `Prosigns` value, and its legibility.
+- The timing of the Receiving playback, the result times, and the blank moment of 0.3 s in Sending.
+- The four keyboard labels sit above `menu/back`, `prev`, `next` and `enter`, in this order.
+- The pause limit in Sending words, with a paddle and with a straight key.
+- The feel of the level selector with auto-repeat, up to an earned level above L50. The last level must show within
+  0.1 s after the release.
+- The start of a session with the `enter` button and with the tip contact. A held contact must give no pick in
+  Receiving, and no element and no tone in Sending.
+- A stored level after a power cycle, and L1 after `Reset Statistics` and a power cycle.
+- The startup screen: its legibility, the time that it shows (5 s), and the skip with each of the four buttons.
+- The display recovery start: the `on/off` button must give a full restart of the processor. The startup screen
+  comes first, then the `Display Defaults` message. A press during the startup screen must not close the message.
+- The legibility of the `About` screen. The two `_` characters at the end of `putikeeg_cw_trainer__` must show as
+  two marks.
 
-The device checks are in `references/internal/keyer_spec.md` section 14 (DC-K1 to DC-K7) and
-`references/internal/ui-ux.md` section 11 (D-15 to D-24).
+The device checks are in these documents:
+
+- `references/internal/ui-ux.md` section 11 (D-1 to D-7 and D-9 to D-40).
+- `references/internal/sidetone_spec.md` section 17 (DC-1 to DC-12). The procedure is in
+  `references/internal/sidetone_validation.md`.
+- `references/internal/keyer_spec.md` section 14 (DC-K1 to DC-K7) and section 17.10 (DC-P1 to DC-P3).
+- `references/internal/training_spec.md` section 18 (DC-T1 to DC-T9).

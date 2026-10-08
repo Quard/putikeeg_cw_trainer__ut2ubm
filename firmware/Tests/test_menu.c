@@ -19,6 +19,7 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 #include "util/crc8.h"
 
@@ -77,6 +78,7 @@ static bool power_on(uint8_t held_mask) {
   if (is_recovery) {
     menu_show_message(MENU_MESSAGE_DISPLAY_DEFAULTS);
   }
+  menu_test_skip_splash();
   if (menu_needs_redraw()) {
     menu_render();
   }
@@ -310,7 +312,10 @@ static bool centered_row_is(int r, const char* text) {
   return row_matches(r, NO_BAND, 0, &row_text, 1U);
 }
 
-/* Main menu with no stored progress: Receiving and Sending show L1 (ui-ux.md UX-57, V-01). */
+/*
+ * Main menu with no stored progress: Receiving and Sending show L1 (ui-ux.md UX-57, V-01). About has no marker
+ * (UX-61).
+ */
 static bool main_menu_is(int selected) {
   static const char* const labels[4] = {"Receiving", "Sending", "Free Input", "Settings"};
   static const char* const levels[3] = {"L1", "L1", NULL};
@@ -320,7 +325,8 @@ static bool main_menu_is(int selected) {
     is_ok = is_ok && list_row_is(i + 1, labels[i], levels[i], i == selected);
   }
   is_ok = is_ok && submenu_row_is(4, labels[3], selected == 3);
-  for (i = 5; i < 8; ++i) {
+  is_ok = is_ok && list_row_is(5, "About", NULL, selected == 4);
+  for (i = 6; i < 8; ++i) {
     is_ok = is_ok && row_is_blank(i);
   }
   return is_ok;
@@ -337,14 +343,17 @@ static bool cw_list_is(const char* const values[7], int selected) {
   return is_ok;
 }
 
+/* From Receiving in the main menu, prev goes to About, then to Settings. */
+static void select_settings(void) { send_times(PREV, 2U); }
+
 static void open_cw(void) {
-  send_times(PREV, 1U); /* Settings */
+  select_settings();
   send(ENTER);
   send(ENTER); /* CW */
 }
 
 static void open_display(void) {
-  send(PREV);
+  select_settings();
   send(ENTER);
   send_times(NEXT, 4U);
   send(ENTER);
@@ -394,9 +403,9 @@ static void test_v02_bad_crc_record(void) {
 static void test_v03_wrap_on_press(void) {
   start_empty();
   send(PREV);
-  TEST_ASSERT(probe_sel(4));
+  TEST_ASSERT(probe_sel(5));
   TEST_ASSERT(probe_plain(1));
-  TEST_ASSERT(main_menu_is(3));
+  TEST_ASSERT(main_menu_is(4));
   send(NEXT);
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(main_menu_is(0));
@@ -405,23 +414,23 @@ static void test_v03_wrap_on_press(void) {
 static void test_v04_repeat_stops_at_end(void) {
   start_empty();
   run_pins(BUTTON_BIT_NEXT, 1000U);
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
-  TEST_ASSERT(probe_sel(4));
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT(probe_sel(5));
   run_pins(0U, 100U);
   /* Repeat events stop at both ends; a press wraps. */
   send_times(REPEAT(NEXT), 3U);
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   send_times(REPEAT(PREV), 5U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send(PREV);
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   send(NEXT);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
 }
 
 static void test_v05_enter_and_back(void) {
   start_empty();
-  send(PREV);
+  select_settings();
   send(ENTER);
   TEST_ASSERT(title_is("Settings"));
   TEST_ASSERT(probe_sel(1));
@@ -535,7 +544,7 @@ static void test_v11_key_type_choices(void) {
 
 static void test_v12_show_cw_code(void) {
   start_empty();
-  send(PREV);
+  select_settings();
   send(ENTER);
   send(NEXT);
   send(ENTER);
@@ -621,7 +630,7 @@ static void test_v15_save_on_settings_exit(void) {
 
 static void test_v16_no_save_without_change(void) {
   start_empty();
-  send(PREV);
+  select_settings();
   send(ENTER);
   send(MENU);
   TEST_ASSERT_EQUAL(0U, fake_iap_access_count());
@@ -716,7 +725,7 @@ static void test_v19_training_screens(void) {
 }
 
 static void open_dialog(void) {
-  send(PREV);
+  select_settings();
   send(ENTER);
   send(PREV);
   send(ENTER);
@@ -887,7 +896,7 @@ static void test_edit_every_item_to_limits(void) {
         continue;
       }
       start_empty();
-      send(PREV);
+      select_settings();
       send(ENTER);
       if (nodes[node] == MENU_NODE_CW) {
         send(ENTER);
@@ -912,9 +921,9 @@ static void test_edit_every_item_to_limits(void) {
 
 static void test_full_navigation(void) {
   start_empty();
-  send_times(NEXT, 4U);
+  send_times(NEXT, 5U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
-  send(PREV);
+  select_settings();
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
   send_times(NEXT, 6U);
@@ -1064,6 +1073,7 @@ static void test_v35_short_hold_is_normal_start(void) {
   backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
   gfx_init();
   menu_init();
+  menu_test_skip_splash();
   menu_render();
   TEST_ASSERT_EQUAL(0U, fake_lcd_contrast_last());
   TEST_ASSERT_EQUAL(0U, fake_backlight_last());
@@ -1164,8 +1174,8 @@ static void test_v74_long_holds_outside_mode_screens(void) {
   start_empty();
   run_pins(BUTTON_BIT_NEXT, 1000U);
   run_pins(0U, 100U);
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
-  TEST_ASSERT(probe_sel(4));
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT(probe_sel(5));
 
   start_empty();
   open_cw();

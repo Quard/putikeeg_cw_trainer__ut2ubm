@@ -18,6 +18,7 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 #include "util/crc8.h"
 
@@ -80,6 +81,7 @@ static bool power_on(uint8_t held_mask) {
   if (is_recovery) {
     menu_show_message(MENU_MESSAGE_DISPLAY_DEFAULTS);
   }
+  menu_test_skip_splash();
   if (menu_needs_redraw()) {
     menu_render();
   }
@@ -105,6 +107,8 @@ static void cw_tone(uint16_t tone_hz) {
     put_record(tone_hz, 0x20U, 0x08U);
   }
   (void)power_on(0U);
+  /* Receiving -> About -> Settings: About is the last main menu item. */
+  handle(PREV);
   handle(PREV);
   handle(ENTER);
   handle(ENTER);
@@ -509,8 +513,15 @@ static void test_v52_no_sound_outside_tone_edit(void) {
     reset_slog();
     poll_500();
   }
-  /* 3. Settings > CW: onto Tone and past it in browse mode. */
+  /* 3. About (the last main menu item), then Settings > CW: onto Tone and past it in browse mode. */
   steps(REPEAT(NEXT), 5U);
+  step(ENTER);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_ABOUT, menu_screen());
+  step(PREV);
+  step(NEXT);
+  step(ENTER);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  step(PREV);
   step(ENTER);
   step(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_CW, menu_node());

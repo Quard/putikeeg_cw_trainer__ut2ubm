@@ -35,6 +35,7 @@
 #include "menu/menu.h"
 #include "progress/progress.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/progress_fixture.h"
 #include "support/test_assert.h"
 
@@ -87,6 +88,7 @@ static inline void harness_power_on(void) {
   fake_iap_clear_counters();
   gfx_init();
   menu_init();
+  menu_test_skip_splash();
   menu_render();
   harness_render_count = 0U;
   harness_overlap_count = 0U;

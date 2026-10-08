@@ -19,6 +19,7 @@
 #include "menu/menu.h"
 #include "menu_internal.h"
 #include "settings/settings.h"
+#include "support/menu_splash.h"
 #include "support/test_assert.h"
 #include "util/crc8.h"
 
@@ -58,6 +59,7 @@ static void power_on(void) {
   backlight_init((uint8_t)settings_get(SETTINGS_ID_BACKLIGHT));
   gfx_init();
   menu_init();
+  menu_test_skip_splash();
   if (menu_needs_redraw()) {
     menu_render();
   }

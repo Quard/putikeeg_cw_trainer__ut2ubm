@@ -2,7 +2,8 @@
 
 This manual is for the custom firmware of the Putikeeg CW Trainer (board `CW_MINI_V2.0D`). It tells you how to use
 the menu, the settings, the Free Input mode and the training modes `Receiving` and `Sending`. The
-[release notes](release_notes.md) list the changes of each version.
+[release notes](release_notes.md) list the changes of each version. To find the version of your firmware, see
+[Firmware version](#firmware-version).
 
 > **Not tested on the device.** This firmware version passed host tests only. Nobody tested it on the device
 > yet. The behavior in this manual comes from the firmware design and the host tests. On the device, some
@@ -27,6 +28,8 @@ This version has the menu, the settings, the display controls, the [Free Input](
 - The device stores your training level for each mode and each speed. It stores no other statistics.
 - `Backlight` and `Contrast` change the display. The other settings set Free Input and the training modes (see
   [Settings for training](#settings-for-training)).
+- At each start, the [startup screen](#startup-screen) shows the name and the firmware version for 5 s. The main
+  menu item [`About`](#about) shows the name, the version and the link to the project.
 
 ## Buttons
 
@@ -61,7 +64,8 @@ Notes:
 - **Wrap in lists.** A press of `next` on the last item moves the cursor to the first item. A press of `prev` on
   the first item moves it to the last item. When you hold the button, the cursor stops at the end of the list.
 - A button that is held while you switch on the device does nothing until you release it and press it again.
-  The only exception is the [display recovery start](#display-recovery-start).
+  It does not skip the [startup screen](#startup-screen). The only exception is the
+  [display recovery start](#display-recovery-start).
 - From left to right on the case, the four buttons are `menu/back`, `prev`, `next` and `enter`. `prev` means up or
   decrease, and `next` means down or increase.
 
@@ -74,31 +78,64 @@ Notes:
 - In the main menu, `Receiving` and `Sending` show your level at the right side of the row, for example `L12` (see
   [Level in the main menu](#level-in-the-main-menu)).
 
+## Startup screen
+
+Each time you switch on the device, the startup screen shows for about 5 s. The startup screen shows:
+
+```text
+
+                Putikeeg
+ CW Trainer
+
+ mod by UT2UBM
+
+
+                 v<version>
+```
+
+- `CW Trainer` shows in large characters.
+- The bottom row shows `v` and the [firmware version](#firmware-version), at the right side.
+- The screen does not change while it shows. It has no countdown and makes no sound.
+
+After 5 s, the main menu shows with the cursor on `Receiving`.
+
+To skip the startup screen, press any of the four buttons. The main menu shows at once. The press only ends the
+startup screen: it does not move the cursor and does not open an item. A closure of the tip contact of the
+key/paddle socket is an `enter` press, so it also skips the screen. A plug insertion can do the same.
+
+If you keep the button held after the skip, the main menu acts on the hold as usual. For example, a held `next`
+moves the cursor after 0.4 s.
+
+On a [display recovery start](#display-recovery-start), the `Display Defaults` message comes after the startup
+screen, before the main menu.
+
 ## Menu structure
 
-After you switch on the device, the main menu `CW Trainer` shows. The cursor is on `Receiving`.
+After the [startup screen](#startup-screen), the main menu `CW Trainer` shows. The cursor is on `Receiving`. The
+main menu has five items.
 
 ```text
 CW Trainer
 ├── Receiving           Koch training: listen and pick the characters
 ├── Sending             Koch training: read and key the characters
 ├── Free Input          key and decode Morse code
-└── Settings
-    ├── CW
-    │   ├── Tone
-    │   ├── RX Speed
-    │   ├── RX Eff. Speed
-    │   ├── TX Speed
-    │   ├── TX Eff. Speed
-    │   ├── Key Type
-    │   └── Paddle
-    ├── Show CW Code
-    ├── Prosigns
-    ├── Max Word Length
-    ├── Display
-    │   ├── Backlight
-    │   └── Contrast
-    └── Reset Statistics
+├── Settings
+│   ├── CW
+│   │   ├── Tone
+│   │   ├── RX Speed
+│   │   ├── RX Eff. Speed
+│   │   ├── TX Speed
+│   │   ├── TX Eff. Speed
+│   │   ├── Key Type
+│   │   └── Paddle
+│   ├── Show CW Code
+│   ├── Prosigns
+│   ├── Max Word Length
+│   ├── Display
+│   │   ├── Backlight
+│   │   └── Contrast
+│   └── Reset Statistics
+└── About               name, firmware version and project link
 ```
 
 `RX` means receive. `TX` means send.
@@ -542,6 +579,7 @@ Receiving           L12
 Sending              L1
 Free Input
 Settings                >
+About
 ```
 
 - `Receiving` shows the level at the current `RX Speed`. `Sending` shows the level at the current `TX Speed`. The
@@ -1139,6 +1177,50 @@ If the device cannot store the reset, it shows `Not saved` and `OK` in place of 
 `menu/back` to go back to `Settings`. Then do the reset again. After a failed reset, the next start can use the
 earlier levels, or L1 for all speeds.
 
+## About
+
+`About` is the last item of the main menu, after `Settings`. It has no `>` marker, because it opens a screen, not
+a list. The screen shows:
+
+```text
+About
+Putikeeg CW Trainer
+mod by UT2UBM
+Version <version>
+
+https://github.com/Quard/
+putikeeg_cw_trainer__
+ut2ubm
+```
+
+- The third row shows `Version` and the [firmware version](#firmware-version).
+- The last three rows are one link. The screen is too narrow for the full link, so it shows the link in three
+  parts. The full link is <https://github.com/Quard/putikeeg_cw_trainer__ut2ubm>. Type the three parts with no
+  space between them. `putikeeg_cw_trainer__` ends with two `_` characters.
+
+To close the screen, press `enter` or `menu/back`. The main menu shows with the cursor on `About`. `prev` and `next`
+do nothing on this screen. A hold of a button does nothing more. The screen makes no sound.
+
+## Firmware version
+
+The firmware version has the format `MAJOR.MINOR.PATCH`: three numbers with dots between them. Read it on one of
+these screens:
+
+- The [startup screen](#startup-screen): the bottom row, at the right side, after `v`.
+- The [`About`](#about) screen: the third row, after `Version`.
+
+The [release notes](release_notes.md) list the changes of each version.
+
+## Not checked on the device: startup screen and About
+
+The firmware design and the host tests give the behavior of the startup screen and `About`. Nobody checked these
+items on the device yet:
+
+- The legibility of the startup screen and the `About` screen, also with the backlight `Off`.
+- The time that the startup screen shows (5 s), and the skip with each button.
+- The order of the startup screen and the `Display Defaults` message on a display recovery start.
+- The two `_` characters at the end of `putikeeg_cw_trainer__` show as two separate marks.
+
 ## Display recovery start
 
 The recovery start helps you to read the screen again. Use it after you saved a bad contrast, or after you set
@@ -1150,10 +1232,13 @@ To start with the default contrast and backlight:
 
 1. Switch off the device.
 2. Push and hold `menu/back`.
-3. Switch on the device. Hold `menu/back` until the screen shows. About 0.1 s is enough. The screen
-   `Display Defaults` shows the text `Default contrast and backlight are in use.` and `OK`.
-4. Release `menu/back`. The held button does not close the screen.
-5. Press `enter` or `menu/back`. The main menu shows with the cursor on `Receiving`.
+3. Switch on the device. Hold `menu/back` until the screen shows. About 0.1 s is enough. The
+   [startup screen](#startup-screen) shows with the default contrast and backlight.
+4. Release `menu/back`. The held button does not skip the startup screen.
+5. After 5 s, or when you press a button, the screen `Display Defaults` shows the text
+   `Default contrast and backlight are in use.` and `OK`. The press that skips the startup screen does not close
+   this screen.
+6. Press `enter` or `menu/back`. The main menu shows with the cursor on `Receiving`.
 
 The device now uses `Contrast` 32 and `Backlight` 8. `Settings > Display` shows these values. All other settings
 come from the saved settings.
