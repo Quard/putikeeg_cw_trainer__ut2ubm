@@ -37,6 +37,26 @@ Run the host tests with:
 ./firmware/test.sh
 ```
 
+## Pre-commit hooks
+
+The repository uses [pre-commit](https://pre-commit.com/) to check each commit.
+The hooks check the files that you commit. The `reuse lint-file` hook makes
+sure that each source file has the `SPDX-FileCopyrightText` and
+`SPDX-License-Identifier` lines. The license texts are in `LICENSES/`. The
+`clang-format` hook formats the C files with `.clang-format`.
+
+To install the hooks, run this command from the repository root:
+
+```sh
+pre-commit install
+```
+
+To check all files, run:
+
+```sh
+pre-commit run --all-files
+```
+
 ## Sidetone hardware bring-up
 
 The firmware plays a CW sidetone on board revision `CW_MINI_V2.0D`. In this

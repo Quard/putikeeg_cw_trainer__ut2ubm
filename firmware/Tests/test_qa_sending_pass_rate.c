@@ -16,8 +16,8 @@
 #include "modes/training.h"
 #include "support/training_harness.h"
 
-#define RX_WPM 32U /* default RX Speed */
-#define TX_WPM 20U /* default TX Speed */
+#define RX_WPM 32U      /* default RX Speed */
+#define TX_WPM 20U      /* default TX Speed */
 #define FINAL_LEVEL 63U /* KOCH_FINAL_LEVEL for 43 characters (section 6) */
 #define LEVEL_CHARS 0U
 #define LEVEL_FIRST_WORDS 2U
@@ -58,9 +58,9 @@ static void test_threshold_function(void) {
     uint8_t count;
     uint8_t word;
     uint8_t chars;
-  } edges[] = {{0U, 0U, 0U},    {1U, 1U, 1U},    {2U, 2U, 2U},    {4U, 4U, 4U},     {5U, 4U, 5U},
-               {6U, 5U, 6U},    {9U, 8U, 9U},    {10U, 8U, 9U},   {11U, 9U, 10U},   {15U, 12U, 14U},
-               {49U, 40U, 45U}, {50U, 40U, 45U}, {51U, 41U, 46U}, {99U, 80U, 90U},  {100U, 80U, 90U},
+  } edges[] = {{0U, 0U, 0U},     {1U, 1U, 1U},       {2U, 2U, 2U},      {4U, 4U, 4U},    {5U, 4U, 5U},
+               {6U, 5U, 6U},     {9U, 8U, 9U},       {10U, 8U, 9U},     {11U, 9U, 10U},  {15U, 12U, 14U},
+               {49U, 40U, 45U},  {50U, 40U, 45U},    {51U, 41U, 46U},   {99U, 80U, 90U}, {100U, 80U, 90U},
                {101U, 81U, 91U}, {254U, 204U, 229U}, {255U, 204U, 230U}};
   unsigned count;
   unsigned kind;
@@ -361,7 +361,8 @@ static void test_fail_text_fits_every_count(void) {
   char text[40];
 
   for (count = 10U; count <= 100U; ++count) {
-    (void)snprintf(text, sizeof(text), "Not passed, need %u", (unsigned)koch_pass_threshold(KOCH_KIND_WORD, (uint8_t)count));
+    (void)snprintf(text, sizeof(text), "Not passed, need %u",
+                   (unsigned)koch_pass_threshold(KOCH_KIND_WORD, (uint8_t)count));
     longest = (strlen(text) > longest) ? (unsigned)strlen(text) : longest;
   }
   (void)snprintf(text, sizeof(text), "Not passed, need %u", (unsigned)koch_pass_threshold(KOCH_KIND_CHAR, 50U));

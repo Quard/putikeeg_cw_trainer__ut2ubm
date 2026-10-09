@@ -148,10 +148,13 @@ def main():
     large = Font(read_font(text, "u8g2_font_spleen8x16_mf"))
 
     lines = [
+        # The reuse tool must not read the header of the output file as the license of this script.
+        # REUSE-IgnoreStart
         "/*",
         " * SPDX-FileCopyrightText: 2026 Vadym Zakovinko",
         " * SPDX-License-Identifier: BSD-3-Clause",
         " */",
+        # REUSE-IgnoreEnd
         "",
         "#ifndef FONT_GOLDEN_H",
         "#define FONT_GOLDEN_H",

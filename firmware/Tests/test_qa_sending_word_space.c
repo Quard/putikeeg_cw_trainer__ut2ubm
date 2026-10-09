@@ -22,18 +22,18 @@
 #define EVENTS_PER_POLL (KEYER_QUEUE_SIZE + 1U)
 
 /* Kinds of wrong attempt. */
-#define WRONG_CHAR 0U      /* a keyed character that is not the expected one */
-#define WRONG_UNKNOWN 1U   /* 8 dits: `*` */
-#define WRONG_PAUSE 2U     /* WORD_GAP after a PARTIAL CHAR_GAP */
-#define WRONG_PROSIGN 3U   /* BT for a letter */
+#define WRONG_CHAR 0U    /* a keyed character that is not the expected one */
+#define WRONG_UNKNOWN 1U /* 8 dits: `*` */
+#define WRONG_PAUSE 2U   /* WORD_GAP after a PARTIAL CHAR_GAP */
+#define WRONG_PROSIGN 3U /* BT for a letter */
 #define WRONG_KIND_COUNT 4U
 
 static uint8_t screen_before[FB_SIZE];
 
 /* ---------- Setup and stimulus ---------- */
 
-static void tx_open_full(uint16_t level, uint8_t style, bool is_code_shown, uint8_t eff_wpm,
-                         const char* const* items, size_t count) {
+static void tx_open_full(uint16_t level, uint8_t style, bool is_code_shown, uint8_t eff_wpm, const char* const* items,
+                         size_t count) {
   size_t index;
 
   fake_iap_reset();

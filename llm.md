@@ -50,6 +50,11 @@ Source: `references/internal/sidetone_spec.md` sections 9 and 21, `references/in
 - No source uses `<stdatomic.h>` or C11 atomics.
 - `P_SW2.EAXFR` stays set after init. No code clears it. An interrupt never reads, saves or restores `P_SW2`.
 
+### Pre-commit hooks
+
+`.pre-commit-config.yaml` runs `reuse lint-file` and `clang-format` on each commit. Before you report a change as
+done, run `pre-commit run --files <changed files>`. Each new source file starts with the SPDX lines.
+
 ## Documents
 
 Project documents in `references/internal/`:

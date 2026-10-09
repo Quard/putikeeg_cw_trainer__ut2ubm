@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
+repos:
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse-lint-file
+        files: (\.(c|h|sh|py|cmake|in)|/CMakeLists\.txt)$
+        always_run: false
+        exclude: ^firmware/drivers/
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c]
+        # Third-party drivers, third-party font data and generated test fixtures keep their own layout.
+        exclude: ^firmware/(drivers/|inc/u8g2_fonts\.h$|Tests/fixtures/font_golden\.h$)

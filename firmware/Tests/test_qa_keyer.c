@@ -380,17 +380,16 @@ static bool step(void) {
     is_same = keyer_queue[(uint8_t)(keyer_queue_head - 1U) & KEYER_QUEUE_MASK] == model.pushed;
   }
   if (was_enabled) {
-    is_same = is_same && (keyer_phase == model.phase) && (keyer_ticks == model.ticks) &&
-              (keyer_space_ticks == model.space) && (qa_is_tone_requested == model.is_tone) &&
-              (keyer_tip_history == model.history[0]) && (keyer_ring_history == model.history[1]) &&
-              (keyer_tip_count == model.count[0]) && (keyer_ring_count == model.count[1]) &&
-              (keyer_is_tip_closed == model.is_closed[0]) && (keyer_is_ring_closed == model.is_closed[1]) &&
-              (keyer_is_tip_masked == model.is_masked[0]) && (keyer_is_ring_masked == model.is_masked[1]) &&
-              (keyer_has_dit_memory == model.has_dit_memory) && (keyer_has_dah_memory == model.has_dah_memory) &&
-              (keyer_was_squeezed == model.was_squeezed) && (keyer_is_element_dah == model.is_element_dah) &&
-              (keyer_is_char_gap_pending == model.is_char_pending) &&
-              (keyer_is_word_gap_pending == model.is_word_pending) &&
-              (keyer_is_start_requested == model.is_start_requested);
+    is_same =
+        is_same && (keyer_phase == model.phase) && (keyer_ticks == model.ticks) && (keyer_space_ticks == model.space) &&
+        (qa_is_tone_requested == model.is_tone) && (keyer_tip_history == model.history[0]) &&
+        (keyer_ring_history == model.history[1]) && (keyer_tip_count == model.count[0]) &&
+        (keyer_ring_count == model.count[1]) && (keyer_is_tip_closed == model.is_closed[0]) &&
+        (keyer_is_ring_closed == model.is_closed[1]) && (keyer_is_tip_masked == model.is_masked[0]) &&
+        (keyer_is_ring_masked == model.is_masked[1]) && (keyer_has_dit_memory == model.has_dit_memory) &&
+        (keyer_has_dah_memory == model.has_dah_memory) && (keyer_was_squeezed == model.was_squeezed) &&
+        (keyer_is_element_dah == model.is_element_dah) && (keyer_is_char_gap_pending == model.is_char_pending) &&
+        (keyer_is_word_gap_pending == model.is_word_pending) && (keyer_is_start_requested == model.is_start_requested);
   }
   if (!is_same) {
     ++mismatches;

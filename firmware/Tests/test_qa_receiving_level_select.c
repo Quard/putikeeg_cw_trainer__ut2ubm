@@ -190,7 +190,9 @@ static bool is_tap_mode_off_on_main_menu(void) {
 
 static void test_golden_start_screens(void) {
   static const golden_t rx_first_use = {
-      {"RX 32/32 L1          1/50", NULL, NULL, NULL, "         L1 of 1", "         K and M", NULL, NULL}, true, NO_ROW};
+      {"RX 32/32 L1          1/50", NULL, NULL, NULL, "         L1 of 1", "         K and M", NULL, NULL},
+      true,
+      NO_ROW};
   static const golden_t tx_l20 = {
       {"TX 20/20 L20         1/50", NULL, NULL, NULL, "     <  L20 of 20", "       New char J", NULL, NULL},
       true,
@@ -233,11 +235,11 @@ static void test_golden_start_screens(void) {
   fake_iap_reset();
   power_on();
   harness_open_start_screen(1U);
-  TEST_ASSERT(screen_is(&(golden_t){{"TX 20/20 L1          1/50", NULL, NULL, NULL, "         L1 of 1",
-                                      "         K and M", NULL, NULL},
-                                     true,
-                                     NO_ROW},
-                        "tx_first_use"));
+  TEST_ASSERT(screen_is(
+      &(golden_t){{"TX 20/20 L1          1/50", NULL, NULL, NULL, "         L1 of 1", "         K and M", NULL, NULL},
+                  true,
+                  NO_ROW},
+      "tx_first_use"));
   TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
 
   earn(PROGRESS_MODE_SENDING, 20U, 19U);
@@ -280,8 +282,10 @@ static void test_golden_prosign_descriptions(void) {
   size_t index;
 
   for (index = 0U; index < 3U; ++index) {
-    golden_t bt = {{"RX 32/32 L59         1/50", NULL, NULL, NULL, "     <  L59 of 59", NULL, NULL, NULL}, true, NO_ROW};
-    golden_t ar = {{"RX 32/32 L62         1/50", NULL, NULL, NULL, "     <  L62 of 62", NULL, NULL, NULL}, true, NO_ROW};
+    golden_t bt = {
+        {"RX 32/32 L59         1/50", NULL, NULL, NULL, "     <  L59 of 59", NULL, NULL, NULL}, true, NO_ROW};
+    golden_t ar = {
+        {"RX 32/32 L62         1/50", NULL, NULL, NULL, "     <  L62 of 62", NULL, NULL, NULL}, true, NO_ROW};
     bt.rows[5] = bt_rows[index];
     ar.rows[5] = ar_rows[index];
     earn(PROGRESS_MODE_RECEIVING, 32U, 58U);
@@ -310,10 +314,11 @@ static void test_golden_end_pass_fail_not_saved(void) {
                                       "    Passed, new level", "      <  L2 of 2", "       New char R", NULL, NULL},
                                      true,
                                      NO_ROW};
-  static const golden_t pass_stepped = {{"RX 32/32 L1         50/50", NULL, "       Score 45/50", "    Passed, new level",
-                                         "         L1 of 2  >", "         K and M", NULL, NULL},
-                                        true,
-                                        NO_ROW};
+  static const golden_t pass_stepped = {
+      {"RX 32/32 L1         50/50", NULL, "       Score 45/50", "    Passed, new level", "         L1 of 2  >",
+       "         K and M", NULL, NULL},
+      true,
+      NO_ROW};
 
   fake_iap_reset();
   power_on();
@@ -405,26 +410,22 @@ static void test_golden_end_top(void) {
 /* ---------- Golden main menu (AC-T34, ui-ux.md 5.16.6, V-01, V-149) ---------- */
 
 static void test_golden_main_menu(void) {
-  static const golden_t empty = {
-      {"CW Trainer", "Receiving            L1", "Sending              L1", "Free Input", "Settings                >",
-       "About", NULL, NULL},
-      false,
-      1};
-  static const golden_t levels = {
-      {"CW Trainer", "Receiving           L12", "Sending              L1", "Free Input", "Settings                >",
-       "About", NULL, NULL},
-      false,
-      1};
-  static const golden_t top_on_sending = {
-      {"CW Trainer", "Receiving        L65535", "Sending          L65535", "Free Input", "Settings                >",
-       "About", NULL, NULL},
-      false,
-      2};
-  static const golden_t on_free_input = {
-      {"CW Trainer", "Receiving        L65535", "Sending          L65535", "Free Input", "Settings                >",
-       "About", NULL, NULL},
-      false,
-      3};
+  static const golden_t empty = {{"CW Trainer", "Receiving            L1", "Sending              L1", "Free Input",
+                                  "Settings                >", "About", NULL, NULL},
+                                 false,
+                                 1};
+  static const golden_t levels = {{"CW Trainer", "Receiving           L12", "Sending              L1", "Free Input",
+                                   "Settings                >", "About", NULL, NULL},
+                                  false,
+                                  1};
+  static const golden_t top_on_sending = {{"CW Trainer", "Receiving        L65535", "Sending          L65535",
+                                           "Free Input", "Settings                >", "About", NULL, NULL},
+                                          false,
+                                          2};
+  static const golden_t on_free_input = {{"CW Trainer", "Receiving        L65535", "Sending          L65535",
+                                          "Free Input", "Settings                >", "About", NULL, NULL},
+                                         false,
+                                         3};
 
   fake_iap_reset();
   power_on();
