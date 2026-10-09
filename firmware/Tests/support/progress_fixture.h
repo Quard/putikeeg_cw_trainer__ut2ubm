@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef PROGRESS_FIXTURE_H
 #define PROGRESS_FIXTURE_H
 

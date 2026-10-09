@@ -46,7 +46,7 @@ Status of the content:
 | --- | --- |
 | `references/internal/components_and_wiring.md` | Buttons, pins, display, paddle socket, backlight pin. |
 | `firmware/inc/u8g2_fonts.h` (`u8g2_font_spleen5x8_mf`) | Font header bytes and glyph bitmaps (decoded, see section 3.3). |
-| `firmware/drivers/u8g2_font_render/u8g2_font_render.c` | How the driver places a glyph relative to the `y` argument. |
+| `firmware/drivers/u8g2_font_render/u8g2_font_render.c` in git commit `01c8e94` (not in the repository) | How the driver places a glyph relative to the `y` argument. |
 | `firmware/inc/lcd/lcd_fb.h`, `firmware/inc/board/lcd_config.h` | 128 x 64 framebuffer, 8 pages of 8 rows, contrast range 0-63, default 0x20. |
 | `references/context/STC8H_datasheet.md` | EEPROM sector erase about 4-6 ms, byte program about 30-40 us. Avoid EEPROM writes at low voltage. |
 | `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |

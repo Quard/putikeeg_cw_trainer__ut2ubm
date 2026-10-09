@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef BOARD_BACKLIGHT_CONFIG_H
 #define BOARD_BACKLIGHT_CONFIG_H
 

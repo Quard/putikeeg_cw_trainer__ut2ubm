@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Reads the firmware version from firmware/VERSION, checks it and generates version.h in the build directory
 # (references/internal/menu_subsystem_spec.md section 17.3). Uses no command that needs project().
 #

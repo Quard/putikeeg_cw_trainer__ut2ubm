@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19; ui-ux.md section 9.4, V-90 to
  * V-109 and V-120). The real menu, buttons, engine, keyboard and progress run with a fake player and fake items.
  */

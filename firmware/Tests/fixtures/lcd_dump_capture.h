@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef LCD_DUMP_CAPTURE_H
 #define LCD_DUMP_CAPTURE_H
 

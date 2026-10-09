@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #include "cw/timing.h"
 
 #include "mcu/compiler.h"

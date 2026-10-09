@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the value field after the Prosigns change (references/internal/keyer_spec.md sections 17.3.4 and
  * 17.4.3, ui-ux.md sections 5.3 and 5.10; AC-P14 to AC-P16). Every value and choice item of the tree shows every
  * value in full, in browse mode and in edit mode, so no value text is cut by the render buffer. The Prosigns row

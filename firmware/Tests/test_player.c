@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the CW player (references/internal/training_spec.md sections 5.4 and 9, AC-T12 to AC-T14). Each
  * tick() is one Timer 0 call: player_service(), then, in the envelope tests, the real sidetone_service().
  */

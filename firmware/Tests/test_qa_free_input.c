@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of Free Input (references/internal/keyer_spec.md sections 6.10 and 6.11, ui-ux.md section 5.9;
  * AC-K40 to AC-K43). A random sequence of keyer events, clears and delimiters runs against an independent model:
  * a 7 x 25 character grid with delimiter rows and its own Morse table built from the spec code strings. After

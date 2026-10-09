@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the xorshift RNG (references/internal/training_spec.md section 5.5, AC-T3). */
 
 #include <stdint.h>

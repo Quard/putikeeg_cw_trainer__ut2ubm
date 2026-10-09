@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA boundary and invalid-argument tests for every public lcd_spi, lcd_fb and lcd function. Integer arguments
  * are swept over their whole range where the cost allows. Buffers given to lcd_write() are exactly as long as the
  * clipped length, so AddressSanitizer stops any read past the clip.

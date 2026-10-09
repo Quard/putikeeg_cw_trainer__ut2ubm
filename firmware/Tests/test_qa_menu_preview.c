@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the Tone preview of the menu (references/internal/ui-ux.md section 6.5, sidetone_spec.md 10.3).
  * A small model of the preview (running or stopped, start time, Tone value) predicts the sidetone calls of each
  * step; the tests check the timeout at every start tick across the 16-bit wrap and random event sequences.

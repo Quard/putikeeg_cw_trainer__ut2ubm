@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #include "delay/delay.h"
 #include "fake_tick.h"
 #include "support/test_assert.h"

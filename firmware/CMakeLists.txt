@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 cmake_minimum_required(VERSION 3.20)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/firmware_version.cmake")

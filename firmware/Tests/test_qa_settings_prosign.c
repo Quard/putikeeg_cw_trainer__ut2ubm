@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the prosign style setting and the layout version 1 to 2 migration (references/internal/keyer_spec.md
  * sections 17.3.3 and 17.4.2, menu_subsystem_spec.md sections 4.8 and 5.1; AC-P6 to AC-P12). An independent oracle
  * parses a record byte by byte and builds the record that a save must write. Fault injection: random version 1 and

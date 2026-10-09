@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #include "fake_keyer.h"
 
 static keyer_event_t fake_fifo[FAKE_KEYER_FIFO_SIZE];

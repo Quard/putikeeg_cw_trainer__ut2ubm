@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the four-run group keyboard (references/internal/training_spec.md section 8, D-T27, AC-T8). A random
  * walk of keyboard_select(), keyboard_back() and keyboard_top() with known and unknown groups runs against a
  * reference model built from section 8 alone: list in keyboard order, run k of c = (c + 3 - k) / 4, a history stack.

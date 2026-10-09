@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for settings persistence: bit upsets of a stored record (the model of an interrupted erase or program),
  * records of other layout versions, every value of every field in a valid record, settings_set() against a clamp
  * oracle from menu_subsystem_spec.md sections 5.2 and 5.3, and CMD_FAIL at each read of a load. Layout versions 1

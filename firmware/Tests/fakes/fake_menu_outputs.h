@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef FAKE_MENU_OUTPUTS_H
 #define FAKE_MENU_OUTPUTS_H
 

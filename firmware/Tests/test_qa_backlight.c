@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the backlight polarity: the P0.3 level and the lit time of the LED for each level, over one PWM period.
  * Oracles: STC8H datasheet section 20.5.7 (PWM mode 1, up counting: OCiREF is high while CNT < CCR), section 20.7.16
  * (CC8P in PWMB_CCER2; CC1P in section 20.7.15 gives its meaning, 1 = low level is active) and components_and_wiring.md

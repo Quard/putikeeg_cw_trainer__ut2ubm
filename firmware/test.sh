@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Build and run the host unit tests and the check_asm.sh self-test. Exits non-zero when any step fails.
 set -euo pipefail
 

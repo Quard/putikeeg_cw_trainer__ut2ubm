@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the buttons module: random bounce trains with irregular poll intervals, repeat catch-up with slow
  * main-loop passes, bounce of a second button during a repeat, the recovery window with a late tick, and long
  * presses with slow passes, release bounce, the tick wrap and the P3.2 ownership. Tap mode of all four buttons

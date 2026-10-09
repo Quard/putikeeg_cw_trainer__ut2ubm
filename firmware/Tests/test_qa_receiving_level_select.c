@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the level selection in Receiving, Sending and the main menu (references/internal/training_spec.md
  * D-T35 to D-T42, AC-T32 to AC-T35, task Q5; ui-ux.md sections 5.11.1, 5.15, 5.16, 6.1, 6.8, 6.9, 9.4).
  *

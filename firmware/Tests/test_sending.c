@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Sending mode scenarios (references/internal/training_spec.md section 12.3, AC-T20; ui-ux.md section 9.4, V-110 to
  * V-119 and V-121). The real menu, buttons, engine and progress run with a fake keyer and fake items.
  */

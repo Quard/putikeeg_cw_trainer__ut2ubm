@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #if !defined(__SDCC_mcs51)
 #error "tick_timer3.c is for the SDCC mcs51 target only"
 #endif

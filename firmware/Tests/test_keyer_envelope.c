@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * AC-K14: the keyer drives the real sidetone envelope (references/internal/keyer_spec.md sections 6.5 and 10.3).
  * Each call runs keyer_service() and then sidetone_service(), as the Timer 0 ISR does. The compare 0 write of each
  * fall must come on the last ELEMENT call.

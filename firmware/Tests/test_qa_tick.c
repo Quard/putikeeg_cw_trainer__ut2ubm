@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the portable tick helpers (src/tick/tick.c). tick_isr() is target-only, so the test plays the
  * interrupt by incrementing the counter. The double read in tick_now() cannot be interleaved on the host; the
  * generated assembly review covers it.

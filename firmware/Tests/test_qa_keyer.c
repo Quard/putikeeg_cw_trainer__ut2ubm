@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the keyer (references/internal/keyer_spec.md sections 6.1 to 6.9, AC-K2, AC-K3, AC-K11, AC-K16,
  * AC-K17, AC-K19, AC-K21, AC-K23). An independent reference model of section 6, written from the spec text, runs
  * call by call next to the real keyer_service(). Random contacts with bounce, all key types, swap, 5..50 WPM,

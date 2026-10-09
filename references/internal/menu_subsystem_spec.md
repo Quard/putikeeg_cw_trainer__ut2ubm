@@ -55,7 +55,9 @@ These items are necessary to make the approved plan work. They add no new user-f
 
 ### 3.1 The third-party font driver is not used (user decision)
 
-`firmware/drivers/u8g2_font_render` stays unchanged and out of the build. Reasons, measured with SDCC 4.6.0:
+The project does not use the third-party driver `u8g2_font_render`, and the repository does not contain it. Its
+last version is in git commit `01c8e94`, directory `firmware/drivers/u8g2_font_render`. Reasons, measured with
+SDCC 4.6.0:
 
 - The driver compiles only with `--stack-auto` (error 92 on the 7-byte pixel callback).
 - In a `--stack-auto` file, calls from normal-model files and calls to SDCC math helpers (`%`, `*`, struct copy)
@@ -1066,7 +1068,7 @@ For each fact, give the section or line in the step report. When a fact is diffe
 
 - The source glob of `src/` already takes `src/gfx/font_u8g2.c` and the other new files.
 - Add `FLASH_CODE_SIZE=${FLASH_CODE_SIZE}UL` to the compile definitions.
-- Do not add `firmware/drivers/u8g2_font_render` to the build. No file gets `--stack-auto`.
+- Do not add the third-party `u8g2_font_render` driver to the build. No file gets `--stack-auto`.
 
 ### 9.2 `check_asm.sh`: extended R5
 

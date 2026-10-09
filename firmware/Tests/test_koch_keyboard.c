@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the Receiving group keyboard (references/internal/training_spec.md section 8, AC-T8). */
 
 #include <stdbool.h>

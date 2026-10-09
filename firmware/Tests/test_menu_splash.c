@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Startup screen tests (references/internal/menu_subsystem_spec.md sections 17.5 and 17.8, ui-ux.md section 5.17,
  * scenarios V-152 to V-161, V-166, V-167 and V-169). Time t is in ms after menu_init().
  */

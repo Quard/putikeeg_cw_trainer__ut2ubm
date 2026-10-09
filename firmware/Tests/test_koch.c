@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the Koch tables, the level model and the item generation (references/internal/training_spec.md
  * sections 5.6, 6 and 7, AC-T4 to AC-T7).
  */

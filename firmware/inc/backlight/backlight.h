@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef BACKLIGHT_BACKLIGHT_H
 #define BACKLIGHT_BACKLIGHT_H
 

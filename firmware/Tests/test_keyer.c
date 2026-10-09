@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the keyer: keyer.c and the ISR side in cw/keyer_service.h (references/internal/keyer_spec.md
  * section 11, AC-K1 to AC-K13 and AC-K15 to AC-K24). Each tick() is one Timer 0 call. The sidetone request macros
  * record into this file, so the tests see the exact call of each request.

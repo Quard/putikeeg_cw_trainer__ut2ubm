@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the progress record (references/internal/training_spec.md section 10, AC-T9 to AC-T11). */
 
 #include <stdbool.h>

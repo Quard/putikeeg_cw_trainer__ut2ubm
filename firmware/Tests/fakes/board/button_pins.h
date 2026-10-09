@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef BOARD_BUTTON_PINS_H
 #define BOARD_BUTTON_PINS_H
 

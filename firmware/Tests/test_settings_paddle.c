@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the Paddle setting in flags bit 1 (references/internal/keyer_spec.md section 6.13, AC-K49, AC-K50). */
 
 #include <string.h>

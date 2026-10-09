@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the prosign decoder codes and morse_format() (references/internal/keyer_spec.md sections 17.3.1 and
  * 17.4.1, AC-P1 to AC-P5, D-P11). An independent reference model of the 17.4.1 table runs against morse_format()
  * for all 256 decoded values and all 256 styles, in a buffer with guards before and after it, and in a heap buffer

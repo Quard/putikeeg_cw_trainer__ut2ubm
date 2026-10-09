@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the long-press events and the P3.2 ownership of the buttons module
  * (references/internal/keyer_spec.md section 6.12, AC-K45 to AC-K48; ui-ux.md section 6.2 and V-75).
  * A hold is measured on the debounced state: the long event needs the button debounced-pressed for

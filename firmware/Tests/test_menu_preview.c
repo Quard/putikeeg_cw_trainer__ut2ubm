@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Tone preview hooks H1-H6 of the menu: references/internal/ui-ux.md section 9.1, V-40 to V-53. */
 
 #include <string.h>

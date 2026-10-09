@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the prosign style setting and layout version 2 (references/internal/keyer_spec.md, AC-P6 to AC-P12). */
 
 #include <string.h>

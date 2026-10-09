@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Build the firmware and download it into the MCU with stcgal.
 # Usage: flash.sh [serial-port]. The port defaults to STCGAL_PORT, then to /dev/ttyUSB0.
 set -euo pipefail

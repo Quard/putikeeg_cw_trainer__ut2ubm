@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Menu scenarios V-54 to V-73, V-79, V-88 and V-89 of references/internal/ui-ux.md sections 9.2 and 9.3 (AC-K51,
  * AC-P17, AC-P20), with the real menu,
  * buttons and Free Input, a fake keyer and a fake sidetone. A long press is measured on the debounced state: the

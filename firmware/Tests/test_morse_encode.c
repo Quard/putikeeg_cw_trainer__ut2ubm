@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of morse_encode() (references/internal/training_spec.md section 5.2, AC-T1). */
 
 #include <stdbool.h>

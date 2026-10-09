@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the CW player (references/internal/training_spec.md section 9.1, AC-T14). Each tick() is one Timer 0
  * call of player_service().
  */

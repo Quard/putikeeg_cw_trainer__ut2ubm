@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the About item and screen: every event byte on About, random event fuzz with real buttons, entry from
  * both cursor directions, the full frame with the version from version.h, and the column limits of the version rows.
  * Oracles: menu_subsystem_spec.md sections 17.2 (D-A4, D-A11, D-A12, D-A14, D-A15), 17.5 and 17.10; ui-ux.md

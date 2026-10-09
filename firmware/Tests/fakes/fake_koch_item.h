@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef FAKE_KOCH_ITEM_H
 #define FAKE_KOCH_ITEM_H
 

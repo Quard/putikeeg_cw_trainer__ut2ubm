@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
 """Writes Tests/fixtures/font_golden.h, the test oracle for the u8g2 font decoder in src/gfx/font_u8g2.c.
 
 The decoder here follows the u8g2 font format description in references/internal/menu_subsystem_spec.md
@@ -146,6 +148,11 @@ def main():
     large = Font(read_font(text, "u8g2_font_spleen8x16_mf"))
 
     lines = [
+        "/*",
+        " * SPDX-FileCopyrightText: 2026 Vadym Zakovinko",
+        " * SPDX-License-Identifier: BSD-3-Clause",
+        " */",
+        "",
         "#ifndef FONT_GOLDEN_H",
         "#define FONT_GOLDEN_H",
         "",

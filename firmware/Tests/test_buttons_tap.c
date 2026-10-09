@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the button tap mode (references/internal/training_spec.md D-T7, D-T28 and section 5.9, AC-T15).
  * Press and release times are those of the debounced state.
  */

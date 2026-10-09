@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Scans SDCC-generated .asm files for operations that break the interrupt and port-sharing rules in AGENTS.md.
 #
 # Usage:

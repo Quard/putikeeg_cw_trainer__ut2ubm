@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef QA_LCD_DUMP_EDGES_H
 #define QA_LCD_DUMP_EDGES_H
 

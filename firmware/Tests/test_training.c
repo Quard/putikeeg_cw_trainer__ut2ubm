@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the session engine (references/internal/training_spec.md sections 5.10 and 11, AC-T16 to AC-T18,
  * AC-T30 and AC-T31).
  */

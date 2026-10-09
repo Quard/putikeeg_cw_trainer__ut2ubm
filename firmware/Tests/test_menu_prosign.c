@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Menu scenarios of the Prosigns setting: ui-ux.md section 9.3, V-80 to V-83 (references/internal/keyer_spec.md
  * section 17.4.3, AC-P9, AC-P10, AC-P14 to AC-P16).
  */

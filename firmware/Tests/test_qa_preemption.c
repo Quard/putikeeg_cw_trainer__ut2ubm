@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA preemption test. An interrupt can stop the software SPI between any two pin writes. The fake hook runs after
  * every pin write and plays the interrupt: it toggles a fake P2.5 latch that only the interrupt owns and adds
  * interrupt time. The hook never writes an LCD pin (the fake aborts if it does).

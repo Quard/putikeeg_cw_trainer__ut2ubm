@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the prosign texts in Free Input with a fake keyer: ui-ux.md section 9.3, V-84 to V-87
  * (references/internal/keyer_spec.md section 17.4.4, AC-P18 to AC-P20).
  */

@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA scenarios of the word pass rate (references/internal/training_spec.md D-T33, section 6, 11.4, AC-T6, AC-T18,
  * AC-T29; ui-ux.md section 5.15, V-121 and V-136). Receiving and Sending run through the real menu, buttons, engine,
  * keyboard and progress with a fake player, a fake keyer and fake items.

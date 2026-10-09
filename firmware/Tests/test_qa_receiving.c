@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA scenarios of the Receiving mode with the four-button keyboard (references/internal/training_spec.md D-T27 to
  * D-T29, sections 8 and 12.2, AC-T8, AC-T19, AC-T23, AC-T27, R-T7; ui-ux.md sections 5.12.1, 6.8 and 9.4, UX-51).
  * The real menu, buttons, engine, keyboard and progress run with a fake player and fake items. The oracles come

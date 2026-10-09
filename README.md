@@ -102,3 +102,27 @@ stc8prog -p /dev/ttyUSB0 -e \
 ```
 
 Power-cycle the trainer when each programmer asks for the ISP bootloader.
+
+## License
+
+Copyright (c) 2026 Vadym Zakovinko.
+
+The firmware, the scripts and the documentation use the
+[BSD 3-Clause License](LICENSE). The hardware design files in `hardware/` use
+the [CERN Open Hardware Licence Version 2 - Permissive](hardware/LICENSE)
+(CERN-OHL-P-2.0). Each source file names its license with an
+`SPDX-License-Identifier` line.
+
+Both licenses permit use, change and distribution, also in closed products. If
+you distribute this work or a work based on it, you must keep the copyright
+notice and the license text.
+
+Third-party components keep their own licenses. The firmware contains the
+Spleen font under the BSD-2-Clause license. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The documents in
+`references/context/`, for example the MCU datasheet, belong to their authors
+and are not part of the licensed work.
+
+The schematic and the PCB in `hardware/` are a reverse-engineered description
+of the original Putikeeg CW Trainer. The CERN-OHL-P covers this description
+only. The rights to the original product design stay with its manufacturer.

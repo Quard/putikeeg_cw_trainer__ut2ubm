@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #include "fake_sidetone_pwm.h"
 
 static fake_sidetone_pwm_event_t fake_log[FAKE_SIDETONE_PWM_LOG_SIZE];

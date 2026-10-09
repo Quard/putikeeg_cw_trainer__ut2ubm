@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * About item and screen tests (references/internal/menu_subsystem_spec.md sections 17.5 and 17.8, ui-ux.md section
  * 5.18, scenarios V-162 to V-166).
  */

@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA random-mutation flush test. A fixed-seed generator changes the framebuffer, the orientation and the dirty
  * pages between lcd_flush_step() calls, the way a main loop that draws while it flushes would. Every step is
  * decoded with the QA bus oracle and applied to the QA RAM model. Whenever nothing is pending, the visible RAM

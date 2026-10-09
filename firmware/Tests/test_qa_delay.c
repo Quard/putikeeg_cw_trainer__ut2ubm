@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for delay_ms() on the tick (src/delay/delay.c with fakes/fake_tick.c). Each tick_now() read returns the
  * current value and then moves it by a fixed step, so the step is the tick time that passes per loop pass.
  *

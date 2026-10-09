@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef FREE_INPUT_SCREEN_H
 #define FREE_INPUT_SCREEN_H
 

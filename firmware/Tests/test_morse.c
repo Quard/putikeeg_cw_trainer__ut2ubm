@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the Morse pattern builder and table (references/internal/keyer_spec.md, AC-K40 and AC-K41). */
 
 #include <stdbool.h>

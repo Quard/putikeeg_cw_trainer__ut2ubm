@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the sidetone module (references/internal/sidetone_spec.md, AC-7 to AC-17).
  *
  * Every service call runs in lockstep with an independent model of the state table (section 6.3) and the mailbox

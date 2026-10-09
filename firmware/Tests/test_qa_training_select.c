@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests of the level selection engine (references/internal/training_spec.md D-T35 to D-T37, sections 5.10 and
  * 11.4, AC-T30, AC-T31, task Q5). The oracles come from the documents: a pass below the earned level never touches
  * the EEPROM or the progress RAM, the preselection is session level + 1 after a pass and the session level after a

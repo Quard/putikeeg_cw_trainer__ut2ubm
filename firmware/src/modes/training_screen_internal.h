@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef MODES_TRAINING_SCREEN_INTERNAL_H
 #define MODES_TRAINING_SCREEN_INTERNAL_H
 

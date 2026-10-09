@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA golden-capture test. The reference is lcd_dump.sr decoded by QA from the raw samples (qa/qa_lcd_dump_edges.h)
  * with the QA bus oracle (qa/qa_bus.h). It does not use fixtures/lcd_dump_capture.h or the developer decoder as the
  * reference; it only cross-checks them.

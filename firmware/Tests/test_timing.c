@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of cw_timing_compute() (references/internal/training_spec.md section 5.3, AC-T2). */
 
 #include <stdint.h>

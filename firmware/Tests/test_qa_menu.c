@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the menu: random event sequences with state invariants and a check that every visible change sets
  * the redraw flag, full repaint over a garbage framebuffer, and save failures (CMD_FAIL and low supply) during
  * the random walk. The walk includes long events and random keyer events in Free Input.

@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2018-2026 Frederic Cambus
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #ifndef INC_U8G2_FONTS_H_
 #define INC_U8G2_FONTS_H_
 

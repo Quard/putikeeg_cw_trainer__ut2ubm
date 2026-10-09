@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /* Host tests of the prosign codes and morse_format() (references/internal/keyer_spec.md section 17, AC-P1 to AC-P4). */
 
 #include <stdbool.h>

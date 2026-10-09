@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * Host tests of the Free Input mode with a fake keyer (references/internal/keyer_spec.md section 6.11, AC-K42 to
  * AC-K44; references/internal/ui-ux.md section 5.9).
  */

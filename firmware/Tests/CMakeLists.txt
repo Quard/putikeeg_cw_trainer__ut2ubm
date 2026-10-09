@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
 cmake_minimum_required(VERSION 3.20)
 
 # Host unit tests for the firmware modules. Built with the host compiler, separate from the SDCC firmware project.

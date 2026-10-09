@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA scenarios of the Sending retry screen and the word-space error (references/internal/training_spec.md D-T30,
  * D-T31, sections 12.3 and 16 AC-T17, AC-T28; ui-ux.md UX-52, sections 5.13.1 to 5.13.3 and 5.14). The real menu,
  * buttons, engine and progress run with a fake keyer and fake items.

@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
  * QA tests for the startup screen: the timeout over every 16-bit start tick, events at MENU_SPLASH_MS - 1 and
  * MENU_SPLASH_MS in both orders against menu_poll(), event fuzz with every event byte, stored and unknown message ids,
  * held buttons with real pins after the skip, and recovery starts with the release before and after the timeout.
