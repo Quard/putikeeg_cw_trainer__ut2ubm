@@ -4,7 +4,8 @@ Custom firmware and reverse-engineered hardware documentation for the
 Putikeeg CW Trainer. The firmware targets the STC8H3K64S2 with SDCC's MCS-51
 backend and drives the trainer's 128 × 64 LCD and four front-panel controls.
 
-The [user manual](docs/user_manual.md) describes the menu, the settings and the
+The [quick guide](docs/quick_guide.md) is a short introduction for users. The
+[user manual](docs/user_manual.md) describes the menu, the settings and the
 Free Input mode. The [release notes](docs/release_notes.md) list the changes.
 
 ## Project overview
@@ -37,6 +38,9 @@ your first two letters to copying and sending whole words.
 - **Speaks ham.** The decoder reads letters, digits, punctuation and the
   prosigns AR, BT, KN, AS and SK, shown the way you prefer.
 - **Free and open.** The firmware is open source.
+
+To start using the device with this firmware, read the
+[**Quick Guide**](docs/quick_guide.md).
 
 The [release notes](docs/release_notes.md) list what is new.
 
