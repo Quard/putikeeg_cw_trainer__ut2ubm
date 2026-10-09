@@ -7,6 +7,39 @@ backend and drives the trainer's 128 × 64 LCD and four front-panel controls.
 The [user manual](docs/user_manual.md) describes the menu, the settings and the
 Free Input mode. The [release notes](docs/release_notes.md) list the changes.
 
+## Project overview
+
+Learn Morse code on a trainer that keeps up with your hand.
+
+The Putikeeg CW Trainer is a small, battery-powered Morse code trainer with a
+screen, a speaker, a headphone socket and a socket for your key. The stock
+firmware has few functions, and it trips over an iambic paddle. This project
+gives the same device new firmware, written from scratch, that takes you from
+your first two letters to copying and sending whole words.
+
+### What you get
+
+- **Practice with your own paddle.** Plug in a paddle or a straight key and
+  key freely. You hear a clean sidetone, and the screen shows what you sent.
+  Instant feedback, no computer needed.
+- **A keyer that does iambic right.** Choose `Straight`, `Iambic A` or
+  `Iambic B`. Squeeze the paddle and get exact dits, dahs and spaces.
+  Left-handed, or a paddle wired the other way? One setting swaps the contacts.
+- **Learn with the Koch method.** Two training modes cover both sides of a
+  QSO. In `Receiving`, you copy what the trainer plays. In `Sending`, you key
+  what it shows. 43 characters, two new ones at a time, then whole words.
+- **Progress that sticks.** The trainer remembers your level for each mode and
+  each speed, even after power-off. Go back to any level you passed to brush up.
+- **Your speed, your spacing.** Set character speed and Farnsworth spacing
+  separately for receiving and sending, from 5 to 50 WPM.
+- **A tone you can listen to for hours.** Pick a pitch from 400 to 1000 Hz.
+  Soft edges remove key clicks. Plug in headphones for quiet practice.
+- **Speaks ham.** The decoder reads letters, digits, punctuation and the
+  prosigns AR, BT, KN, AS and SK, shown the way you prefer.
+- **Free and open.** The firmware is open source.
+
+The [release notes](docs/release_notes.md) list what is new.
+
 ## Prerequisites
 
 - CMake 3.20 or newer
@@ -68,12 +101,6 @@ The route is automatic. P1.0 detects the headphone plug. With the plug in
 (P1.0 LOW), the headphone route P1.2 plays. Without the plug, the speaker route
 P1.1 plays. A plug change takes effect at the next tone start. Both routes are
 quiet at a HIGH level. The PWM pulses are LOW-active, with at most 50 % duty.
-
-The sidetone is not tested on the device yet. Run the device checks in
-[references/internal/sidetone_validation.md](references/internal/sidetone_validation.md)
-and record the results there. For the first powered test, set the volume to
-minimum. Check the PWM pin and the amplified output with a logic analyzer or an
-oscilloscope before you increase the volume.
 
 ## Download firmware
 

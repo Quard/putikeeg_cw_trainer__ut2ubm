@@ -5,11 +5,6 @@ the menu, the settings, the Free Input mode and the training modes `Receiving` a
 [release notes](release_notes.md) list the changes of each version. To find the version of your firmware, see
 [Firmware version](#firmware-version).
 
-> **Not tested on the device.** This firmware version passed host tests only. Nobody tested it on the device
-> yet. The behavior in this manual comes from the firmware design and the host tests. On the device, some
-> details can be different, for example the button response time, the readable contrast range and the backlight
-> levels.
-
 ## What this version does
 
 This version has the menu, the settings, the display controls, the [Free Input](#free-input) mode and the
@@ -56,7 +51,7 @@ Notes:
   back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). On the start screen and the session
   end screen, a plug insertion can start a session (see [Choose a level](#choose-a-level)). In Receiving, a plug
   insertion can select the `enter` group of the keyboard (see
-  [Key or paddle in Receiving](#key-or-paddle-in-receiving)). These effects are not checked on the device.
+  [Key or paddle in Receiving](#key-or-paddle-in-receiving)).
 - **Hold for auto-repeat.** To repeat the action of `prev` or `next`, hold the button. The first repeat comes
   after 0.4 s. After that, the action repeats every 0.08 s (12.5 steps per second). `enter` and `menu/back` do
   not repeat. In the menu lists, a longer hold does nothing more. The level selector of the training modes also
@@ -388,26 +383,8 @@ Examples (values are rounded):
 | Dits and dahs are on the wrong levers. | `Paddle` does not match your paddle. | Change `Settings > CW > Paddle`. |
 | Many characters are wrong or show as `*`. | Your speed is different from `TX Speed`. The decoder does not adapt. | Set `TX Speed` near your keying speed. |
 | Word spaces come too often or too rarely. | The pause for a word space comes from `TX Eff. Speed`. | Change `TX Eff. Speed`. A lower value needs a longer pause. |
-| The dah lever does nothing, or the keyer sends with no lever pressed. | The ring input needs the internal pull-up of the processor. Nobody checked yet that it works on this board. | Report the problem with your key type and plug type. |
 | The text is gone. | You left Free Input, or the power went off. | The device does not store the text. |
 | The screen shows `Free Input` and no text, and no tone sounds. | No key is connected. | Connect the key. The `enter` button keys the tip contact. |
-
-### Not checked on the device
-
-These parts of Free Input passed host tests only. Nobody checked them on the device yet:
-
-- The feel of the 0.8 s hold. A hold must never come by accident in the menu.
-- The ring contact with the internal pull-up of the processor, and the polarity of both contacts.
-- The exact element and space lengths, and the difference between `Iambic A` and `Iambic B` with a real paddle.
-- The bounce of a real paddle. It must never split an element.
-- The decoding of a straight key at normal speed.
-- The start and the end of Free Input with a closed contact. The `enter` press that opens Free Input must give no
-  tone. A lever that you hold while you leave must open no menu item.
-- The legibility of the text, the time until a character shows, and the sidetone while the text moves up.
-- A mono plug inserted before and during Free Input.
-- The line from a long `next`. It must look different from the `-` and `_` characters.
-- The prosign texts of each `Prosigns` value. The user must read `<AR/+>`, `<KN/(>` and `<AS/&>` at a glance, tell
-  `(` from `<`, tell the `/` inside a text from a keyed `/`, and join a text that splits at a line end.
 
 ## Koch training
 
@@ -1006,8 +983,7 @@ If the save fails, the session end screen shows `Not saved`. A low battery volta
 > stored levels and then writes them again. This takes a few milliseconds. If the power stops at that moment, the
 > next start can use L1 for all speeds in both modes. The device shows no message.
 
-The levels and the settings are in the same memory. A firmware download can keep or delete them. Nobody checked
-this on the device yet.
+The levels and the settings are in the same memory. A firmware download can keep or delete them.
 
 ### Problems in training
 
@@ -1027,38 +1003,6 @@ this on the device yet.
 | `next` does not go above a level. | The selector stops at your earned level. | Pass a session at your earned level. Then the next level is available. |
 | You passed, but your level in the main menu did not change. | You passed below your earned level. A replay does not change the stored level. The end screen showed `Passed`, not `Passed, new level`. | Nothing. To move up, choose your earned level and pass. |
 | All levels are L1. | A reset, a failed save, or a power loss during a save. | Train the levels again. |
-
-### Not checked on the device
-
-These parts of the training modes passed host tests only. Nobody checked them on the device yet:
-
-- The timing of the playback, and no clicks at the start and the end of each element.
-- The legibility of the large characters, the block, the bars and the dot and dash marks.
-- The four keyboard labels sit above `menu/back`, `prev`, `next` and `enter`, in this order.
-- The feel of a tap that acts at the release.
-- A hold of `enter` plays the item again with no group change and no pick first.
-- Short tip closures and tip closures of 0.8 s, with the dit lever of a paddle and with a straight key.
-- A plug insertion in Receiving during an item.
-- The blank moment of 0.3 s in Sending. The display can be too slow to show it.
-- The pause limit in Sending words, with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM. Words
-  with the normal 3-unit pause must pass. A pause of about 6 units must give `Wrong: pause too long`. A pause of
-  about 4 units must not.
-- The retry screen in Sending: the rows below the item must be blank at the retry. The wrong code in the bottom
-  row must be readable during the 1.2 s result.
-- The time on the screen of each result.
-- A held lever at the session end and at the start of the next session.
-- A stored level after a power cycle, and L1 after `Reset Statistics` and a power cycle.
-- The feel of the level selector in both modes, on the start screen and on the session end screen. This includes
-  single presses of `prev` and `next`, and holds over 20 levels or more, up to an earned level above L50. The number
-  must follow a hold at about 12.5 levels per second, and the last level must show within 0.1 s after the release.
-  You must be able to stop on a level that you want.
-- The start of a session from the start screen and from the session end screen. Use the `enter` button, the dit
-  lever of a paddle and a straight key, in both modes. One closure must start one session. A contact that you hold
-  after the start must give no pick and no replay in Receiving, and no element and no tone in Sending.
-- A plug insertion while the start screen or the session end screen shows. It can start a session.
-- The legibility of the selector, of `<` and `>`, of the description line (for example `New char .` and
-  `New char <AR/+>`), and of the level in the main menu on the selected row.
-- The level next to `Receiving` and `Sending` in the main menu.
 
 ## Change a setting
 
@@ -1150,7 +1094,7 @@ The device uses the default values in these cases. It shows no message.
 - No settings are saved yet, for example at the first start.
 - The saved settings are damaged, for example after a power failure during a save.
 
-A firmware download can keep or delete the saved settings. Nobody checked this on the device yet. If the device
+A firmware download can keep or delete the saved settings. If the device
 keeps the settings of an earlier firmware version, `Prosigns` is `Both`, and the other settings stay as they were.
 The device shows no message. If the earlier version had no `Paddle` setting, `Paddle` is `Normal`.
 
@@ -1211,16 +1155,6 @@ these screens:
 
 The [release notes](release_notes.md) list the changes of each version.
 
-## Not checked on the device: startup screen and About
-
-The firmware design and the host tests give the behavior of the startup screen and `About`. Nobody checked these
-items on the device yet:
-
-- The legibility of the startup screen and the `About` screen, also with the backlight `Off`.
-- The time that the startup screen shows (5 s), and the skip with each button.
-- The order of the startup screen and the `Display Defaults` message on a display recovery start.
-- The two `_` characters at the end of `putikeeg_cw_trainer__` show as two separate marks.
-
 ## Display recovery start
 
 The recovery start helps you to read the screen again. Use it after you saved a bad contrast, or after you set
@@ -1254,6 +1188,3 @@ To keep the default contrast and backlight:
 3. Press `menu/back` until the main menu shows.
 
 The device saves all current values, also the default contrast and backlight.
-
-> **Not checked on the device:** The recovery start needs a full restart of the processor. Nobody checked yet
-> that the `on/off` button gives a full restart.

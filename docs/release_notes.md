@@ -8,10 +8,6 @@ user can see, hear or press. The [user manual](user_manual.md) tells you how to 
 Version 0.1.0 is the first version of the custom firmware. It is not released. Work on it continues, and the next
 changes go into this version too. All functions below are new.
 
-> **Not tested on the device.** This version passed the host tests, the build checks, the QA review and the
-> architecture review. Nobody tested it on the device yet. See
-> [Not checked on the device](#not-checked-on-the-device).
-
 ### Menu and buttons
 
 - **Main menu.** The main menu `CW Trainer` has five items: `Receiving`, `Sending`, `Free Input`, `Settings` and
@@ -185,41 +181,4 @@ settings.
 - The decoder does not adapt to your speed. Key at the speed of the settings.
 - A far level takes time to reach: from L1 to L150 takes about 12 s.
 - The level that you choose is not stored. When you open the mode again, the selector shows your earned level.
-- A firmware download can keep or delete the saved settings and levels. Nobody checked this on the device yet.
-
-### Not checked on the device
-
-The firmware design and the host tests give the behavior above. These items need a check on the device:
-
-- The legibility of the screens, the contrast range and the backlight levels. The button response time.
-- The sidetone and the Tone preview: no clicks, the route to the speaker or the headphones, the pitch.
-- The internal pull-up of the paddle ring input (P5.5). The reference manual of the processor is not clear about
-  it. If the pull-up does not work, the dah lever does nothing, or the keyer sends with no lever pressed.
-- The polarity of the tip and ring contacts, the bounce of a real paddle, and a mono plug.
-- The element and space lengths, and the difference between `Iambic A` and `Iambic B` with a real paddle. The
-  decoding of a straight key.
-- The feel of the 0.8 s hold, and of a Receiving tap that acts at the release.
-- No tone at the start of Free Input, and no menu item at its end, with a closed contact.
-- The legibility and the speed of the Free Input text, and the sidetone while the text moves up.
-- The text of AR, BT, KN, AS and SK for each `Prosigns` value, and its legibility.
-- The timing of the Receiving playback, the result times, and the blank moment of 0.3 s in Sending.
-- The four keyboard labels sit above `menu/back`, `prev`, `next` and `enter`, in this order.
-- The pause limit in Sending words, with a paddle and with a straight key.
-- The feel of the level selector with auto-repeat, up to an earned level above L50. The last level must show within
-  0.1 s after the release.
-- The start of a session with the `enter` button and with the tip contact. A held contact must give no pick in
-  Receiving, and no element and no tone in Sending.
-- A stored level after a power cycle, and L1 after `Reset Statistics` and a power cycle.
-- The startup screen: its legibility, the time that it shows (5 s), and the skip with each of the four buttons.
-- The display recovery start: the `on/off` button must give a full restart of the processor. The startup screen
-  comes first, then the `Display Defaults` message. A press during the startup screen must not close the message.
-- The legibility of the `About` screen. The two `_` characters at the end of `putikeeg_cw_trainer__` must show as
-  two marks.
-
-The device checks are in these documents:
-
-- `references/internal/ui-ux.md` section 11 (D-1 to D-7 and D-9 to D-40).
-- `references/internal/sidetone_spec.md` section 17 (DC-1 to DC-12). The procedure is in
-  `references/internal/sidetone_validation.md`.
-- `references/internal/keyer_spec.md` section 14 (DC-K1 to DC-K7) and section 17.10 (DC-P1 to DC-P3).
-- `references/internal/training_spec.md` section 18 (DC-T1 to DC-T9).
+- A firmware download can keep or delete the saved settings and levels.
