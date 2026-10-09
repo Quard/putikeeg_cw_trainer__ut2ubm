@@ -56,7 +56,7 @@ Project documents in `references/internal/`:
 
 | Document | Content |
 | --- | --- |
-| `components_and_wiring.md` | Board revision, components, pins, audio routes, measurements. |
+| `components_and_wiring.md` | Board revision, components, pins, audio routes, backlight circuit, measurements. |
 | `menu_subsystem_spec.md` | Menu, settings, EEPROM and button contract. |
 | `ui-ux.md` | UI/UX decision record: display, buttons, long presses, Tone preview, Free Input screen, keyer from the user's view. `Paddle` setting, `Prosigns` setting (section 5.10, UX-38). Training modes: Receiving, Sending and session end screens, group keyboard, tap mode, delays and layout constants (sections 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50). Four-button Receiving keyboard, tap `enter` and long `enter` (UX-51). Sending retry screen and pause limit in a word (UX-52). Level selection: start screen, level selector on the start and end screens, earned level in the main menu (section 5.16, UX-53 to UX-57). Device checks. |
 | `sidetone_spec.md` | Sidetone contract: API, envelope, registers, memory, decisions. |

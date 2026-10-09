@@ -438,12 +438,27 @@ void backlight_init(uint8_t level);
 void backlight_set_level(uint8_t level);
 ```
 
-`inc/board/backlight_config.h`. Both values can be changed with `-D`.
+`inc/board/backlight_config.h`. Both values are `#ifndef` defaults. `firmware/build.sh` passes no `-D`, so to change
+a value, edit its default in this header.
 
 ```c
 #define BACKLIGHT_PWM_HZ 1000U        /* not checked on the device */
-#define BACKLIGHT_IS_ACTIVE_LOW 0     /* 1 sets CC8P; polarity not checked on the device */
+#define BACKLIGHT_IS_ACTIVE_LOW 0     /* 1 sets CC8P; polarity from the corrected schematic */
 ```
+
+P0.3 drives the base of the NPN switch Q6 through R2 (120 Ω). R10 (47 kΩ) pulls P0.3 down
+(`components_and_wiring.md`, section Backlight). A high P0.3 turns the backlight on. So the channel is active high:
+CC8P = 0. Level 0 gives a constant low pin (off). Level 10 gives a constant high pin (on).
+
+Pin mode (decision D-BL1): open drain with the internal pull-up (`P0PU` bit 3, about 4.1 kΩ, 3-5 kΩ). A high pin is
+the pull-up, so the base current is (VCC - 0.75 V) / (pull-up + 120 Ω): 0.5-1.1 mA over the supply and pull-up
+ranges. Push-pull would source (VCC - 0.75 V) / 120 Ω: about 21 mA at 3.3 V up to 29 mA at 4.2 V. Both are above
+the 20 mA pin limit (datasheet section 9.2). The supply is not certain: section 8 names an HT7833 3.3 V regulator,
+but P1.1 measured about 4 V HIGH (`components_and_wiring.md`). The weak pull-up of the quasi-bidirectional mode
+(150-270 µA) may not saturate Q6. The datasheet does not say clearly that the `PxPU` pull-up works in open-drain
+mode (section 9.2 mode table, section 9.3.5). The backlight diagnostic checks it on the device. If it fails, the
+first fallback is the quasi-bidirectional mode with `P0PU` bit 3; `architector` confirms it after the diagnostic.
+While the pin is low, the pull-up draws 0.7-1.4 mA.
 
 Derived values. They are compile-time values with `#error` checks.
 
@@ -466,7 +481,9 @@ Derived values. They are compile-time values with `#error` checks.
 8. `PWMB_BKR`: MOE.
 9. Update event (`PWMB_EGR` UG) to load the prescaler.
 10. Counter on: `PWMB_CR1` CEN with ARPE.
-11. P0.3 push-pull: `P0M0 |= 0x08`, `P0M1 &= ~0x08`.
+11. P0.3 open drain with the pull-up, in this order: `P0M1 |= 0x08`, `P0M0 |= 0x08`, `P0PU |= 0x08`. The pin goes
+    from high-impedance to open drain while the PWM output is low, so the backlight stays off. `P0PU` is a
+    read-modify-write of an XFR in the main loop; no ISR writes `P0PU`.
 
 `BACKLIGHT_PWM_SET_COMPARE(value)` writes `PWMB_CCR8H`, then `PWMB_CCR8L`.
 
@@ -1016,6 +1033,9 @@ Gap line (decision of 2026-10-05, conflict between `ui-ux.md` sections 4.2 and 9
   them.
 - These registers change only with `ORL` or `ANL` and a constant mask of the bits of the module: `P0M0`, `P0M1`,
   `P3M0`, `P3M1`, `P_SW2`, `PCON` and `RSTCFG`. The new modules never write port 2.
+- `P0PU` and `P3PU` are XFRs, so a change is a read-modify-write (`movx` read, `ORL`, `movx` write) in the main loop
+  only. It sets only the bits of the module: `BUTTON_PINS_CONFIGURE()` bits 0-2 of `P0PU` and bit 2 of `P3PU`,
+  `BACKLIGHT_PWM_CONFIGURE()` bit 3 of `P0PU`. No ISR reads or writes `P0PU` or `P3PU`.
 - `BUTTON_PINS_CONFIGURE()` and `BACKLIGHT_PWM_CONFIGURE()` set `EAXFR`. It stays set. No code clears it. The xdata
   RAM (0x0000-0x0BFF) does not overlap the XFR area (0xFE00-0xFEFF).
 - `inc/mcu/stc8h.h` declares XFRs as macros, for example
@@ -1031,8 +1051,8 @@ For each fact, give the section or line in the step report. When a fact is diffe
 | --- | --- |
 | IAP SFRs | `IAP_DATA` 0xC2. `IAP_ADDRH` 0xC3. `IAP_ADDRL` 0xC4. `IAP_CMD` 0xC5 with CMD[1:0] 1 read, 2 program, 3 erase. `IAP_TRIG` 0xC6, write 0x5A then 0xA5. `IAP_CONTR` 0xC7: bit 7 IAPEN, bit 4 CMD_FAIL (software clears it). `IAP_TPS` 0xF5: IAPTPS[5:0] = clock in MHz, rounded. |
 | IAP addresses | IAP address 0x0000 is the first EEPROM byte. With `program_eeprom_split=61440`, the EEPROM is 4 KB: IAP 0x0000-0x0FFF, 8 sectors of 512 B. A program clears bits only. An erase sets a sector to 0xFF. Erase 4-6 ms, program 30-40 us. The CPU idles during the operation. |
-| Port mode | `P0M1` 0x93, `P0M0` 0x94, `P3M1` 0xB1, `P3M0` 0xB2. High-impedance input: M1 = 1, M0 = 0. Push-pull: M1 = 0, M0 = 1. |
-| Pull-ups | `P0PU` XFR 0xFE10, `P3PU` XFR 0xFE13. One bit for each pin, about 4.1 kOhm. Check that the pull-up works in high-impedance input mode. |
+| Port mode | `P0M1` 0x93, `P0M0` 0x94, `P3M1` 0xB1, `P3M0` 0xB2. High-impedance input: M1 = 1, M0 = 0. Push-pull: M1 = 0, M0 = 1. Open drain: M1 = 1, M0 = 1 (P0.3, D-BL1). |
+| Pull-ups | `P0PU` XFR 0xFE10, `P3PU` XFR 0xFE13. One bit for each pin, about 4.1 kOhm. Check that the pull-up works in high-impedance input mode (buttons) and in open-drain mode (P0.3, D-BL1; unverified on the device). |
 | XFR access | `P_SW2` 0xBA. Bit 7 `EAXFR` must be 1 for XFR read and write. |
 | PWMB pin select | `PWMB_PS` XFR 0xFEB6. C8PS[1:0] in bits 7:6: 00 P2.3, 01 P3.4, 10 P0.3, 11 P7.7. |
 | PWMB registers | `PWMB_ENO` 0xFEB5 (ENO8P bit 6). `PWMB_CR1` 0xFEE0 (CEN, ARPE). `PWMB_EGR` 0xFEE7 (UG). `PWMB_CCMR4` 0xFEEB (OC8M[2:0], OC8PE, CC8S). `PWMB_CCER2` 0xFEED (CC8E bit 4, CC8P bit 5). `PWMB_PSCRH/L` 0xFEF0/1. `PWMB_ARRH/L` 0xFEF2/3. `PWMB_CCR8H/L` 0xFEFB/C. `PWMB_BKR` 0xFEFD (MOE bit 7). |
@@ -1377,7 +1397,7 @@ QA runs two times: after T2 (font decoder and text output, the highest risk) and
 | Full-screen render time in software | Device check 6. The fallback is a row-level redraw (architect decision). |
 | ENTER shares P3.2 with the paddle tip, so a plugged key can press ENTER | In the menu this stays: a held key gives one ENTER (section 4.5). In Free Input the keyer owns P3.2 (`keyer_spec.md` section 6.12, `ui-ux.md` UX-33). |
 | EEPROM operation at low battery voltage | The LVD flag check before each erase and program (section 3.6, Q-5). A drop during the one 4-6 ms erase is not caught. Then the page is blank and the defaults load. CRC and magic-last protect the record. |
-| HX4004A needs a different PWM frequency or polarity | Both are configurable with `-D`. Device check 3. |
+| The reverse-engineered backlight circuit is wrong, or the LED needs a different PWM frequency | Change the default of `BACKLIGHT_IS_ACTIVE_LOW` or `BACKLIGHT_PWM_HZ` in `inc/board/backlight_config.h`, then run `firmware/build.sh`. Device check 3. |
 
 ## 15. Final review decisions (2026-10-05)
 

@@ -1,4 +1,5 @@
 #include "backlight/backlight.h"
+#include "board/backlight_config.h"
 #include "fake_backlight_pwm.h"
 #include "support/test_assert.h"
 
@@ -37,9 +38,12 @@ static void test_levels_above_max(void) {
   TEST_ASSERT_EQUAL(1000U, fake_backlight_pwm_compare());
 }
 
+static void test_default_polarity_is_active_high(void) { TEST_ASSERT_EQUAL(0U, BACKLIGHT_IS_ACTIVE_LOW); }
+
 int main(void) {
   TEST_RUN(test_init_configures_once_and_sets_level);
   TEST_RUN(test_level_to_compare);
   TEST_RUN(test_levels_above_max);
+  TEST_RUN(test_default_polarity_is_active_high);
   return TEST_FINISH();
 }

@@ -9,7 +9,7 @@ Board revision: **CW_MINI_V2.0D**.
 | MCU             | STC8H3K64S2              | 8051-based MCU with a 1T core |
 | LCD             | 128 × 64 COG LCD, 10-pin |                               |
 | Battery charger | TP4056                   |                               |
-| LCD backlight   | HX4004A                  |                               |
+| LCD backlight   | HX4004A                  | Charge pump for the backlight supply. Always enabled: En connects to VCC through R13 1 kΩ. Output about 5 V (unverified). |
 | Power           | Li-ion battery           |                               |
 
 ## Controls
@@ -51,7 +51,7 @@ Rules:
 | P0.0    | Button `next` |
 | P0.1    | Button `prev` |
 | P0.2    | Button `menu/back` |
-| P0.3    | LCD backlight |
+| P0.3    | LCD backlight. Drives the Q6 (SS8050) base through R2 120 Ω. R10 47 kΩ goes to GND. HIGH = on. LOW or high-impedance = off. |
 | P1.0    | Ring 2 of the headphone socket (TRRS); measured LOW when headphones are inserted |
 | P1.1    | Fifth pin of the volume potentiometer; speaker sidetone route; measured quiet level HIGH (approximately 4 V) |
 | P1.2    | Fourth pin of the volume potentiometer; headphone sidetone route; measured quiet level HIGH (approximately 4 V) |
@@ -80,6 +80,75 @@ Tentative pin mapping:
 | P2.4    | 5           | SDA              |
 
 Based on the [referenced display module datasheet](https://www.display-lcd.com/data/upload/admin/202401/6593a0c5d936f.pdf), the power connections on pins 6 through 10 appear to match.
+
+## Backlight
+
+Source: the `kicad-cli` netlist of the corrected `hardware/putikeeg_cw_trainer.kicad_sch`. The schematic is reverse
+engineered, and the export reports annotation errors. The user read the resistor markings on the board.
+
+The circuit:
+
+- P0.3 (U1 pin 32) connects through R2 (120 Ω, marking "121") to the base of Q6 (SS8050, NPN).
+- R10 (47 kΩ, marking "473") connects P0.3 to GND.
+- The emitter of Q6 connects to GND. The collector connects to J6 pin 2, the backlight cathode.
+- U4 (HX4004A) is a charge pump. Pin 5 (Vin) connects to VCC. Pin 3 (En) connects to VCC through R13 (1 kΩ).
+- U4 pin 1 (Vout) connects through R19 (50 Ω) to J6 pin 1, the backlight anode.
+
+So Q6 is a low-side switch, and P0.3 drives its base. A HIGH pin turns the backlight on. A LOW or high-impedance
+pin turns it off, because R10 pulls the base down.
+
+The HX4004A is always enabled. On 2026-10-08, the backlight was lit on the device with En tied to VCC. The Vout
+voltage, about 5 V, is unverified. The repository has no HX4004A datasheet.
+
+Firmware use: PWMB channel 8 drives P0.3 with `CC8P` = 0, so the channel is active high. The pin is open drain
+with the internal pull-up (`P0PU` bit 3), decision D-BL1. Level n gives n × 10 % on-time. Sources:
+[menu_subsystem_spec.md](menu_subsystem_spec.md) section 4.6, `firmware/inc/board/backlight_config.h`,
+`firmware/inc/board/backlight_pwm.h`.
+
+Pin current: a HIGH pin is the internal pull-up (about 4.1 kΩ, 3 kΩ to 5 kΩ). It gives a base current of about
+0.6 mA to 0.8 mA. A push-pull HIGH would source about 27 mA through R2. That is above the 20 mA limit for each pin
+([STC8H family reference manual](../context/STC8H_datasheet.md) section 9.2). While the pin is LOW, the pull-up
+draws about 1 mA. The reference manual does not state clearly that `PxPU` works in open-drain mode (sections 9.2
+and 9.3.5). DC-BL1 tests it.
+
+The behavior on the device is unverified. These device checks test it:
+
+| Check | Procedure | Pass |
+| --- | --- | --- |
+| DC-BL1 | Set `Backlight` to Off, 1, 5 and 10. | Off is dark. 1 is dim, 5 is medium and 10 is the brightest. No level flickers. |
+| DC-BL2 | Switch the device on with the default level 8. Then set another level, and switch the device on while you hold `menu/back` (display recovery start). | The backlight does not flash at full brightness at power-on. After the recovery start, the level is 8. |
+| DC-BL3 (optional, multimeter) | Measure the P0.3 voltage at Off and at level 10. | P0.3 is about 0 V at Off. P0.3 is about 0.7 V to 0.9 V at level 10, because the Q6 base clamps the open-drain pin. |
+| DC-BL4 | Change the level several times. Use the buttons and the menu during and after the changes. | The buttons work. The LCD shows the menu correctly while the level changes. |
+
+If the brightness is inverted on the device, report the result to `architector`.
+
+### Device record 2026-10-09: diagnostic build
+
+The user ran a diagnostic build on the device. The build came from a temporary worktree and was never merged. It
+has 12 phases. Each phase sets PWMB channel 8 and the P0.3 mode itself, and shows the registers on the LCD.
+
+The register readback matched the written values in every phase: `PWMB_PS` 80, `PWMB_ENO` 40 (PWM phases) or 00
+(GPIO phases), `PWMB_CR1` 81, `PWMB_BKR` 80, `PWMB_CCER2` 10, `PWMB_CCMR4` 68, `PWMB_IOAUX` 00, ARR 03E7, PSCR
+0017, `P_SW2` 80, and CCR8 as set. The counter value changed between two reads, so the counter runs. Bit 3 of
+`P0M0`, `P0M1`, `P0PU` and the P0.3 latch matched each phase. Example, phase 12 (push-pull, latch 0): `P0M0` 08,
+`P0M1` F7, `P0PU` 07, `P0` 07.
+
+The backlight was on in all 12 phases, also with a push-pull LOW and an open-drain LOW. The user measured these
+P0.3 voltages to GND. The measurement point is not recorded.
+
+| P0.3 state | Phases | Voltage |
+| --- | --- | --- |
+| Driven LOW, or PWM 0 % | 1, 2, 5, 8, 12 | 0.75 V to 0.77 V |
+| PWM 50 %, or released | 3, 7, 9, 10, 11 | 0.82 V to 0.83 V |
+| PWM 100 % | 4, 6 | 0.87 V |
+
+The latch had no effect: phase 5 equals phase 1, and phase 6 equals phase 4.
+
+Conclusion: the PWM reaches P0.3, and the register setup of the firmware works on the device. A source other than
+P0.3 holds the Q6 base at about 0.8 V, so Q6 conducts at every level. The suspected cause on this unit is a
+collector-base short in Q6, or a part with the wrong pinout. This is not confirmed. The user will replace Q6. Until
+then, DC-BL1 to DC-BL4 cannot pass on this unit. It is still unknown if `P0PU` works in open drain. Phases 9 and
+10 cannot show it while Q6 conducts.
 
 ## Audio output
 

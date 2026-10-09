@@ -25,6 +25,7 @@
 #define BACKLIGHT_P0_MASK 0x08U /* P0.3 */
 
 /* The datasheet asks for the high byte of a 16-bit register first (section 20.3.2). */
+/* D-BL1: P0PU drives the Q6 base in open drain. Push-pull would source about 27 mA through R2, over the 20 mA limit. */
 #define BACKLIGHT_PWM_CONFIGURE()                       \
   do {                                                  \
     P_SW2 |= P_SW2_EAXFR;                               \
@@ -44,8 +45,9 @@
     PWMB_BKR = PWMB_BKR_MOE;                            \
     PWMB_EGR = PWMB_EGR_UG;                             \
     PWMB_CR1 = (uint8_t)(PWMB_CR1_ARPE | PWMB_CR1_CEN); \
+    P0M1 |= BACKLIGHT_P0_MASK;                          \
     P0M0 |= BACKLIGHT_P0_MASK;                          \
-    P0M1 &= (uint8_t)~BACKLIGHT_P0_MASK;                \
+    P0PU |= BACKLIGHT_P0_MASK;                          \
   } while (0)
 
 #define BACKLIGHT_PWM_SET_COMPARE(value)  \

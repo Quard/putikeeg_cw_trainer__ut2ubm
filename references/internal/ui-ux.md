@@ -82,7 +82,7 @@ the Receiving keyboard follow this order: one label above each button (section 5
 | ID | Output | Budget | Notes |
 | --- | --- | --- | --- |
 | O-1 | LCD, 128 x 64, monochrome, probably ST7567 | 8 text rows x 25 columns with the 5 x 8 font | Contrast 0-63 (`lcd_set_contrast`), default 0x20 = 32. The full-screen transfer time is not measured yet. |
-| O-2 | LCD backlight, HX4004A on P0.3 | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
+| O-2 | LCD backlight, Q6 switch driven from P0.3 (HIGH = on; HX4004A supply, Vout unverified) | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
 | O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Uses: the Tone preview (section 6.5), the keyer sidetone in Free Input and Sending (section 6.7), the CW playback in Receiving (section 5.12). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
 
 ### 3.3 Font facts (decoded from `u8g2_fonts.h`)

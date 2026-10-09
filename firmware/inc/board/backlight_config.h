@@ -1,13 +1,19 @@
 #ifndef BOARD_BACKLIGHT_CONFIG_H
 #define BOARD_BACKLIGHT_CONFIG_H
 
-/* Backlight PWM on P0.3 (HX4004A enable). Both values can be overridden with -D. */
+/*
+ * Backlight PWM on P0.3. P0.3 drives the Q6 base through R2, so a high pin turns the backlight on. R10 pulls the pin
+ * down. build.sh passes no -D options, so change a value here.
+ */
 
 #ifndef BACKLIGHT_PWM_HZ
 #define BACKLIGHT_PWM_HZ 1000U /* not checked on the device */
 #endif
 #ifndef BACKLIGHT_IS_ACTIVE_LOW
-#define BACKLIGHT_IS_ACTIVE_LOW 0 /* 1 sets CC8P; polarity not checked on the device */
+#define BACKLIGHT_IS_ACTIVE_LOW 0 /* 1 sets CC8P; polarity from the corrected schematic */
+#endif
+#if (BACKLIGHT_IS_ACTIVE_LOW != 0) && (BACKLIGHT_IS_ACTIVE_LOW != 1)
+#error "BACKLIGHT_IS_ACTIVE_LOW must be 0 or 1"
 #endif
 
 /*
