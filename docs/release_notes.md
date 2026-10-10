@@ -3,10 +3,9 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
-## Version 0.1.0 (in development)
+## Version 0.1.0
 
-Version 0.1.0 is the first version of the custom firmware. It is not released. Work on it continues, and the next
-changes go into this version too. All functions below are new.
+Version 0.1.0 is the first version of the custom firmware. All functions below are new.
 
 ### Menu and buttons
 
