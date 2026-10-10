@@ -4,9 +4,12 @@ Custom firmware and reverse-engineered hardware documentation for the
 Putikeeg CW Trainer. The firmware targets the STC8H3K64S2 with SDCC's MCS-51
 backend and drives the trainer's 128 × 64 LCD and four front-panel controls.
 
-The [quick guide](docs/quick_guide.md) is a short introduction for users. The
-[user manual](docs/user_manual.md) describes the menu, the settings and the
-Free Input mode. The [release notes](docs/release_notes.md) list the changes.
+* The [quick guide](docs/quick_guide.md) is a short introduction for users.
+* The [user manual](docs/user_manual.md) describes the menu, the settings and the
+Free Input mode.
+* The [firmware download guide](docs/firmware_download.md) tells
+you how to connect the trainer to a computer and download the firmware.
+* The [release notes](docs/release_notes.md) list the changes.
 
 ## Project overview
 
@@ -108,7 +111,8 @@ quiet at a HIGH level. The PWM pulses are LOW-active, with at most 50 % duty.
 
 ## Download firmware
 
-Connect the trainer's programming interface, then run:
+To connect a USB-to-serial adapter to the trainer, read the
+[firmware download guide](docs/firmware_download.md). Then run:
 
 ```sh
 ./firmware/flash.sh /dev/ttyUSB0
