@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  check-version:
+    name: Check tag and version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the tag with firmware/VERSION
+        run: |
+          version="$(head -n 1 firmware/VERSION)"
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match firmware/VERSION ${version}."
+            exit 1
+          fi
+
+      - name: Find the release notes section
+        run: |
+          version="$(head -n 1 firmware/VERSION)"
+          if ! awk -v heading="## Version ${version}" '$0 == heading || index($0, heading " ") == 1 { found = 1 } END { exit !found }' docs/release_notes.md; then
+            echo "::error::docs/release_notes.md has no '## Version ${version}' section."
+            exit 1
+          fi
+
+  ci:
+    needs: check-version
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Publish GitHub release
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: firmware
+          path: artifact
+
+      - name: Prepare the release files
+        run: |
+          version="$(head -n 1 firmware/VERSION)"
+          mkdir dist
+          cp artifact/build/putikeeg_cw_trainer.ihx "dist/putikeeg_cw_trainer-v${version}.ihx"
+          cp artifact/build/putikeeg_cw_trainer.mem "dist/putikeeg_cw_trainer-v${version}.mem"
+          (cd dist && sha256sum -- * > SHA256SUMS)
+
+          # The body is the release notes section of this version, without its heading.
+          awk -v heading="## Version ${version}" '
+            $0 == heading || index($0, heading " ") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' docs/release_notes.md > release_body.md
+          docs_url="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs"
+          {
+            echo
+            echo "To download the firmware into the trainer, read [the firmware download guide](${docs_url}/firmware_download.md)."
+            echo "To start to use the trainer, read [the quick guide](${docs_url}/quick_guide.md)."
+          } >> release_body.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release_body.md \
+            --verify-tag

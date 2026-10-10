@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: Bug report
+description: The firmware does something wrong on the trainer.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version
+      description: The startup screen and the `About` screen show the version.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: Board revision
+      description: The text on the PCB.
+      placeholder: CW_MINI_V2.0D
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Menu and buttons
+        - Receiving
+        - Sending
+        - Free Input
+        - Keyer and paddle
+        - Sidetone and sound
+        - Display
+        - Settings and saved data
+        - Firmware download
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: key
+    attributes:
+      label: Key or paddle
+      options:
+        - Iambic (dual-lever) paddle
+        - Single-lever paddle
+        - Straight key
+        - None
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings and set ...
+        2. Hold ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Attach a photo of the screen or a sound recording if it helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Other information
+      description: Settings values, how often it happens, logic analyzer captures.

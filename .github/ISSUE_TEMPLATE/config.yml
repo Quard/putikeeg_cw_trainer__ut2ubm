@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Vadym Zakovinko
+# SPDX-License-Identifier: BSD-3-Clause
+
+blank_issues_enabled: true
+contact_links:
+  - name: User manual
+    url: https://github.com/Quard/putikeeg_cw_trainer__ut2ubm/blob/develop/docs/user_manual.md
+    about: Read how to use the device before you open an issue.
