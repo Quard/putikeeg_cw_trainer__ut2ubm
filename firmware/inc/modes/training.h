@@ -36,7 +36,7 @@
 #define TRAINING_WRONG_MS 1200U
 #endif
 #ifndef TRAINING_FAILED_MS
-#define TRAINING_FAILED_MS 2500U /* Receiving: from the end of the answer playback (D-T14) */
+#define TRAINING_FAILED_MS 2500U /* Sending only: Receiving waits for an enter tap (D-T44) */
 #endif
 #ifndef TRAINING_RECEIVING_GAP_MS
 #define TRAINING_RECEIVING_GAP_MS 500U
@@ -102,8 +102,8 @@ training_check_t training_add_char(char character);
 /** Removes the last answer character in phase ITEM. Returns false when there is none. */
 bool training_undo_char(void);
 /**
- * In phase RESULT: true stops the RESULT delay. A later call with false starts the delay again from the tick of that
- * call. Other phases: no effect. A phase change clears the hold (D-T14).
+ * In phase RESULT: true stops the RESULT delay. False clears the hold and sets the delay to 0, so the next
+ * training_poll() ends the RESULT. Other phases: no effect. A phase change clears the hold (D-T14, D-T44).
  */
 void training_hold_result(bool is_held);
 

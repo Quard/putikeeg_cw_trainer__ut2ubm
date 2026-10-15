@@ -7,7 +7,10 @@ space, user decision 2026-10-07): D2, T12, Q3 and W3 done, final review `approve
 decision 2026-10-07): D3, T13, Q4 and W4 done, final review `approved` on 2026-10-07 (section 22.3). Change request
 D-T35 to D-T41 (level selection in Receiving and Sending, user decisions 2026-10-07): specification published on
 2026-10-07. D4 done, review `approved` on 2026-10-07 (D-T42). T14 and Q5 done, final review `approved` on
-2026-10-07 after fix F1 (section 22.4). W5 ready to start (section 17.4). The user answered Q-T1 and Q-T2 (section 20). Section 21
+2026-10-07 after fix F1 (section 22.4). W5 ready to start (section 17.4). Change request D-T44 (Receiving waits for
+`enter` after the third wrong attempt, user decision 2026-10-15): specification published on 2026-10-15. D5 done,
+review `approved` on 2026-10-15 (U-32). T15 and Q6 done, final review `approved` on 2026-10-15 after test
+fixes R1 and R2 (section 22.5). W6 manual and quick guide `approved`. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -125,7 +128,7 @@ fails. Do not try another layout.
 | D-T11 | `stats_reset()` returns `bool`. True means that the reset levels are stored. The menu shows `Statistics reset` on true and `Not saved` on false. | A reset that is not stored comes back after a power cycle. The user must know. UI dependency U-17. |
 | D-T12 | Receiving never starts the keyer. Sending never starts the player. Every leave path stops the module of its mode. A menu host test checks that the fake keyer and the fake player never run at the same time. | Both write `sidetone_is_on_requested`. |
 | D-T13 | No `player_init()`. The C start-up RAM clear sets `player_is_enabled` and `player_is_start_requested` to 0 (same reason as R-5 of `keyer_spec.md`). | Flash. |
-| D-T14 | Result hold (`ui-ux.md` Q-14). After the third wrong attempt, Receiving plays the item once more. `training_hold_result(true)` stops the RESULT delay. The mode calls `training_hold_result(player_is_busy())` on each poll. The first call with false starts `TRAINING_FAILED_MS` at the tick of that call. | The answer playback of a long word at a low speed is longer than 2500 ms. The engine stays free of the player. The delay counts exactly from the first poll that sees the player idle. |
+| D-T14 | Result hold (`ui-ux.md` Q-14), revised by D-T44. After the third wrong attempt, Receiving plays the item once more. `training_hold_result(true)` stops the RESULT delay. The hold stays on until the user taps `enter`. `training_hold_result(false)` clears the hold and sets the delay to 0, so the next `training_poll()` ends the RESULT. The mode does not call `training_hold_result()` on each poll. | The engine stays free of the player and of the buttons. One function gives both the hold and the release. |
 | D-T15 | Dropped-character rule (`ui-ux.md` Q-15, item 1). In Sending, a DIT or DAH outside phase ITEM sets a drop flag. While the flag is set, the mode drops every keyer event up to and including the next CHAR_GAP, also in phase ITEM. That CHAR_GAP clears the flag. | A character that starts during a delay never counts and never uses an attempt. |
 | D-T16 | Overflow (`ui-ux.md` Q-15, item 2). In phase ITEM, OVERFLOW empties the pattern and sets the drop flag of D-T15. No check, no attempt, no status. | A lost event is a fault of the device, not of the user. If the lost events held a CHAR_GAP, the next character is dropped too. The user keys it again. |
 | D-T17 | Top level outcome. A pass at level index 65535 gives `TRAINING_OUTCOME_PASS_TOP`. The end screen then shows `Top level L65535`. Revised text (D-T42, UX-56): row 3 shows `Passed`, and the selector shows `L65535 of 65535`. | `ui-ux.md` UX-47 has its own text for this case. |
@@ -154,6 +157,7 @@ fails. Do not try another layout.
 | D-T41 | Main menu level. `draw_item_row()` in `menu_render.c` draws `L<n>` for a mode item with target `MENU_MODE_RECEIVING` or `MENU_MODE_SENDING`. `n` = `koch_shown_level(progress_level(target, settings_get(SETTINGS_ID_RX_WPM or SETTINGS_ID_TX_WPM)))`. The value is read at each render. No cache. The text uses the color of the label (inverted on the selected row). The column comes from `ui-ux.md` (task D4). `Free Input` and `Settings` rows do not change. `menu_render.c` checks at compile time that `MENU_MODE_RECEIVING` equals `PROGRESS_MODE_RECEIVING` and that `MENU_MODE_SENDING` equals `PROGRESS_MODE_SENDING`. | The user sees the earned level before entering a mode. A read at each render always shows the RAM value, also after a session or a speed change. |
 | D-T42 | Review of D4 (2026-10-07): `approved`. Accepted UI values of `ui-ux.md` 5.11.1, 5.15, 5.16 (UX-53 to UX-57), V-01, V-19, V-105 to V-108, V-121, V-136, V-137 to V-151 and D-35 to D-37. (1) `Start` replaces `Next` on the end screen. One band helper serves both screens (cells 9-15, x 47-81). (2) `Not saved` moves to row 1. (3) Row 3: `Passed, new level` for PASS and PASS_NOT_SAVED. `Passed` for PASS_REPLAY and PASS_TOP. `Not passed, need <t>` for FAIL. The texts `New level L`, `Repeat level L`, `Top level L` and `Next` go away. (4) Start screen header: level field `training_new_shown_level()`, item field `1/<n>` with `n` = `koch_item_count(training_selected_level())`. A step redraws pages 0, 4 and 5. The end screen header keeps the session that ended, and a step there redraws pages 4 and 5 only. (5) A-L1 to A-L5 hold for D-T36. A pass at index 65534 below an earned index 65535 is a replay and preselects 65535 (V-148). (6) The steps "no DIT from the held contact" of V-108 run 5 and V-142 have no host test, as D-T26: the keyer entry mask (AC-K3) gives this behavior. The host test checks that the keyer starts once. D-35 to D-37 are the device checks of DC-T9. | The draft meets D-T35 to D-T41 and SL-1 to SL-7. The texts are short `MEM_CODE` constants, and four old texts go away, so the flash budget of T14 holds. |
 | D-T43 | Decisions on the T14 and Q5 results (2026-10-07). (1) F1, fix required: in Sending, a `prev` or `next` held from the last RESULT across END keeps its repeat and steps the selector on the end screen. The END branch of `sending_poll()` calls `buttons_set_tap_mode(false)` with `keyer_stop()` and `buttons_set_enter_enabled(true)`. The call drops the pending press, the long-pending state and the repeat, as in Receiving (D-T39). Tap mode stays off. (2) F2, accepted: `receiving_leave()` calls `player_stop()` in every phase, also in SELECT and END. A second stop has no effect (section 5.4), and D-T12 asks every leave path to stop the module of its mode. The V-143 oracle "no player call" means "no playback starts": `fake_player_start_count()` stays 0. No phase guard. (3) Accepted deviation: `training_finish()` does not assign the selected level on a fail. `training_start()` copies the selected level into the session level. `training_select_step()` acts only in SELECT and END. So the selected level equals the session level at the finish. QA mutants M5 and M9 prove that the tests guard this. (4) Accepted: the developer changed QA-owned test files (`test_qa_*`) only for the interface change and the new entry. QA reviewed each change, and no check is removed or loosened (F3). Later interface changes in QA files go through QA. | (1) The user must not lose the preselection through a button that was pressed during the session. One call gives both modes the same rule. (2) A guard costs flash and changes nothing that the user can see or hear. (3) The invariant holds by construction, and the assignment costs flash. |
+| D-T44 | Receiving waits for `enter` after the third wrong attempt (user decision 2026-10-15, `ui-ux.md` UX-64). (1) Answer state: phase RESULT and `training_last_check() == TRAINING_CHECK_FAILED`, in Receiving only. `receiving.c` tests it in one helper, `rx_is_answer_shown()`, and `rx_draw_item_line()` uses the same helper. (2) Engine: in phase RESULT, `training_hold_result(true)` sets the hold. `training_hold_result(false)` clears the hold and sets the phase duration to 0. The phase start does not change. So the next `training_poll()` ends the RESULT with the normal rule of 11.2: GAP, or END after the last item (RETRY after a WRONG check). Other phases: no effect. A phase change clears the hold. (3) The FAILED check sets the hold as before (12.2). `receiving_poll()` does not call `training_hold_result()`. The hold stays on after the answer playback ends, for any time. (4) Events in the answer state (tap mode is on): an `enter` tap (button, or a short tip closure) calls `player_stop()` and `training_hold_result(false)`. It is allowed also while the answer plays. A long `enter` (button, or a tip closure of 800 ms) plays the item again from its start with `player_start()`. The screen does not change. A long `menu/back` leaves, as in every phase. All other events do nothing and draw nothing: `menu/back`, `prev` and `next` taps, long `prev`, long `next`. An acted event calls `rng_mix(tick_now())`. (5) Row 7 in the answer state: the labels of `menu/back`, `prev` and `next` are blank. On the last item (`training_item_number() == training_item_count()`), the `enter` field shows `Finish`. On other items, it shows `Next`. Both texts are `MEM_CODE` constants. LC-4 does not apply to these two texts. Position and alignment: `ui-ux.md` UX-64. The key bar segments do not change. (6) The GAP event redraws the labels of the whole set (`rx_draw_labels()`), because row 7 can hold `Next`. (7) `TRAINING_FAILED_MS` applies to Sending only. Sending does not change: it has no button input in a session (the tip is the keyer), so it keeps the 2500 ms delay after the third wrong attempt. | The fixed 2500 ms delay gave too little time to compare the answer with the wrong picks. `enter` confirms and continues on every other training screen, and it is the paddle tip, so the hand can stay on the paddle. Tap `enter` = continue and long `enter` = replay is the same pair as in phase ITEM. The changed meaning of `training_hold_result(false)` keeps one function and costs the least flash: its only caller was the poll call of D-T14. |
 | D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
 
 ## 4. Baseline (measured)
@@ -578,7 +582,7 @@ Changes of D-T28 (`buttons.h` declarations keep their signatures, and only the c
 #define TRAINING_START_MS 1000U
 #define TRAINING_CORRECT_MS 600U
 #define TRAINING_WRONG_MS 1200U
-#define TRAINING_FAILED_MS 2500U          /* Receiving: from the end of the answer playback (D-T14) */
+#define TRAINING_FAILED_MS 2500U          /* Sending only: Receiving waits for an enter tap (D-T44) */
 #define TRAINING_RECEIVING_GAP_MS 500U
 #define TRAINING_SENDING_GAP_MS 300U
 
@@ -636,8 +640,8 @@ training_check_t training_add_char(char character);
 /** Removes the last answer character in phase ITEM. Returns false when there is none. */
 bool training_undo_char(void);
 /**
- * In phase RESULT: true stops the RESULT delay. A later call with false starts the delay again from the tick of that
- * call. Other phases: no effect. A phase change clears the hold (D-T14).
+ * In phase RESULT: true stops the RESULT delay. False clears the hold and sets the delay to 0, so the next
+ * training_poll() ends the RESULT. Other phases: no effect. A phase change clears the hold (D-T14, D-T44).
  */
 void training_hold_result(bool is_held);
 
@@ -994,7 +998,7 @@ version. Load never writes the EEPROM.
 - Session: phase, mode, wpm, kind, level, learned count, max word length.
 - Selection: the selected level (`uint16_t`, D-T36). The earned level has no copy.
 - Counters: item number, item count, score, pass threshold, wrong attempts, last check, outcome.
-- Time: phase start tick (`uint16_t`), phase duration (`uint16_t`), result hold flag (`bool`, D-T14).
+- Time: phase start tick (`uint16_t`), phase duration (`uint16_t`), result hold flag (`bool`, D-T14, D-T44).
 - Texts: item text and answer text (`TRAINING_TEXT_SIZE` each), item length, answer length.
 
 ### 11.2 Transitions
@@ -1008,9 +1012,9 @@ version. Load never writes the EEPROM.
 | GAP | duration passed (poll) | Item number + 1. Wrong attempts 0. `koch_make_item()`. Empty answer. | ITEM | ITEM |
 | ITEM | `training_add_char()` gives CORRECT | First attempt (wrong attempts 0): score + 1. Duration `TRAINING_CORRECT_MS`. | RESULT | - |
 | ITEM | gives WRONG | Wrong attempts + 1 (now 1 or 2). Duration `TRAINING_WRONG_MS`. | RESULT | - |
-| ITEM | gives FAILED | Wrong attempts = 3. Duration `TRAINING_FAILED_MS`. | RESULT | - |
+| ITEM | gives FAILED | Wrong attempts = 3. Duration `TRAINING_FAILED_MS`. Receiving sets the hold at once (12.2), so only Sending uses this delay. | RESULT | - |
 | RESULT | `training_hold_result(true)` | Hold on. The delay does not run. | RESULT | - |
-| RESULT | `training_hold_result(false)` with the hold on | Hold off. Phase start = the tick of this call. | RESULT | - |
+| RESULT | `training_hold_result(false)` | Hold off. Duration 0. The phase start does not change. So the next poll ends the RESULT by the three rows below (D-T44). | RESULT | - |
 | RESULT | duration passed with the hold off, last check WRONG | Empty answer. | ITEM | RETRY |
 | RESULT | duration passed with the hold off, CORRECT or FAILED, item number < item count | Duration `TRAINING_RECEIVING_GAP_MS` or `TRAINING_SENDING_GAP_MS` by mode. | GAP | GAP |
 | RESULT | duration passed with the hold off, CORRECT or FAILED, last item | Finish (11.4). No GAP after the last item. | END | END |
@@ -1108,7 +1112,10 @@ session gives no event at its release, because `buttons_set_tap_mode(true)` drop
 | ITEM | `menu/back`, `prev`, `next`, `enter` (button or tip) | `keyboard_select()` of `KEYBOARD_GROUP_MENU`, `_PREV`, `_NEXT`, `_ENTER`. A pick goes to `training_add_char()`. Redraw the labels and the item line. An empty run: ignored, no redraw. |
 | ITEM | long `enter` (button or tip) | Replay: `player_start()` of the item. A running playback starts again. The picks and the current run stay. |
 | ITEM | long `prev` | Undo one step: first `keyboard_back()`. If it returns false, `training_undo_char()`. Redraw. |
-| GAP, RESULT | any | Ignored. No redraw. |
+| RESULT, answer state (D-T44) | `enter` tap (button or short tip closure) | `player_stop()`, then `training_hold_result(false)`. No redraw: the next poll gives GAP or END. Allowed also during the answer playback. |
+| RESULT, answer state (D-T44) | long `enter` (button or tip closure of 800 ms) | `player_start()` of the item. A running playback starts again. No redraw. |
+| RESULT, answer state (D-T44) | `menu/back`, `prev`, `next` taps, long `prev` | Ignored. No redraw. |
+| GAP, RESULT other than the answer state | any | Ignored. No redraw. |
 | GAP, ITEM, RESULT | long `next`, repeats | Ignored. |
 
 Button to run, left to right: MENU -> 0, PREV -> 1, NEXT -> 2, ENTER -> 3. `BUTTON_EVENT_MENU - code` does not
@@ -1137,18 +1144,22 @@ Check results (the return value of `training_add_char()`):
 | --- | --- |
 | PARTIAL | Redraw the item line: the block moves to the next slot. |
 | CORRECT, WRONG | `player_stop()`. Status and item line of `ui-ux.md` 5.14. |
-| FAILED | `player_stop()`. Status `Wrong. The answer is:`, the item text on the item line. `player_start()` of the item. `training_hold_result(true)`. |
+| FAILED | `player_stop()`. Status `Wrong. The answer is:`, the item text on the item line. Row 7 of the answer state (D-T44 (5)). `player_start()` of the item. `training_hold_result(true)`. The hold stays on until an `enter` tap. |
 
-Poll (`receiving_poll()`), in this order:
+Answer state (D-T44): phase RESULT with `training_last_check() == TRAINING_CHECK_FAILED`. The helper
+`rx_is_answer_shown()` gives it. `rx_draw_item_line()` and `rx_draw_labels()` use the helper. In the answer state,
+`rx_draw_labels()` clears row 7 and draws only the `enter` field: `Next`, or `Finish` on the last item.
+`receiving_handle()` sends events in the answer state to `rx_handle_answer()`, after the repeat filter. As
+`rx_handle_item()`, it returns true for an acted event. For such an event, the caller calls `rng_mix()`.
 
-1. In phase RESULT with the last check FAILED: `training_hold_result(player_is_busy())`.
-2. `training_poll()`, then the reaction to its event:
+Poll (`receiving_poll()`): `training_poll()`, then the reaction to its event. `receiving_poll()` does not call
+`training_hold_result()`.
 
 | Event | Action |
 | --- | --- |
 | ITEM | Empty slots, block on the first slot, labels of the whole set, header number. `player_start()` of the item. |
 | RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Empty slots, block on the first slot, labels of the whole set (`keyboard_top()`). `player_start()` of the item. |
-| GAP | Blank moment: rows 1-5 off, header shows `training_shown_item_number()`. The key bar segments and the labels of the whole set stay. |
+| GAP | Blank moment: rows 1-5 off, header shows `training_shown_item_number()`. `rx_draw_labels()` draws the labels of the whole set in row 7, because row 7 can hold `Next` (D-T44 (6)). A pick already put the keyboard at the top. The key bar segments stay. |
 | END | `buttons_set_tap_mode(false)` (D-T39), then `training_screen_draw_end()` and the header with `i` = `n`. A button held at this call gives no event until it is released and pressed again. |
 
 ### 12.3 Sending (`ui-ux.md` sections 5.13, 5.14, 6.9)
@@ -1439,6 +1450,18 @@ Stack candidates for T14, to compare with the 66 B bound:
 T14 measures the baseline again before the first change. It reports the 14.2 table before and after. It also
 reports the flash per changed file and the deepest chain by name.
 
+Change D-T44 (task T15): Receiving waits for `enter` after the third wrong attempt. No new file, no ISR change. Later
+commits (startup screen, About item, backlight) changed the build after T14. So T15 measures the baseline on the
+unchanged tree before the first change.
+
+| Resource | Baseline (measured by T15) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | T15 measures it | at most +120 B | +200 B |
+| xdata | T15 measures it | +0 B (the hold flag exists) | +1 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | T15 measures it | no deeper main-loop chain: `rx_handle_answer()` -> `player_start()` is not deeper than `rx_handle_item()` -> `rx_pick()` -> `player_start()` | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged: no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+
 Report table from `build.sh`, `.map` and `.mem`, before and after each task:
 
 | Task | Flash B | DSEG B | Overlay B | Bit bytes | xdata B | Stack start | Stack free B | Deepest main-loop stack B | Largest ISR frame B | Margin B |
@@ -1555,6 +1578,15 @@ Player tests define `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()`, include 
   screen. This covers `test_training.c`, `test_receiving.c`, `test_sending.c`, `test_menu_training.c`, the
   `test_qa_*` files of these groups and `Tests/support/`. Each changed expected value traces to D-T35 to D-T41 or to
   a revised V-vector of task D4.
+- D-T44 (task T15): Receiving tests that expect the answer state to end by itself after the answer playback (with
+  `fake_player_finish()` and a wait of `TRAINING_FAILED_MS`) get an `enter` tap to continue. Tests that expect a
+  long `enter` in the answer state to do nothing change to the replay. Engine tests that expect
+  `training_hold_result(false)` to start `TRAINING_FAILED_MS` change to the end at the next poll. The files:
+  `test_training.c`, `test_receiving.c`, `test_qa_receiving.c` and any other `test_qa_*` file with a Receiving
+  third wrong attempt. Known cases: the `test_receiving.c` session helper that calls `fake_player_finish()` after a
+  third wrong attempt, and `test_long_enter_outside_item_and_long_next` in `test_qa_receiving.c`. Each file keeps its owner: `qa-embedded` changes the
+  `test_qa_*` files (D-T43 (4)). Each changed expected value traces to D-T44 or to a V-vector of task D5. Sending
+  tests with `TRAINING_FAILED_MS` do not change.
 - No change removes a check or loosens an expected value.
 
 ## 16. Acceptance criteria
@@ -1581,9 +1613,9 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T14 | Player control. `player_start()` rejects length 0, length 9 and a character without a code, and then plays nothing. A start during a playback restarts from the first element. `player_stop()` clears busy, and the next calls change no player state. A disabled service reads no shared value except `player_is_enabled`. |
 | AC-T15 | Tap mode (D-T28). A tap of `menu/back`, `prev`, `next` or `enter` gives its event at the debounced release. A hold gives only the long event at `BUTTONS_LONG_PRESS_MS` (long `enter` = 0x44), and nothing at the release. The edge case of D-T22 holds for `enter` too. No repeat in tap mode. Long events due in one poll come in the order `menu/back`, `enter`, `prev`, `next`. A hold that started before the switch gives no event, also an `enter` hold (the entry from the menu). `buttons_set_enter_enabled(false)` and `(true)` drop a long-pending `enter`. Off: `enter` gives its event at the press and never a long event (AC-K45), and all existing tap-off button tests pass unchanged. |
 | AC-T16 | Engine flow. Fake tick: start -> GAP -> ITEM after `TRAINING_START_MS` -> answers -> RESULT -> GAP or RETRY or END with the exact delays of 11.2. One event per poll. |
-| AC-T17 | Engine checks. Receiving: PARTIAL until the last character, then one whole-word check. Sending: a wrong character ends the attempt at once. Three wrong attempts give FAILED. A correct item after a wrong attempt does not count in the score. Characters out of phase ITEM give IGNORED and change nothing. Undo works only in ITEM. A held RESULT never ends. Hold off at tick P ends the RESULT exactly at P + `TRAINING_FAILED_MS`. A phase change clears the hold. Sending: `TRAINING_CHAR_WORD_SPACE` after k accepted characters (k = 1 and k = length - 1) gives WRONG for attempts 1 and 2 and FAILED for the third, with `TRAINING_WRONG_MS` and `TRAINING_FAILED_MS`. The answer ends with it, the answer length is k + 1, and the item does not count in the score (D-T31). |
+| AC-T17 | Engine checks. Receiving: PARTIAL until the last character, then one whole-word check. Sending: a wrong character ends the attempt at once. Three wrong attempts give FAILED. A correct item after a wrong attempt does not count in the score. Characters out of phase ITEM give IGNORED and change nothing. Undo works only in ITEM. A held RESULT never ends. `training_hold_result(false)` in RESULT ends it at the next poll (D-T44, AC-T37). A phase change clears the hold. Sending: `TRAINING_CHAR_WORD_SPACE` after k accepted characters (k = 1 and k = length - 1) gives WRONG for attempts 1 and 2 and FAILED for the third, with `TRAINING_WRONG_MS` and `TRAINING_FAILED_MS`. The answer ends with it, the answer length is k + 1, and the item does not count in the score (D-T31). |
 | AC-T18 | Engine finish. `training_pass_threshold()` is 45 at a character level, 8 at the first word level (10 words) and 80 at a final level of 100 words (D-T33). Score at threshold - 1 fails and keeps the level. Score at threshold passes, advances and saves. A failed save gives PASS_NOT_SAVED and the new level stays in RAM. A pass at 65535 gives PASS_TOP with no save. Shown levels follow D-T5. |
-| AC-T19 | Receiving scenarios. Basic steps: enter the mode, play, pick a character with each of the four buttons, undo, step out. Replay with a long `enter` and with a tip closure of 800 ms. A short tip closure selects the `enter` run. A long `enter` in GAP, RESULT and END does nothing. The `enter` that opens the mode gives no pick at its release. Results: three wrong attempts, pass, fail. Next session with `enter`. Leave with a short `menu/back` at END, and with a long `menu/back` in each phase. The player stops on every leave. Tap mode is off after every leave. |
+| AC-T19 | Receiving scenarios. Basic steps: enter the mode, play, pick a character with each of the four buttons, undo, step out. Replay with a long `enter` and with a tip closure of 800 ms. A short tip closure selects the `enter` run. A long `enter` in GAP, RESULT and END does nothing, except in the answer state of D-T44 (AC-T38). The `enter` that opens the mode gives no pick at its release. Results: three wrong attempts, pass, fail. Next session with `enter`. Leave with a short `menu/back` at END, and with a long `menu/back` in each phase. The player stops on every leave. Tap mode is off after every leave. |
 | AC-T20 | Sending scenarios. Keyed input: a correct character, a wrong character, an unknown pattern, an overflow, a word. Events in RESULT and GAP are dropped. A character that starts in a delay is dropped up to its CHAR_GAP, also after the delay ends (D-T15). An overflow uses no attempt (D-T16). The blank GAP shows also for a repeated item. END stops the keyer and gives P3.2 back. Next session with `enter`. Leave with a long `menu/back` in each phase. |
 | AC-T21 | Exclusive sidetone users. In every menu scenario of AC-T19, AC-T20 and the QA random walk, the fake keyer and the fake player never run at the same time. |
 | AC-T22 | Menu. Receiving and Sending items open their screens. `Reset Statistics` Yes: stored gives `Statistics reset`, failed gives `Not saved`. The placeholder screen is gone. `main.c` calls `progress_load()` after `settings_load()`. |
@@ -1600,6 +1632,9 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T34 | Main menu level (D-T41). The `Receiving` row shows `L<n>` of the stored level at `RX Speed`. The `Sending` row shows it at `TX Speed`. Column and video follow `ui-ux.md` (task D4), inverted on the selected row. Stored levels 0, 11, 65534 and 65535 show `L1`, `L12`, `L65535` and `L65535`. After a `RX Speed` change, the main menu shows the level of the new speed. After a pass at the earned level and a leave, the menu shows the new level. After a replay pass it does not change. `Free Input` and `Settings` rows are bit-identical to the baseline. |
 | AC-T35 | UI vectors. The vectors of task D4 pass: V-01, V-19, V-105 to V-108, V-121, V-136 and V-137 to V-151. V-90 to V-136 use the new `RX()` and `TX()` entry through the start screen. QA golden LCD dumps cover three screens. Start screen: both modes, L1, a character level, a word level, a final level, the limits with and without `<` and `>`. End screen with the selector: each outcome, PASS_REPLAY included. Main menu rows. |
 | AC-T36 | Change D-T35 to D-T41: memory within the T14 budget of section 14.2, with the before and after report and the named deepest chain. `check_asm.sh` passes. No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c` or `firmware/drivers/`. |
+| AC-T37 | Engine hold (D-T44), `test_training.c`. (1) Receiving item with three wrong attempts, then `training_hold_result(true)`. Poll at every 1000 ms step up to 70 000 ms after the check. This passes one 16-bit tick wrap. Each poll gives NONE, and the phase stays RESULT. (2) Then `training_hold_result(false)` at tick P. If items remain, the poll at P gives GAP, and the next item comes `TRAINING_RECEIVING_GAP_MS` after P. On the last item, the poll at P gives END with the outcome of 11.4, and the FAILED item does not count in the score. (3) `training_hold_result(false)` in RESULT with the hold off also ends the RESULT at the next poll: after CORRECT (GAP before `TRAINING_CORRECT_MS`) and after WRONG (RETRY before `TRAINING_WRONG_MS`). (4) In SELECT, GAP, ITEM, END and IDLE, both calls change nothing (phase, events and timing). (5) Hold on in one RESULT, then a phase change: the next RESULT runs its normal delay. (6) The Sending FAILED test stays unchanged: GAP exactly at `TRAINING_FAILED_MS`, not one tick before. |
+| AC-T38 | Receiving answer state (D-T44), `test_receiving.c`, with V-170 and the revised V-99, V-121 and V-136 of task D5, through the menu with the fake player. (1) After the third wrong attempt: status `Wrong. The answer is:`, the answer on the item line, one new `player_start()` of the item. (2) After `fake_player_finish()` and also 70 000 ms later, the phase is RESULT and the screen is unchanged. (3) Row 7 shows only `Next` in the `enter` field (position of `ui-ux.md` UX-64). The other three label fields are blank. The key bar segments are unchanged. (4) `menu/back`, `prev` and `next` taps, long `prev` and long `next` change nothing: no phase change, no LCD page dirty, no player call, no answer change. (5) A long `enter` starts the player once more with the item. A tip closure of 800 ms does the same. Both act during the playback and after its end. The screen does not change. (6) An `enter` tap during the playback stops the player at the tap. The next poll gives the blank moment: rows 1-5 off, the header shows the next item number, row 7 shows the labels of the whole set. The next item comes after `TRAINING_RECEIVING_GAP_MS`. The same after the playback end, and with a short tip closure. (7) On the last item, row 7 shows `Finish`. An `enter` tap gives the end screen at the next poll, with tap mode off, and the score does not count the item. (8) A long `menu/back` in the answer state leaves: the player is stopped, tap mode is off, and the main menu shows. |
+| AC-T39 | Change D-T44: memory within the T15 budget of section 14.2, with the before and after report and the deepest chain by name. `check_asm.sh` passes. No change in `sending.c`, `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c` or `firmware/drivers/`. All Sending tests pass with no change. |
 | AC-T26 | `firmware/test.sh` and `firmware/build.sh` pass. All host tests pass under ASan and UBSan. No regression: existing tests change only as section 15.3 allows. |
 
 ## 17. Tasks
@@ -1696,6 +1731,34 @@ of section 5, Part B stops and reports to `architector`.
 Not in Part B: any change of `training.h`, `training.c`, `koch.h` or `koch.c` beyond Part A, the ISR files,
 `buttons.c`, `keyer.c`, `player.c` and `firmware/drivers/`. A need for such a change goes to `architector` first.
 
+### 17.5 Change D-T44: Receiving waits for `enter` after the third wrong attempt
+
+User decision 2026-10-15. Plan approved by the user. D5 done, review `approved` on 2026-10-15 (U-32). T15 Part A
+runs. After Part A, T15 Part B can start.
+
+Review of D5 (2026-10-15). `ui-ux.md` UX-64, 5.12.2, 5.14, 6.1, 6.4, 6.8, 6.10, 7, F-20, V-170, the revised V-99,
+V-121 and V-136, and D-41 match D-T44. Notes for T15 Part B:
+
+| ID | Note |
+| --- | --- |
+| N1 | V-170 has five runs. Run 1: the answer state and its no-op events. Run 2: a tap during the first playback. Run 3: the last item with `Finish`. Run 4: tip closures of 900 ms and 100 ms. Run 5: a long `menu/back` exit. AC-T38 also asks for a wait of 70 000 ms (one tick wrap). V-170 waits 10 s. Test both. |
+| N2 | The blank moment and the end screen come at the tap tick. `harness_event()` runs `menu_handle()` and then `menu_poll()` at the same tick, so `training_hold_result(false)` must not change the phase start: duration 0 is enough. The GAP then starts at the tap tick, and the next item comes exactly 500 ms later (V-170: still blank at w + 499, item at w + 500). |
+| N3 | Row 7 positions: `Next` at x 107 and `Finish` at x 97 are the existing right-alignment rule of the `enter` field (x = 127 - 5n). Use the code path of the `enter` label. No new position constant. |
+| N4 | In the answer state, `rx_draw_labels()` runs only from the FAILED check (through `rx_draw_input()`). The GAP event draws the labels of the whole set again. Long `enter` and the no-op events draw nothing (V-170: no dirty page). |
+| N5 | Three existing vectors change. In V-99, an `E` at w closes the answer state. In V-136, an `E` closes each Receiving answer state. V-121 also renders the answer state with `Next` and `Finish`. These are 15.3 changes, traced to D5. |
+| N6 | V-170 Run 1 checks `stop()` in `PLOG` at the tap. Every `enter` tap in the answer state calls `player_stop()`. This includes a tap with the player idle (Run 3). |
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D5 | `ui-ux-embedded-designer` | Done, review `approved` (U-32). `ui-ux.md`: new decision UX-64. 5.12.2: a new state "Answer, waiting". 5.14: the row "Wrong, attempt 3, Receiving", the delay table, the timeline and the answer playback text. 6.8: the event column of the answer state. 7: the feedback rows. 6.10: the `TRAINING_FAILED_MS` row applies to Sending only. Row 7 of the answer state: the `enter` field position and alignment for `Next` and `Finish`, the other fields blank. New and revised V-vectors in 9.4 and a device check. All within D-T44. | - |
+| T15 | `c-embedded-developer` | Done, final review `approved` (section 22.5). Part A: `src/modes/training.c` and the doc comments in `inc/modes/training.h` (D-T44 (2), section 5.10): `training_hold_result(false)` in RESULT clears the hold and sets the duration to 0. The `TRAINING_FAILED_MS` comment says Sending only. AC-T37 in `test_training.c`. Part B: `src/modes/receiving.c` as section 12.2 and D-T44: `rx_is_answer_shown()`, used also by `rx_draw_item_line()`. The poll call of `training_hold_result()` goes away. The GAP event calls `rx_draw_labels()`. `rx_draw_labels()` in the answer state. `rx_handle_answer()`. AC-T38 in `test_receiving.c`, the V-vectors of D5 and the 15.3 changes of developer files. Build with `build.sh`, run `test.sh` and `pre-commit run --files <changed files>`. Report AC-T39. | Part A: -. Part B: D5, Part A |
+| Q6 | `qa-embedded` | Done, `approved`. Independent verification of AC-T17, AC-T19, AC-T26 and AC-T37 to AC-T39, and the 15.3 changes of the `test_qa_*` files. New cases in `test_qa_receiving.c`. Fault cases: (F1) An `enter` tap in the same poll as the playback end. (F2) A long `menu/back` in the answer state. (F3) A tip closure from a plug insertion in the answer state: it continues, as a tap. (F4) The `enter` tap that makes the third wrong pick does not also continue. (F5) A second `enter` tap in the blank moment does nothing. Mutation cases: (M1) `training_hold_result(false)` restarts `TRAINING_FAILED_MS`. (M2) The per-poll `training_hold_result(player_is_busy())` stays. (M3) The answer state has no FAILED test, so it acts after CORRECT or WRONG. (M4) The `enter` tap does not call `player_stop()`. (M5) No label redraw at GAP. (M6) `Next` and `Finish` swapped, or the last-item test off by one. (M7) Another event acts in the answer state. (M8) A long `enter` does nothing. | T15 |
+| W6 | `technical-writer` | Manual and quick guide done, review `approved` (section 22.5). Release notes open. `docs/user_manual.md`: the result table row of the third wrong attempt, and the Receiving button text. Tell the user that `enter` continues and long `enter` plays the answer again. Describe `Next` and `Finish`. `docs/release_notes.md`: the new version section, after the user decides the version. | `architector` approval of T15 |
+
+If Part A changes an interface of section 5, Part B stops and reports to `architector`. Not in T15: a change of
+`sending.c`, `training_screen.c` (unless D5 needs it, then `architector` decides first), the ISR files,
+`buttons.c`, `keyer.c`, `player.c` and `firmware/drivers/`.
+
 ## 18. Device checks (unverified until the user tests on the device)
 
 | ID | Check |
@@ -1709,6 +1772,7 @@ Not in Part B: any change of `training.h`, `training.c`, `koch.h` or `koch.c` be
 | DC-T6 | The main loop keeps up: no keyer queue overflow during the Sending redraw at 50 WPM. |
 | DC-T8 | `ui-ux.md` D-34. Sending word session with a paddle and with a straight key, at 20/20, 13/13 and 20/10 WPM: words keyed with the normal 3-unit space pass. A pause of about 6 units after a character gives `Wrong: pause too long`, a pause of about 4 units does not. At the retry, rows 5 and 7 are blank. |
 | DC-T9 | D-T35 to D-T41. In both modes: the selector steps feel right with auto-repeat (400 ms, then every 80 ms), from L1 to an earned level above L50. `enter` and the paddle tip start a session from the start screen and from the end screen. Record whether a plug insertion on a selector screen starts a session (R-T10). The main menu shows the level next to `Receiving` and `Sending`. |
+| DC-T10 | D-T44. Receiving: after the third wrong attempt, wait 10 s. The answer stays on the screen, and row 7 shows only `Next`. A long `enter` and a tip closure of 800 ms play the answer again. An `enter` tap and a short tip closure go on to the blank moment. On the last item, row 7 shows `Finish`, and an `enter` tap shows the end screen. Record whether a plug insertion in the answer state goes on (R-T12). |
 
 ## 19. Risks
 
@@ -1723,6 +1787,8 @@ Not in Part B: any change of `training.h`, `training.c`, `koch.h` or `koch.c` be
 | R-T8: the four labels do not fit one row for every run (LC-6). | D1 runs the script check over all Koch prefixes. LC-2 allows a second row. |
 | R-T10: on the start screen and the end screen, tap mode is off, so `enter` acts at the press. A tip closure or a plug insertion there starts a session (D-T39, D-T40). | A session that the user leaves changes no level. A long `menu/back` leaves in every phase. W5 tells the user to insert the plug before opening a mode. DC-T9. |
 | R-T11: at 12.5 steps per second, a far level takes time. From L1 to L150 takes about 12 s. | The selector opens at the earned level, so a replay is usually a few steps down. D-T35 (6) keeps the fallback (long `prev` or `next` steps by 10) for an `architector` decision after DC-T9. |
+| R-T12: in the answer state of D-T44, a short tip closure or a plug insertion continues to the next item. | The answer was already on the screen, and the item already counts as wrong. W6 and the existing R-T7 text tell the user to insert the plug before opening Receiving. DC-T10. |
+| R-T13: in the answer state, row 7 shows `Next` above `enter`. A user can read it as the name of the `next` button and press `next`. | A `next` tap does nothing there, so no wrong action and no lost point follow. The `enter` label position is the same as in phase ITEM. W6 says "tap `enter`". DC-T10 and `ui-ux.md` D-41 record whether users press `next`. If they do, `ui-ux-embedded-designer` proposes a new text and `architector` decides. |
 | R-T9: a slow or uneven fist gets word-space errors at equal character and effective speeds (5 units leave 2 units above the normal space). | User decision (5 units, D-T30). The user can lower `TX Eff. Speed`. W3 tells the user. DC-T8. |
 
 ## 20. Answered questions
@@ -1747,7 +1813,7 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 | U-3 | `TRAINING_SENDING_GAP_MS` | 300 ms | 5.14, 6.10 |
 | U-4 | `TRAINING_CORRECT_MS` | 600 ms | 5.14, 6.10 |
 | U-5 | `TRAINING_WRONG_MS` | 1200 ms | 5.14, 6.10 |
-| U-6 | `TRAINING_FAILED_MS` | 2500 ms. Receiving counts from the end of the answer playback (D-T14). | 5.14, 6.10, Q-14 |
+| U-6 | `TRAINING_FAILED_MS` | 2500 ms, Sending only. Receiving has no delay after the third wrong attempt: the answer stays until an `enter` tap (D-T44). | 5.14, 6.10, Q-14, UX-64 |
 | U-7 | Header | Tag, speed from column 3, level from column 9, item right-aligned to column 24. No short form. In a gap the header shows the next item number (`training_shown_item_number()`). | 5.11.1 |
 | U-8 | Receiving layout | Block and bar marks, slot x `68 - 8n + 16k`, key bar segments at y 55 (D-T29), label fields and label texts. | 5.11.1, 5.11.2, 5.12, 5.12.1 |
 | U-9 | Sending layout | Item line, bar under the next word character, status `Wrong: <text>`, code row 7, answer code row 5. `TX_CODE_MAX_MARKS` = 12. | 5.13, 5.13.3 |
@@ -1772,6 +1838,7 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 | U-29 | Description texts (SL-2, SL-3) | Resolved by D4 (UX-54): `K and M`, `New char <full text>` in the `Prosigns` style (longest 15 cells), `Words of <len>` also for the final word phase. | 5.16.3 |
 | U-30 | Controls on the selector screens (D-T38, D-T39, D-T40) | Resolved by D4 (UX-55), matches D-T38 to D-T40. `next` up, `prev` down, press and repeat, no wrap. `enter` and the tip start at the press. `menu/back` leaves at the press. Long events do nothing. | 6.1, 6.8, 6.9, 5.16.4 |
 | U-31 | Main menu level column (D-T41) | Resolved by D4 (UX-57): right-aligned, last character in column 22, the video of a value. | 5.2, 5.16.6 |
+| U-32 | Receiving answer state (D-T44) | Resolved by D5 (UX-64), review `approved` on 2026-10-15. Row 7: only the `enter` field, right-aligned as every `enter` label: `Next` at x 107, or `Finish` at x 97 on the last item. The other three fields are blank, and the key bars stay. Events of 6.1 and 6.8 match D-T44 (4). New vector V-170, revised V-99, V-121 and V-136. Device check D-41 (DC-T10). | 5.12.2, 5.14, 6.1, 6.8, 6.10, 7, 8 (F-20), 9.4 |
 | U-25 | Sending word-space result (D-T30, D-T31) | `Wrong: pause too long`, bar under the next character, row 5 at FAILED the code of that character, row 7 kept (WS-1 to WS-5). Resolved by D2 (UX-52). The arming condition text waits for fix F-1. | 5.13.1, 5.13.2, 5.14, 9.4 |
 
 ## 22. Final review (2026-10-06)
@@ -1876,3 +1943,52 @@ Stack 191 B free, margin 107 B. No protected file changed.
 
 T14 is closed. W5 (`technical-writer`) can start with the scope of section 17.4. Open, not blocking: device check DC-T9 (`ui-ux.md` D-35 to D-37). `ui-ux.md` V-143 can say "no playback
 starts" in its next edit (D-T43 (2), owner `ui-ux-embedded-designer`).
+
+### 22.5 Final review of D-T44, task T15 (2026-10-15)
+
+Verdict T15: `approved` on 2026-10-15, after the test fixes R1 and R2. The first pass gave `changes_requested`
+for the test file `test_receiving.c` only. QA verdict (Q6): `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 80 of 80 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| `build.sh` | Passes, with the `check_asm.sh` post-build step. Run again by `architector`. |
+| Memory | Flash 28 090 -> 28 209 B (+119, target +120, hard limit +200). xdata 1817 B (+0). Stack starts at 0x41, 191 B free. |
+| `pre-commit` | `reuse lint-file` and `clang-format` pass on the seven changed files. |
+| ISR and protected files | No change in `sending.c`, `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c` or `firmware/drivers/`. |
+| Engine | `training_hold_result()` sets the hold from the argument. False sets the duration to 0 and keeps the phase start (D-T44 (2), N2). The phase guard stays. |
+| Receiving | `rx_is_answer_shown()` serves `rx_draw_item_line()`, `rx_build_label()` and `receiving_handle()`. `receiving_poll()` has no hold call. GAP redraws the labels. `rx_handle_answer()` acts only on `enter`: long replays, tap stops the player and releases the hold. `Next` and `Finish` are `MEM_CODE` texts on the `enter` label path (N3). The `\|\|` in `receiving_handle()` cannot act twice: an ITEM event that gives FAILED returns true first. |
+| Tests | AC-T37 in `test_training.c`. V-170 runs 1-5, revised V-99, V-121 and V-136 in `test_receiving.c`. QA: F1-F5 and extra cases in `test_qa_receiving.c`, M1-M8 (14 variants) killed. The change in `test_qa_sending_pass_rate.c` is in the Receiving branch of a shared helper (15.3). |
+
+Change requests for `c-embedded-developer` (tests only, no production change):
+
+| ID | Change |
+| --- | --- |
+| R1 | `test_v170_answer_state_waits`: read the player call count before the no-op taps (`L`, `M`, `R`, long `M`, long `R`). Assert the same count after them (AC-T38 (4)). `expect_answer_state_quiet_to()` reads the count after the taps, so a stray player call is not seen. Also check `Next` on item 49 of 50 in `test_receiving.c`. Then the developer file tests both sides of the last-item rule of D-T44 (5). |
+| R2 | `run_word_session()`: the inner RESULT/GAP loop checks `guard` but does not increase it. With the new `enter` tap in the loop, a fault that keeps RESULT makes the test loop with no time step (QA mutant M1). Give the inner loop its own bound. At that bound, the test fails with an assertion. The `while (training_phase() == TRAINING_PHASE_ITEM)` loop before it gets the same bound. |
+
+R1 and R2 result. Only `test_receiving.c` changed. The production diff is the one of the first pass.
+`test_v170_answer_state_waits` reads the player call count before the no-op taps and asserts it after them. The new
+`test_answer_state_next_on_item_49` checks `Next` on item 49 of 50 and the blank moment after the tap, with header
+`50/50`. Both inner loops of `run_word_session()` stop at 5000 steps with an assertion. With M1, `test_receiving`
+fails by that assertion in about 1 s, with no hang (developer evidence). No new QA run is necessary: the change adds
+checks to a developer test file and removes none. Run again by `architector`: `test.sh` passes 80 of 80. The
+`check_asm.sh` self-test passes 168 of 168. `build.sh` passes with no `check_asm.sh` violation. Flash 28 209 B,
+xdata 1817 B, 191 B stack free. `pre-commit` passes.
+
+T15 is closed. Open, not blocking: DC-T10 and `ui-ux.md` D-41 (R-T13).
+
+Review of W6 (2026-10-15): `approved`. `docs/user_manual.md` and `docs/quick_guide.md` match D-T44 and UX-64.
+
+| Item | Result |
+| --- | --- |
+| Behavior | The answer shows and plays one time, with no time limit. An `enter` tap continues, also during the playback. A hold of `enter` plays the answer again. A long `menu/back` leaves. The other buttons do nothing. `Next`, or `Finish` on the last item. The end screen comes at the tap after the last item. Sending keeps 2.5 s. |
+| Places | The manual: the hold table, the Receiving steps, the replay rules and the tip closures. Also the results table and the troubleshooting table. A new section "After the third wrong attempt" has the screen example of `ui-ux.md` 5.14. The quick guide: the steps and the button table. |
+| R-T12 | The plug-insertion note says that a closure in the answer state goes on, and that this costs no point. The troubleshooting row names it. |
+| R-T13 | The manual says that `Next` is the label of `enter`, not the name of the `next` button, and that `next` does nothing there. The quick guide says the same. |
+| Version | `docs/release_notes.md` and `firmware/VERSION` do not change until the user decides the version. |
+
+Note for the next edit of the manual, not blocking: in the results bullet about the last item, put the action first.
+Write: "tap `enter` to show the session end screen."
+
+Next: the version decision of the user (plan: MINOR, 0.1.0 to 0.2.0). Then W6 adds the release notes section.

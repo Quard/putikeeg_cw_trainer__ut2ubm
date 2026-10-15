@@ -5,7 +5,8 @@
 
 /*
  * QA scenarios of the Receiving mode with the four-button keyboard (references/internal/training_spec.md D-T27 to
- * D-T29, sections 8 and 12.2, AC-T8, AC-T19, AC-T23, AC-T27, R-T7; ui-ux.md sections 5.12.1, 6.8 and 9.4, UX-51).
+ * D-T29, D-T44, sections 8 and 12.2, AC-T8, AC-T19, AC-T23, AC-T27, AC-T38, R-T7, R-T12; ui-ux.md sections 5.12.1,
+ * 6.8 and 9.4, UX-51, UX-64).
  * The real menu, buttons, engine, keyboard and progress run with a fake player and fake items. The oracles come
  * from the documents: the run split is computed here from (c + 3 - k) / 4, and the label fields from their pixel
  * ranges, not from receiving.c or keyboard.c.
@@ -491,8 +492,9 @@ static void test_empty_runs_in_narrowed_range(void) {
 }
 
 /*
- * ui-ux.md 6.8, AC-T19: a long enter does nothing in the start pause, in RESULT (also during the answer playback
- * after the third wrong attempt), in the blank moment and on the end screen. A long next does nothing in ITEM.
+ * ui-ux.md 6.8, AC-T19: a long enter does nothing in the start pause, in a Wrong RESULT, in the blank moment and on
+ * the end screen. A long next does nothing in ITEM. In the answer state after the third wrong attempt, a long enter
+ * replays the answer (D-T44, UX-64), and only an enter tap continues.
  */
 static void test_long_enter_outside_item_and_long_next(void) {
   const char* const items[2] = {"K", "K"};
@@ -513,25 +515,45 @@ static void test_long_enter_outside_item_and_long_next(void) {
   TEST_ASSERT(is_quiet_since_mark());
   TEST_ASSERT_EQUAL(calls, fake_player_call_count());
 
-  /* Three wrong attempts: the answer plays; a long enter must not restart it or add a call. */
+  /* A Wrong RESULT: a long enter and an enter tap do nothing. */
   tap(M_TAP);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_last_check());
+  calls = fake_player_call_count();
+  mark_quiet_start();
+  tap(LONG_EVENT(ENTER_EVENT));
+  tap(ENTER_EVENT);
+  TEST_ASSERT(is_quiet_since_mark());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
   run_to_item();
   tap(M_TAP);
   run_to_item();
   tap(M_TAP);
+
+  /* Three wrong attempts: the answer plays; each long enter (event or real hold) starts it again, the screen stays. */
   TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
   TEST_ASSERT(fake_player_is_running());
   calls = fake_player_call_count();
   mark_quiet_start();
   tap(LONG_EVENT(ENTER_EVENT));
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls));
   pin_press(BUTTON_BIT_ENTER, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 50U));
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls + 1U));
+  TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
   TEST_ASSERT(is_quiet_since_mark());
-  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
   TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
 
-  /* Blank moment before item 2. */
+  /* No time limit: the answer state outlives the old TRAINING_FAILED_MS delay after the playback end. */
   fake_player_finish();
-  run_to_phase(TRAINING_PHASE_GAP);
+  harness_run_to((uint16_t)(harness_now + TRAINING_FAILED_MS + 1000U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT(is_quiet_since_mark());
+
+  /* The enter tap continues: blank moment before item 2. */
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
   calls = fake_player_call_count();
   mark_quiet_start();
   tap(LONG_EVENT(ENTER_EVENT));
@@ -640,6 +662,369 @@ static void test_short_menu_never_leaves_in_session(void) {
   TEST_ASSERT(status("Wrong"));
 }
 
+/* ---------- Answer state after the third wrong attempt (D-T44, UX-64, Q6 fault cases F1 to F5) ---------- */
+
+#define HDR_ITEM_1 "RX 32/32 L1          1/50"
+#define HDR_ITEM_2 "RX 32/32 L1          2/50"
+
+/* Items K then M at the KM level; item 1 is answered M three times. The answer K shows, and it plays. */
+static void qa_open_answer_state(void) {
+  const char* const items[2] = {"K", "M"};
+  uint8_t attempt;
+
+  rx_open_items(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 2U);
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(status("Wrong. The answer is:"));
+  TEST_ASSERT(keys("", "", "", "Next"));
+  TEST_ASSERT(hdr(HDR_ITEM_1));
+  TEST_ASSERT(fake_player_is_running());
+  TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
+}
+
+/*
+ * The blank moment that started at tick @p start: rows 1-5 off, the next item number, the labels of the whole set.
+ * Item 2 (M) comes exactly TRAINING_RECEIVING_GAP_MS after @p start, with one player start and no pick in it.
+ */
+static void expect_gap_then_item_2(uint16_t start) {
+  const size_t calls = fake_player_call_count();
+
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT(body_off(1, 5));
+  TEST_ASSERT(hdr(HDR_ITEM_2));
+  TEST_ASSERT(keys("K", "M", "", ""));
+  harness_run_to((uint16_t)(start + TRAINING_RECEIVING_GAP_MS - 1U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  harness_run_to((uint16_t)(start + TRAINING_RECEIVING_GAP_MS));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(2U, training_item_number());
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls));
+  TEST_ASSERT_EQUAL(0, strcmp("M", fake_player_last_text()));
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  TEST_ASSERT(keys("K", "M", "", ""));
+  TEST_ASSERT(status(NULL));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* The first tick at which the phase left RESULT during pins_watch(). */
+static uint16_t qa_change_tick;
+
+/* Sets the pins for @p duration passes and records the tick at which the phase leaves RESULT. */
+static void pins_watch(uint8_t mask, uint16_t duration) {
+  uint16_t pass;
+
+  harness_pins = mask;
+  fake_button_pins_set(mask);
+  for (pass = 0U; pass < duration; ++pass) {
+    const bool was_result = (training_phase() == TRAINING_PHASE_RESULT);
+    harness_set_time((uint16_t)(harness_now + 1U));
+    harness_pass();
+    if (was_result && (training_phase() != TRAINING_PHASE_RESULT)) {
+      qa_change_tick = harness_now;
+    }
+  }
+}
+
+/*
+ * F1: the enter tap comes in the same main-loop pass as the end of the answer playback, before it and after it. Each
+ * order gives one continue: one stop, the blank moment from the tap tick, item 2 exactly 500 ms later.
+ */
+static void test_qa_answer_tap_at_playback_end(void) {
+  uint16_t t;
+  size_t stops;
+
+  /* The playback ends, then the tap, in the same tick. */
+  qa_open_answer_state();
+  harness_run_to((uint16_t)(harness_now + 3000U));
+  t = (uint16_t)(harness_now + 1U);
+  harness_set_time(t);
+  fake_player_finish();
+  stops = fake_player_stop_count();
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(stops + 1U, fake_player_stop_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(fake_player_call_count() - 1U));
+  expect_gap_then_item_2(t);
+
+  /* The tap, then the playback end in the same tick: the stop already ended it, nothing more happens. */
+  qa_open_answer_state();
+  harness_run_to((uint16_t)(harness_now + 300U));
+  t = (uint16_t)(harness_now + 1U);
+  harness_set_time(t);
+  stops = fake_player_stop_count();
+  harness_event(ENTER_EVENT);
+  fake_player_finish();
+  harness_pass();
+  TEST_ASSERT_EQUAL(stops + 1U, fake_player_stop_count());
+  expect_gap_then_item_2(t);
+  TEST_ASSERT_EQUAL(0U, harness_overlap_count);
+}
+
+/*
+ * F2: in the answer state, a short menu/back does nothing. A long menu/back leaves after the playback end and also
+ * during a replay: the player stops, no EEPROM write, the main menu shows with tap mode off. The next session has no
+ * stale hold: its Correct result ends after TRAINING_CORRECT_MS without a tap.
+ */
+static void test_qa_answer_long_menu_leaves(void) {
+  size_t calls;
+  uint16_t correct_tick;
+
+  qa_open_answer_state();
+  fake_player_finish();
+  harness_run_to((uint16_t)(harness_now + 5000U));
+  calls = fake_player_call_count();
+  mark_quiet_start();
+  pin_press(BUTTON_BIT_MENU, 50U);
+  TEST_ASSERT(is_quiet_since_mark());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT_EQUAL(MENU_SCREEN_RECEIVING, menu_screen());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+
+  /* A replay runs, then a long menu/back. */
+  tap(LONG_EVENT(ENTER_EVENT));
+  TEST_ASSERT(fake_player_is_running());
+  harness_pins_for(BUTTON_BIT_MENU, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 10U));
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT(!fake_player_is_running());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(fake_player_call_count() - 1U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, training_phase());
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT(hdr("CW Trainer"));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+  /* Tap mode is off: a next press moves the cursor at the press, a prev press moves it back. */
+  TEST_ASSERT_EQUAL(0U, menu_cursor());
+  harness_pins_for(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(1U, menu_cursor());
+  harness_pins_for(0U, 30U);
+  harness_pins_for(BUTTON_BIT_PREV, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(0U, menu_cursor());
+  harness_pins_for(0U, 30U);
+
+  /* Open Receiving again and start a session: a Correct result is not held. */
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
+  harness_set_time((uint16_t)(harness_now + 1U));
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  harness_set_time((uint16_t)(harness_now + 1U));
+  harness_event(ENTER_EVENT);
+  run_to_item();
+  tap(L_TAP);
+  TEST_ASSERT(status("Correct"));
+  correct_tick = harness_now;
+  harness_run_to((uint16_t)(correct_tick + TRAINING_CORRECT_MS - 1U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  harness_run_to((uint16_t)(correct_tick + TRAINING_CORRECT_MS));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+}
+
+/*
+ * F3, R-T12: a plug insertion in the answer state is a bouncy short tip closure. It continues once, as an enter tap,
+ * while the answer plays and after its end. The bounces give no second action in the blank moment or in item 2.
+ */
+static void test_qa_answer_plug_insertion_continues(void) {
+  unsigned is_playing;
+
+  for (is_playing = 0U; is_playing < 2U; ++is_playing) {
+    size_t stops;
+
+    qa_open_answer_state();
+    if (is_playing == 0U) {
+      fake_player_finish();
+    }
+    harness_run_to((uint16_t)(harness_now + 400U));
+    stops = fake_player_stop_count();
+    qa_change_tick = 0U;
+    pins_watch(BUTTON_BIT_ENTER, 2U);
+    pins_watch(0U, 3U);
+    pins_watch(BUTTON_BIT_ENTER, 35U);
+    pins_watch(0U, 4U);
+    pins_watch(BUTTON_BIT_ENTER, 3U);
+    pins_watch(0U, (uint16_t)(BUTTONS_DEBOUNCE_MS + 10U));
+    TEST_ASSERT(qa_change_tick != 0U);
+    TEST_ASSERT_EQUAL(stops + 1U, fake_player_stop_count());
+    TEST_ASSERT(!fake_player_is_running());
+    expect_gap_then_item_2(qa_change_tick);
+  }
+}
+
+/*
+ * F4: the enter tap that makes the third wrong pick (the enter run holds S, the item is K) shows the answer state and
+ * does not also continue it, as an event and as a real closure that the release turns into the tap.
+ */
+static void test_qa_third_pick_by_enter_does_not_continue(void) {
+  const char* const items[2] = {"K", "M"};
+  unsigned is_pin;
+
+  for (is_pin = 0U; is_pin < 2U; ++is_pin) {
+    uint8_t attempt;
+    size_t calls;
+
+    rx_open_items(LEVEL_KMRS, SETTINGS_PROSIGN_BOTH, items, 2U);
+    for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+      run_to_item();
+      TEST_ASSERT(keys("K", "M", "R", "S"));
+      calls = fake_player_call_count();
+      if (is_pin != 0U) {
+        pin_press(BUTTON_BIT_ENTER, 40U);
+      } else {
+        tap(ENTER_EVENT);
+      }
+    }
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+    TEST_ASSERT_EQUAL((uint8_t)'S', (uint8_t)training_answer_text()[0]);
+    TEST_ASSERT(status("Wrong. The answer is:"));
+    TEST_ASSERT(keys("", "", "", "Next"));
+    /* The pick gives one stop and the answer start, and nothing after it. */
+    TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+    TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(calls));
+    TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls + 1U));
+    TEST_ASSERT(fake_player_is_running());
+    fake_player_finish();
+    mark_quiet_start();
+    harness_run_to((uint16_t)(harness_now + 5000U));
+    TEST_ASSERT(is_quiet_since_mark());
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+    TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  }
+}
+
+/*
+ * F5: a second enter tap in the blank moment does nothing: in the same tick as the continue tap, one tick later, as a
+ * real closure, and as a long enter. Item 2 still comes 500 ms after the first tap, with no pick in it.
+ */
+static void test_qa_second_enter_in_blank_moment(void) {
+  uint16_t t;
+  size_t calls;
+
+  qa_open_answer_state();
+  t = (uint16_t)(harness_now + 100U);
+  harness_run_to((uint16_t)(t - 1U));
+  harness_set_time(t);
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  calls = fake_player_call_count();
+  mark_quiet_start();
+  harness_event(ENTER_EVENT);
+  tap(ENTER_EVENT);
+  pin_press(BUTTON_BIT_ENTER, 40U);
+  tap(LONG_EVENT(ENTER_EVENT));
+  TEST_ASSERT(is_quiet_since_mark());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  expect_gap_then_item_2(t);
+}
+
+/*
+ * D-T44 (1): only the FAILED check makes the answer state. After Correct, an enter tap and a long enter do nothing;
+ * the result keeps TRAINING_CORRECT_MS and the labels of the whole set.
+ */
+static void test_qa_enter_after_correct_does_nothing(void) {
+  const char* const items[2] = {"K", "M"};
+  uint16_t correct_tick;
+  size_t calls;
+
+  rx_open_items(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 2U);
+  run_to_item();
+  tap(L_TAP);
+  TEST_ASSERT(status("Correct"));
+  TEST_ASSERT(keys("K", "M", "", ""));
+  correct_tick = harness_now;
+  calls = fake_player_call_count();
+  mark_quiet_start();
+  tap(ENTER_EVENT);
+  tap(LONG_EVENT(ENTER_EVENT));
+  pin_press(BUTTON_BIT_ENTER, 40U);
+  TEST_ASSERT(is_quiet_since_mark());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  harness_run_to((uint16_t)(correct_tick + TRAINING_CORRECT_MS - 1U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  harness_run_to((uint16_t)(correct_tick + TRAINING_CORRECT_MS));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+}
+
+/*
+ * D-T44 (4), AC-T38 (4): in the answer state, menu/back, prev and next taps, long prev and long next do nothing, as
+ * events and as real presses, during the playback and after its end: no draw, no player call, no phase change.
+ */
+static void test_qa_answer_other_events_do_nothing(void) {
+  static const button_event_t events[] = {L_TAP, M_TAP, R_TAP, LONG_EVENT(M_TAP), LONG_EVENT(R_TAP)};
+  static const uint8_t pins[] = {BUTTON_BIT_MENU, BUTTON_BIT_PREV, BUTTON_BIT_NEXT};
+  unsigned is_finished;
+
+  for (is_finished = 0U; is_finished < 2U; ++is_finished) {
+    size_t index;
+    size_t calls;
+
+    qa_open_answer_state();
+    if (is_finished != 0U) {
+      fake_player_finish();
+    }
+    calls = fake_player_call_count();
+    mark_quiet_start();
+    for (index = 0U; index < (sizeof(events) / sizeof(events[0])); ++index) {
+      tap(events[index]);
+      TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+    }
+    for (index = 0U; index < sizeof(pins); ++index) {
+      pin_press(pins[index], 50U);
+      TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+    }
+    pin_press(BUTTON_BIT_PREV, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 50U));
+    pin_press(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 50U));
+    TEST_ASSERT(is_quiet_since_mark());
+    TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+    TEST_ASSERT_EQUAL(is_finished == 0U, fake_player_is_running());
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+    TEST_ASSERT_EQUAL(MENU_SCREEN_RECEIVING, menu_screen());
+    TEST_ASSERT_EQUAL(1U, training_answer_length());
+  }
+}
+
+/* Fails item @p number of the K session three times and checks the enter label of its answer state. */
+static void fail_item_and_expect_label(uint8_t number, const char* enter_label) {
+  uint8_t attempt;
+
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT_EQUAL(number, training_item_number());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(keys("", "", "", enter_label));
+}
+
+/*
+ * D-T44 (5), UX-64: `Finish` shows only on the last item. Item 49 of 50 shows `Next` and goes on to the blank
+ * moment; item 50 shows `Finish` and gives the end screen at the tap.
+ */
+static void test_qa_next_and_finish_on_last_two_items(void) {
+  uint8_t number;
+
+  rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, "K");
+  TEST_ASSERT_EQUAL(50U, training_item_count());
+  for (number = 1U; number < 49U; ++number) {
+    run_to_item();
+    tap(L_TAP);
+  }
+  fail_item_and_expect_label(49U, "Next");
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT(keys("K", "M", "", ""));
+  fail_item_and_expect_label(50U, "Finish");
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(48U, training_score());
+}
+
 int main(void) {
   TEST_RUN(test_long_prev_steps_out_before_undo);
   TEST_RUN(test_labels_fit_every_range_of_every_prefix);
@@ -651,5 +1036,13 @@ int main(void) {
   TEST_RUN(test_end_screen_long_enter_and_short_tip);
   TEST_RUN(test_opening_enter_held_into_item);
   TEST_RUN(test_short_menu_never_leaves_in_session);
+  TEST_RUN(test_qa_answer_tap_at_playback_end);
+  TEST_RUN(test_qa_answer_long_menu_leaves);
+  TEST_RUN(test_qa_answer_plug_insertion_continues);
+  TEST_RUN(test_qa_third_pick_by_enter_does_not_continue);
+  TEST_RUN(test_qa_second_enter_in_blank_moment);
+  TEST_RUN(test_qa_enter_after_correct_does_nothing);
+  TEST_RUN(test_qa_answer_other_events_do_nothing);
+  TEST_RUN(test_qa_next_and_finish_on_last_two_items);
   return TEST_FINISH();
 }

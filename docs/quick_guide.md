@@ -67,6 +67,9 @@ copy Morse code by ear.
    group of characters, for example `A-K`. Press a button to pick its character, or to split its group into four
    smaller groups. One pick takes three presses at most.
 5. When you fill the last slot, the trainer checks the answer. You have three attempts for each item.
+6. After the third wrong attempt, the answer stays on the screen and plays one time. `Next` shows above `enter`,
+   or `Finish` on the last item. Tap `enter` to go on. The `next` button does nothing here. Hold `enter` to hear
+   the answer again.
 
 | Screen | Button | Short press | Long press |
 | --- | --- | --- | --- |
@@ -78,6 +81,9 @@ copy Morse code by ear.
 | Session | `prev` | Keyboard key 2. | Undoes one step: the last group or the last pick. |
 | Session | `next` | Keyboard key 3. | Does nothing. |
 | Session | `enter` | Keyboard key 4. | Plays the item again. This is free. |
+| Answer after the third wrong attempt | `enter` | Goes to the next item, or to the end screen. | Plays the answer again. |
+| Answer after the third wrong attempt | `prev`, `next` | Do nothing. | Do nothing. |
+| Answer after the third wrong attempt | `menu/back` | Does nothing. | Leaves the session. The session is lost. |
 
 ## Sending
 

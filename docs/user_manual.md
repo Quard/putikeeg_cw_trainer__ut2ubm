@@ -150,7 +150,7 @@ keys (see [The group keyboard](#the-group-keyboard)). To give a command, hold th
 | `menu/back` | Leaves Free Input. The main menu shows with the cursor on `Free Input`. The text is lost. | Leaves the session. The main menu shows with the cursor on `Receiving`. | Leaves the session. The main menu shows with the cursor on `Sending`. |
 | `prev` | Clears the text. | Undoes one step of the answer. | Does nothing. |
 | `next` | Draws a line under the text. | Does nothing. | Does nothing. |
-| `enter` | No hold action. `enter` keys like the tip contact. | Plays the item again from its start, while the item shows. | No hold action. `enter` keys like the tip contact. |
+| `enter` | No hold action. `enter` keys like the tip contact. | Plays the item again from its start, while the item shows. After the third wrong attempt, plays the answer again. | No hold action. `enter` keys like the tip contact. |
 
 How to hold a button:
 
@@ -636,8 +636,9 @@ In Receiving, you listen to an item and pick its characters with the four button
 7. Pick the characters with the keyboard (see [The group keyboard](#the-group-keyboard)). You can pick while the
    item plays. Each pick shows at once.
 8. Fill the last slot. The device checks the whole answer at once. If the item still plays, the playback stops.
-9. Read the result in the status line (see [Results and attempts](#results-and-attempts)). The next item comes
-   after the result.
+9. Read the result in the status line (see [Results and attempts](#results-and-attempts)). After a correct
+   answer, the next item comes after the result. After the third wrong attempt, the answer stays on the screen.
+   Tap `enter` to go on (see [After the third wrong attempt](#after-the-third-wrong-attempt)).
 10. To leave, hold `menu/back` for about 0.8 s.
 
 In a Receiving session, a short press is a tap. You must release the button before about 0.8 s. When you release the
@@ -650,7 +651,43 @@ To hear the item again, hold `enter` for about 0.8 s while the item shows:
 - The replay starts while you still hold the button. The screen does not change. When you hear the playback start
   again, release the button.
 - Your picks and the labels stay. A replay is free: it uses no attempt and does not change the score.
-- A hold of `enter` does nothing during the start pause, a result or the blank moment.
+- A hold of `enter` does nothing during the start pause, a result or the blank moment. After the third wrong
+  attempt, a hold of `enter` plays the answer again (see
+  [After the third wrong attempt](#after-the-third-wrong-attempt)).
+
+#### After the third wrong attempt
+
+After the third wrong attempt, the device shows the answer and waits for you. Example: item 7 of 50, the answer
+is K:
+
+```text
+RX 20/15 L12         7/50
+  Wrong. The answer is:
+
+            K
+            K
+
+_____ _____ ____ ________
+                     Next
+```
+
+- The status line shows `Wrong. The answer is:`. The answer shows in the middle of the screen.
+- The answer plays one time.
+- The answer stays on the screen until you tap `enter`. There is no time limit.
+- The bottom row shows only one label, above `enter`. It shows `Next`, or `Finish` on the last item of the
+  session. The other three labels are blank.
+
+To go on, tap `enter`. The `Next` label is the label of the `enter` button. It is not the name of the `next`
+button. A tap of the `next` button does nothing here.
+
+| Action | Result |
+| --- | --- |
+| Tap `enter` | If the answer still plays, the playback stops. Then the blank moment and the next item come. On the last item, the session end screen shows. You can tap while the answer plays. |
+| Hold `enter` for about 0.8 s | The answer plays again from its start. The screen does not change. You can do this many times. |
+| Hold `menu/back` for about 0.8 s | Leaves the session. The main menu shows. |
+| Tap `menu/back`, `prev` or `next`, or hold `prev` or `next` | Does nothing. |
+
+The item counts as wrong. So the time on this screen does not change the score.
 
 #### Key or paddle in Receiving
 
@@ -660,6 +697,8 @@ The tip contact of the key/paddle socket is connected to `enter`. So in Receivin
 - On the start screen and the session end screen, a closure starts a session at once, like a press of `enter`.
 - In a session, a short closure is a tap of `enter`. It selects the right group.
 - In a session, a closure of about 0.8 s is a hold of `enter`. It plays the item again.
+- After the third wrong attempt, a short closure goes on, like a tap of `enter`. A closure of about 0.8 s plays the
+  answer again.
 
 The ring contact does nothing. The paddle gives no sidetone in Receiving.
 
@@ -667,8 +706,10 @@ The ring contact does nothing. The paddle gives no sidetone in Receiving.
 > During Receiving, this acts as a tap of `enter`. So it can select the right group. If that group has two or more
 > characters, the labels change. Hold `prev` to go back. If that group has one character, the device picks it.
 > Hold `prev` to undo the pick. But if the pick fills the last slot, the device checks the answer at once. This
-> uses an attempt, and you cannot undo it. On the start screen and the session end screen, a plug insertion can
-> start a session.
+> uses an attempt, and you cannot undo it. After the third wrong attempt, a plug insertion can go on to the next
+> item, or to the session end screen. Then the answer goes away before you read it. This costs no point, because
+> the item already counts as wrong. On the start screen and the session end screen, a plug insertion can start a
+> session.
 
 #### The group keyboard
 
@@ -871,13 +912,14 @@ result.
 | --- | --- | --- | --- |
 | Correct | `Correct` | 0.6 s | The blank moment, then the next item. |
 | Wrong, attempt 1 or 2 | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character. |
-| Wrong, attempt 3 | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: 2.5 s after the end of the playback. Sending: 2.5 s. | The blank moment, then the next item. |
+| Wrong, attempt 3 | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. The bottom row shows `Next` above `enter`, or `Finish` on the last item. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: until you tap `enter`, with no time limit (see [After the third wrong attempt](#after-the-third-wrong-attempt)). Sending: 2.5 s. | The blank moment, then the next item. |
 
 - In Sending, the dots and dashes of the expected character show after the third wrong attempt, also with
   `Show CW Code` = `Off`.
 - An item that you answer correctly on attempt 2 or 3 does not add to the score.
 - The blank moment takes 0.5 s in Receiving and 0.3 s in Sending.
-- After the last item, the session end screen shows at once.
+- After the last item, the session end screen shows at once. In Receiving, after the third wrong attempt on the
+  last item, the session end screen shows when you tap `enter`.
 
 ### Session end screen
 
@@ -991,9 +1033,10 @@ The levels and the settings are in the same memory. A firmware download can keep
 | --- | --- | --- |
 | You cannot leave a session. | In Receiving, a short press of `menu/back` is a keyboard key. In Sending, it does nothing. | Hold `menu/back` for about 0.8 s, until the main menu shows. |
 | A press picks nothing in Receiving. | The device saw a hold. Or a start pause, a result or the blank moment shows. Or the label above the button is blank. | Press and release the button quickly while the item shows. |
+| In Receiving, the answer stays on the screen, and the next item does not come. | After the third wrong attempt, the device waits for you. `Next` or `Finish` shows above `enter`. A tap of `next` does nothing here. | Tap `enter`. |
 | You hear no playback in Receiving. | The volume knob is at its minimum. | Turn up the volume. Hold `enter` for about 0.8 s to play the item again. |
 | The item plays again without a press. | You inserted or removed a plug. A tip closure of about 0.8 s acts as a hold of `enter`. | Nothing. A replay is free. |
-| In Receiving, a character was picked without a press, or an attempt was used after you inserted the plug. | You inserted the plug while Receiving was open. A short tip closure acts as a tap of `enter`. | Insert the plug before you open Receiving. To undo a pick that the device did not check yet, hold `prev`. |
+| In Receiving, a character was picked without a press, an attempt was used, or the answer went away after you inserted the plug. | You inserted the plug while Receiving was open. A short tip closure acts as a tap of `enter`. | Insert the plug before you open Receiving. To undo a pick that the device did not check yet, hold `prev`. |
 | In Sending, a tone sounds or a wrong character shows without a keyed element. | You inserted or removed a plug during the session. A mono plug closes the ring contact. | Hold `menu/back` to leave. Insert the plug, then open `Sending` again. |
 | In Sending, a character that you keyed does not count. | You started it during a pause. | Key the character again. |
 | In Sending, many characters are wrong or show as `*`. | Your speed is different from `TX Speed`. The decoder does not adapt. | Set `TX Speed` near your keying speed. |
