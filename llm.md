@@ -71,5 +71,6 @@ Project documents in `references/internal/`:
 | `sidetone_validation.md` | Sidetone device checks and measurement results. |
 | `paddle_keyer_research.md` | Paddle input and iambic keyer guide. |
 | `paddle_keyer_howtoimplement_research.md` | Iambic mode B notes. |
+| `spi_flash_vocabulary_research.md` | SPI flash mod for real words: English word counts per length and per Koch level, chip comparison W25Q80 to W25Q128, flash layout with the word map, 5 V tolerant serial EEPROM option (AT24CM02, M95M04-DR). |
 
 External context: `references/context/STC8H_datasheet.md` (STC8H family reference manual).
