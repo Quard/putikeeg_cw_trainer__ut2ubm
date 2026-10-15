@@ -47,6 +47,10 @@ _Static_assert((RX_GROUP_OF(BUTTON_EVENT_MENU) == KEYBOARD_GROUP_MENU) &&
 /* Left pixel x of the label field and the key bar of each run: x 2-26, 30-54, 58-82 and 87-126. */
 static const MEM_CODE uint8_t rx_field_x[KEYBOARD_GROUP_COUNT] = {2U, 30U, 58U, 87U};
 
+/* The enter label of the answer state (UX-64). */
+static const MEM_CODE char rx_text_next[] = "Next";
+static const MEM_CODE char rx_text_finish[] = "Finish";
+
 /* Settings read once at the mode start (UX-49). */
 static MEM_XDATA uint8_t rx_wpm;
 static MEM_XDATA uint8_t rx_eff_wpm;
@@ -63,6 +67,11 @@ static MEM_XDATA bool rx_is_long;
 static MEM_XDATA bool rx_is_block;
 
 static void rx_play_item(void) { (void)player_start(training_item_text(), training_item_length(), rx_wpm, rx_eff_wpm); }
+
+/* The answer state of D-T44: the answer after the third wrong attempt shows until an enter tap. */
+static bool rx_is_answer_shown(void) {
+  return (training_phase() == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED);
+}
 
 /* Tap mode is on only during a session (D-T39); the switch drops the press that starts it. */
 static void rx_start_session(void) {
@@ -86,14 +95,33 @@ static uint8_t rx_field_cells(void) {
   return (rx_group == KEYBOARD_GROUP_ENTER) ? RX_ENTER_FIELD_CELLS : RX_FIELD_CELLS;
 }
 
-/* ui-ux.md section 5.12.1: blank, a list of short texts (one character is a list of one), or a range. */
+/*
+ * ui-ux.md section 5.12.1: blank, a list of short texts (one character is a list of one), or a range. The answer state
+ * has only the enter label (UX-64).
+ */
 static void rx_build_label(void) {
-  const uint8_t size = keyboard_group_size(rx_group);
-  const uint8_t field = rx_field_cells();
-  const uint8_t first = keyboard_group_first(rx_group);
+  uint8_t size;
+  uint8_t field;
+  uint8_t first;
 
   rx_label_length = 0U;
   rx_label[0] = '\0';
+  if (rx_is_answer_shown()) {
+    if (rx_group == KEYBOARD_GROUP_ENTER) {
+      training_screen_compose();
+      if (training_item_number() == training_item_count()) {
+        training_screen_append(rx_text_finish);
+        rx_label_length = (uint8_t)(sizeof(rx_text_finish) - 1U);
+      } else {
+        training_screen_append(rx_text_next);
+        rx_label_length = (uint8_t)(sizeof(rx_text_next) - 1U);
+      }
+    }
+    return;
+  }
+  size = keyboard_group_size(rx_group);
+  field = rx_field_cells();
+  first = keyboard_group_first(rx_group);
   for (rx_index = 0U; (rx_index < size) && (rx_label_length <= field); ++rx_index) {
     rx_append_short((uint8_t)(first + rx_index));
   }
@@ -136,7 +164,7 @@ static void rx_draw_key_bars(void) {
 static void rx_draw_item_line(void) {
   const training_phase_t phase = training_phase();
 
-  if ((phase == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED)) {
+  if (rx_is_answer_shown()) {
     training_screen_draw_item_text(training_item_text(), rx_prosign_style);
     return;
   }
@@ -188,13 +216,8 @@ void receiving_render(void) {
 }
 
 void receiving_poll(void) {
-  training_event_t event;
+  const training_event_t event = training_poll();
 
-  /* D-T14: the result after the third wrong attempt waits for the end of the answer playback. */
-  if ((training_phase() == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED)) {
-    training_hold_result(player_is_busy());
-  }
-  event = training_poll();
   if ((event == TRAINING_EVENT_ITEM) || (event == TRAINING_EVENT_RETRY)) {
     keyboard_top();
     rx_draw_input();
@@ -202,6 +225,8 @@ void receiving_poll(void) {
   } else if (event == TRAINING_EVENT_GAP) {
     training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_ITEM_LAST_ROW + 1U);
     training_screen_draw_header();
+    /* Row 7 can hold the label of the answer state (D-T44). */
+    rx_draw_labels();
   } else if (event == TRAINING_EVENT_END) {
     buttons_set_tap_mode(false);
     training_screen_draw_header();
@@ -216,7 +241,7 @@ static void rx_pick(char character) {
   if (check != TRAINING_CHECK_PARTIAL) {
     player_stop();
     if (check == TRAINING_CHECK_FAILED) {
-      /* The answer plays once more; its end starts the delay (D-T14). */
+      /* The answer plays once more and stays until an enter tap (D-T44). */
       rx_play_item();
       training_hold_result(true);
     }
@@ -258,6 +283,20 @@ static bool rx_handle_item(void) {
   return true;
 }
 
+/* Applies rx_code and rx_is_long in the answer state (D-T44). Returns true when the event acted. */
+static bool rx_handle_answer(void) {
+  if (rx_code != BUTTON_EVENT_ENTER) {
+    return false;
+  }
+  if (rx_is_long) {
+    rx_play_item();
+  } else {
+    player_stop();
+    training_hold_result(false);
+  }
+  return true;
+}
+
 bool receiving_handle(button_event_t event) {
   const training_phase_t phase = training_phase();
   training_select_action_t action;
@@ -287,7 +326,7 @@ bool receiving_handle(button_event_t event) {
   if ((event & BUTTON_EVENT_LONG_FLAG) != 0U) {
     rx_is_long = true;
   }
-  if ((phase == TRAINING_PHASE_ITEM) && rx_handle_item()) {
+  if (((phase == TRAINING_PHASE_ITEM) && rx_handle_item()) || (rx_is_answer_shown() && rx_handle_answer())) {
     rng_mix(tick_now());
   }
   return false;

@@ -3,6 +3,26 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
+## Version 0.1.2 (in development)
+
+Version 0.1.2 changes the answer state of Receiving. It is not released. Work on it continues, and the next changes
+go into this version too.
+
+### Koch training: Receiving and Sending
+
+- **Receiving waits after the third wrong attempt.** After the third wrong attempt, the answer stays on the screen
+  until you tap `enter`. There is no time limit. The answer plays one time. To hear it again, hold `enter` for about
+  0.8 s. In version 0.1.0, the next item came 2.5 s after the end of the playback.
+- **Go on with `enter`.** A tap of `enter` shows the next item. On the last item, it shows the session end screen.
+  You can tap while the answer plays. Then the playback stops.
+- **`Next` and `Finish`.** In this state, the bottom row shows `Next` above `enter`, or `Finish` on the last item.
+  The other three labels are blank. `Next` is the label of the `enter` button. A tap of the `next` button does
+  nothing. The other buttons also do nothing. To leave the session, hold `menu/back` for about 0.8 s.
+- **Key or paddle.** In this state, a short closure of the tip contact acts as a tap of `enter`. A closure of about
+  0.8 s plays the answer again. A plug insertion can also go on to the next item. Insert the plug before you open
+  Receiving.
+- **Sending does not change.** After the third wrong attempt, the answer shows for 2.5 s. Then the next item comes.
+
 ## Version 0.1.0
 
 Version 0.1.0 is the first version of the custom firmware. All functions below are new.

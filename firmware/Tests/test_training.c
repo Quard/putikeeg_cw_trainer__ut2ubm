@@ -5,7 +5,7 @@
 
 /*
  * Host tests of the session engine (references/internal/training_spec.md sections 5.10 and 11, AC-T16 to AC-T18,
- * AC-T30 and AC-T31).
+ * AC-T30, AC-T31 and AC-T37).
  */
 
 #include <stdbool.h>
@@ -278,53 +278,170 @@ static void test_ignored_and_undo(void) {
   TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(60000U));
 }
 
-/* AC-T17, D-T14: a held RESULT never ends; a release at tick P ends it at P + TRAINING_FAILED_MS. */
+/* Gives the current one-character item three wrong attempts from @p time. Returns the tick of the FAILED check. */
+static uint16_t fail_item(uint16_t time) {
+  const char wrong = wrong_char_for(training_item_text()[0]);
+  uint8_t attempt;
+
+  for (attempt = 1U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    at(time);
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong));
+    time = (uint16_t)(time + TRAINING_WRONG_MS);
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, poll_at(time));
+  }
+  at(time);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_add_char(wrong));
+  return time;
+}
+
+/* Answers the current one-character item correctly at @p time. Returns the tick of the CORRECT check. */
+static uint16_t pass_item(uint16_t time) {
+  at(time);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(training_item_text()[0]));
+  return time;
+}
+
+/*
+ * AC-T37 (1), (2): a held FAILED RESULT never ends, also across a tick wrap. A release at tick P ends it at the poll
+ * at P, and the next item comes TRAINING_RECEIVING_GAP_MS after P.
+ */
 static void test_hold_result(void) {
-  char item;
+  uint16_t t;
+  uint32_t step;
 
   start_at_level(RX, 20U, 0U, 5U);
   TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
-  item = training_item_text()[0];
-  /* No effect outside RESULT. */
+  t = fail_item(2100U);
   training_hold_result(true);
-  at(2100U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong_char_for(item)));
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, poll_at(3300U));
-  at(3400U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong_char_for(item)));
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, poll_at(4600U));
-  at(4700U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_add_char(wrong_char_for(item)));
+  for (step = 1000U; step <= 70000U; step += 1000U) {
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + step)));
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  }
+  t = (uint16_t)(t + 70500U);
+  at(t);
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, training_poll());
+  TEST_ASSERT_EQUAL(1U, training_item_number());
+  TEST_ASSERT_EQUAL(0U, training_score());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_RECEIVING_GAP_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at((uint16_t)(t + TRAINING_RECEIVING_GAP_MS)));
+  TEST_ASSERT_EQUAL(2U, training_item_number());
+
+  /* A release 1 ms after the check also ends the RESULT at once: no part of TRAINING_FAILED_MS stays. */
+  t = fail_item((uint16_t)(t + 600U));
   training_hold_result(true);
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(20000U));
+  t = (uint16_t)(t + 1U);
+  at(t);
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, training_poll());
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* AC-T37 (2): a release on the last item gives END at the next poll, and the FAILED item does not count. */
+static void test_hold_release_last_item(void) {
+  uint16_t t = 2000U;
+  uint8_t number;
+
+  start_at_level(RX, 20U, 0U, 5U);
+  for (number = 1U; number < training_item_count(); ++number) {
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+    t = (uint16_t)(pass_item((uint16_t)(t + 100U)) + TRAINING_CORRECT_MS);
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at(t));
+    t = (uint16_t)(t + TRAINING_RECEIVING_GAP_MS);
+  }
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  TEST_ASSERT_EQUAL(training_item_count(), training_item_number());
+  t = fail_item((uint16_t)(t + 100U));
+  training_hold_result(true);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 30000U)));
+  at((uint16_t)(t + 30001U));
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_END, training_poll());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(49U, training_score());
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
+  TEST_ASSERT_EQUAL(1U, progress_level(RX, 20U));
+  TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(EEPROM_MAP_PROGRESS_PAGE));
+
+  /* AC-T37 (4), END: both calls change nothing. */
+  training_hold_result(false);
+  training_hold_result(true);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 40000U)));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
+  TEST_ASSERT_EQUAL(49U, training_score());
+  TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(EEPROM_MAP_PROGRESS_PAGE));
+}
+
+/* AC-T37 (3): a release with the hold off ends a CORRECT RESULT to GAP and a WRONG RESULT to RETRY at once. */
+static void test_release_without_hold(void) {
+  uint16_t t;
+
+  start_at_level(RX, 20U, 0U, 5U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
+  t = pass_item(2100U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 100U)));
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, training_poll());
+  TEST_ASSERT_EQUAL(1U, training_score());
+  t = (uint16_t)(t + 100U + TRAINING_RECEIVING_GAP_MS);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+
+  at((uint16_t)(t + 100U));
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong_char_for(training_item_text()[0])));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 200U)));
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, training_poll());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(1U, training_wrong_attempts());
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+}
+
+/* AC-T37 (4): in GAP, ITEM and IDLE both calls change nothing (SELECT: check_prepare(), END: the last-item test). */
+static void test_hold_other_phases(void) {
+  const char* item;
+
+  start_at_level(RX, 20U, 0U, 5U);
+  at(1100U);
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(1999U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  training_hold_result(true);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
+
+  item = training_item_text();
+  training_hold_result(true);
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(30000U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  TEST_ASSERT_EQUAL(1U, training_item_number());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(item[0]));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(30000U + TRAINING_CORRECT_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at((uint16_t)(30000U + TRAINING_CORRECT_MS)));
+
+  training_stop();
+  training_hold_result(false);
+  training_hold_result(true);
   TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(60000U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, training_phase());
+}
+
+/* AC-T37 (5): a phase change clears the hold, so the next RESULT runs its normal delay. */
+static void test_hold_cleared_by_phase_change(void) {
+  uint16_t t;
+
+  start_at_level(RX, 20U, 0U, 5U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
+  (void)fail_item(2100U);
   training_hold_result(true);
-  at(61000U);
-  training_hold_result(false);
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at(63499U));
-  /* A second false does not restart the delay. */
-  at(63000U);
-  training_hold_result(false);
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at(63500U));
-  /* A false without a hold does not move the delay. */
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(64000U));
-  item = training_item_text()[0];
-  at(64100U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(item));
-  at(64500U);
-  training_hold_result(false);
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at(64700U));
-  /* A phase change clears the hold: a start drops it. */
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(65200U));
-  at(65300U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(training_item_text()[0]));
-  training_hold_result(true);
-  at(100U);
+  at(10000U);
   restart(RX, 20U, 5U);
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(1100U));
-  at(1200U);
-  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(training_item_text()[0]));
-  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at(1800U));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(11000U));
+  t = pass_item(11100U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_CORRECT_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at((uint16_t)(t + TRAINING_CORRECT_MS)));
 }
 
 /*
@@ -857,6 +974,10 @@ int main(void) {
   TEST_RUN(test_sending_word_space);
   TEST_RUN(test_ignored_and_undo);
   TEST_RUN(test_hold_result);
+  TEST_RUN(test_hold_release_last_item);
+  TEST_RUN(test_release_without_hold);
+  TEST_RUN(test_hold_other_phases);
+  TEST_RUN(test_hold_cleared_by_phase_change);
   TEST_RUN(test_finish_fail);
   TEST_RUN(test_finish_pass);
   TEST_RUN(test_finish_save_failed);

@@ -213,11 +213,9 @@ void training_hold_result(bool is_held) {
   if (training_phase_value != TRAINING_PHASE_RESULT) {
     return;
   }
-  if (is_held) {
-    training_is_held = true;
-  } else if (training_is_held) {
-    training_is_held = false;
-    training_phase_start = tick_now();
+  training_is_held = is_held;
+  if (!is_held) {
+    training_duration = 0U;
   }
 }
 

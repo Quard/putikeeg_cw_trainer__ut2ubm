@@ -4,8 +4,9 @@
  */
 
 /*
- * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19; ui-ux.md section 9.4, V-90 to
- * V-109 and V-120). The real menu, buttons, engine, keyboard and progress run with a fake player and fake items.
+ * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19, AC-T38; ui-ux.md section 9.4,
+ * V-90 to V-109, V-120 and V-170). The real menu, buttons, engine, keyboard and progress run with a fake player and
+ * fake items.
  */
 
 #include "cw/morse.h"
@@ -512,18 +513,23 @@ static void test_v98_v99_wrong_attempts(void) {
   TEST_ASSERT(stop_index >= 0);
   TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at((size_t)stop_index + 1U));
   TEST_ASSERT(fake_player_is_running());
-  /* The answer plays for 5 s; the delay counts from its end. */
+  TEST_ASSERT(keys("", "", "", "Next"));
+  /* The answer plays for 5 s; the answer state has no time limit (UX-64). */
   harness_run_to(HARNESS_T0 + 9000U);
-  TEST_ASSERT(status("Wrong. The answer is:"));
   fake_player_finish();
   t = harness_now;
-  harness_run_to((uint16_t)(t + 2499U));
+  harness_run_to((uint16_t)(t + 10000U));
   TEST_ASSERT(status("Wrong. The answer is:"));
   expect_item_line_big(60, "K");
-  harness_run_to((uint16_t)(t + 2501U));
+  TEST_ASSERT(keys("", "", "", "Next"));
+  TEST_ASSERT(hdr("RX 32/32 L1          1/50"));
+  t = (uint16_t)(t + 10001U);
+  harness_set_time(t);
+  harness_event(ENTER_EVENT);
   TEST_ASSERT(body_off(1, 5));
   TEST_ASSERT(hdr("RX 32/32 L1          2/50"));
-  harness_run_to((uint16_t)(t + 3001U));
+  TEST_ASSERT(keys("K", "M", "", ""));
+  harness_run_to((uint16_t)(t + 500U));
   expect_item_line_block(60);
   TEST_ASSERT_EQUAL(5U, fake_player_start_count());
   TEST_ASSERT_EQUAL(0, strcmp("M", fake_player_last_text()));
@@ -1373,8 +1379,9 @@ static void rx_answer_km_word(bool is_right) {
     pick('M');
     pick('M');
   }
-  /* The answer playback holds the result (D-T14). */
+  /* The answer state waits for an enter tap (D-T44, V-136). */
   fake_player_finish();
+  tap(ENTER_EVENT);
 }
 
 /* A Receiving session of KM words at @p level with @p first_correct items right on the first attempt. */
@@ -1462,6 +1469,315 @@ static void test_leave_in_each_phase(void) {
   TEST_ASSERT_EQUAL(0U, harness_overlap_count);
   TEST_ASSERT(!fake_keyer_is_running());
   TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+}
+
+/* ---------- Answer state after the third wrong attempt (D-T44, ui-ux.md UX-64, V-170, AC-T38) ---------- */
+
+#define V170_U 4000U /* the third wrong pick of item 1 */
+#define V170_P 5000U /* the answer playback ends */
+
+/* RX("KM", chars, "K", "M"), then M in all three attempts of item 1 (K), the third at V170_U. */
+static void v170_open_answer_state(void) {
+  const char* const items[2] = {"K", "M"};
+
+  rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 2U);
+  harness_at(1300U, M_TAP);
+  harness_at(2600U, M_TAP);
+  harness_at(V170_U, M_TAP);
+}
+
+/* The answer state with the answer K on item @p number of 50 and @p enter_label above enter. */
+static void expect_answer_state(unsigned number, const char* enter_label) {
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(status("Wrong. The answer is:"));
+  expect_item_line_big(60, "K");
+  TEST_ASSERT(keys("", "", "", enter_label));
+  TEST_ASSERT(hdr(rx_header(1U, number, 50U)));
+  TEST_ASSERT(margins_off());
+}
+
+/* Snapshot and clean dirty flags, so is_quiet() sees any later draw. */
+static void mark_quiet(void) {
+  snapshot(snapshot_before);
+  harness_clear_dirty();
+}
+
+static bool is_quiet(void) { return is_screen_unchanged() && dirty_is(0U); }
+
+/* The blank moment before item 2 of 50, with the labels of the whole set. */
+static void expect_blank_moment_before_item_2(void) {
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT(body_off(1, 5));
+  TEST_ASSERT(hdr("RX 32/32 L1          2/50"));
+  TEST_ASSERT(keys("K", "M", "", ""));
+}
+
+/* The continue tap at @p t: the player stops, the blank moment shows, item 2 (M) comes 500 ms later. */
+static void expect_continue_at(uint16_t t) {
+  const size_t starts = fake_player_start_count();
+  const size_t stops = fake_player_stop_count();
+
+  harness_at(t, ENTER_EVENT);
+  TEST_ASSERT_EQUAL(stops + 1U, fake_player_stop_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(fake_player_call_count() - 1U));
+  TEST_ASSERT(!fake_player_is_running());
+  expect_blank_moment_before_item_2();
+  harness_run_to((uint16_t)(HARNESS_T0 + t + TRAINING_RECEIVING_GAP_MS - 1U));
+  expect_blank_moment_before_item_2();
+  TEST_ASSERT_EQUAL(starts, fake_player_start_count());
+  harness_run_to((uint16_t)(HARNESS_T0 + t + TRAINING_RECEIVING_GAP_MS));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  expect_item_line_block(60);
+  TEST_ASSERT(keys("K", "M", "", ""));
+  TEST_ASSERT_EQUAL(starts + 1U, fake_player_start_count());
+  TEST_ASSERT_EQUAL(0, strcmp("M", fake_player_last_text()));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* The answer state stays quiet up to @p t: no draw, no player call, no phase or answer change. */
+static void expect_answer_state_quiet_to(uint16_t t) {
+  const size_t calls = fake_player_call_count();
+
+  harness_run_to((uint16_t)(HARNESS_T0 + t));
+  TEST_ASSERT(is_quiet());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(1U, training_answer_length());
+  TEST_ASSERT_EQUAL((uint8_t)'M', (uint8_t)training_answer_text()[0]);
+}
+
+/* V-170 Run 1, AC-T38 (1) to (6): the answer state waits, ignores other buttons, replays on a long enter. */
+static void test_v170_answer_state_waits(void) {
+  const uint16_t v = (uint16_t)(V170_P + 70100U);
+  size_t calls;
+  long stop_index;
+
+  v170_open_answer_state();
+  expect_answer_state(1U, "Next");
+  TEST_ASSERT_EQUAL(4U, fake_player_start_count());
+  TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
+  stop_index = last_player_call(FAKE_PLAYER_CALL_STOP);
+  TEST_ASSERT_EQUAL((long)fake_player_call_count() - 2L, stop_index);
+  TEST_ASSERT(fake_player_is_running());
+  /* Next from x 107: the enter field is right-aligned, x = 127 - 5n. */
+  TEST_ASSERT_EQUAL(107, label_x(3, "Next"));
+  TEST_ASSERT(!pixel(106, 60) && !pixel(127, 60));
+
+  mark_quiet();
+  harness_run_to(HARNESS_T0 + V170_P);
+  fake_player_finish();
+  expect_answer_state_quiet_to(V170_P + 10000U);
+  /* AC-T38 (2): also 70 000 ms after the playback end, past one tick wrap. */
+  expect_answer_state_quiet_to(V170_P + 40000U);
+  expect_answer_state_quiet_to((uint16_t)(V170_P + 70000U));
+
+  calls = fake_player_call_count();
+  tap(L_TAP);
+  tap(M_TAP);
+  tap(R_TAP);
+  tap(LONG_EVENT(M_TAP));
+  tap(LONG_EVENT(R_TAP));
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  expect_answer_state_quiet_to((uint16_t)(harness_now - HARNESS_T0));
+
+  /* Hold enter from v for 1000 ms: the long event at v + 800 replays the answer, the release does nothing. */
+  calls = fake_player_call_count();
+  pins_at(BUTTON_BIT_ENTER, v);
+  harness_pins_for(BUTTON_BIT_ENTER, 799U);
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  TEST_ASSERT_EQUAL((uint16_t)(HARNESS_T0 + v + 800U), harness_now);
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls));
+  TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
+  TEST_ASSERT(fake_player_is_running());
+  pins_at(0U, (uint16_t)(v + 1000U));
+  expect_answer_state_quiet_to((uint16_t)(v + 1100U));
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  expect_answer_state(1U, "Next");
+
+  /* The continue tap while the replay still plays. */
+  expect_continue_at((uint16_t)(v + 1500U));
+  TEST_ASSERT_EQUAL(0U, harness_overlap_count);
+}
+
+/* V-170 Run 2, AC-T38 (6): an enter tap during the first answer playback continues at once. */
+static void test_v170_continue_during_playback(void) {
+  v170_open_answer_state();
+  TEST_ASSERT(fake_player_is_running());
+  expect_continue_at(V170_U + 100U);
+}
+
+/* V-170 Run 3, AC-T38 (7): on the last item, Finish shows, and the enter tap gives the end screen at once. */
+static void test_v170_last_item_finish(void) {
+  const char* const items[1] = {"K"};
+  uint8_t number;
+  size_t stops;
+
+  rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 1U);
+  for (number = 1U; number < 50U; ++number) {
+    run_to_item();
+    tap(L_TAP);
+  }
+  for (number = 0U; number < TRAINING_ATTEMPTS; ++number) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT_EQUAL(50U, training_item_number());
+  expect_answer_state(50U, "Finish");
+  /* Finish from x 97. */
+  TEST_ASSERT_EQUAL(97, label_x(3, "Finish"));
+  TEST_ASSERT(!pixel(96, 60) && !pixel(127, 60));
+  fake_player_finish();
+  mark_quiet();
+  harness_run_to((uint16_t)(harness_now + 5001U));
+  TEST_ASSERT(is_quiet());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+
+  stops = fake_player_stop_count();
+  tap(ENTER_EVENT);
+  /* N6: the tap stops the player also when it is idle. */
+  TEST_ASSERT_EQUAL(stops + 1U, fake_player_stop_count());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
+  TEST_ASSERT(text_at(2, 7, "Score 49/50"));
+  TEST_ASSERT_EQUAL(49U, training_score());
+  TEST_ASSERT(start_button());
+  TEST_ASSERT(margins_off());
+  TEST_ASSERT(!fake_player_is_running());
+  /* Tap mode is off: a prev press steps the selector at the press. */
+  TEST_ASSERT(lvl(2U, 2U));
+  harness_pins_for(BUTTON_BIT_PREV, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT(lvl(1U, 2U));
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT(!fake_player_is_running());
+}
+
+/* D-T44 (5): Next shows on item 49 of 50, and the enter tap gives the blank moment before item 50. */
+static void test_answer_state_next_on_item_49(void) {
+  const char* const items[1] = {"K"};
+  uint8_t number;
+
+  rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 1U);
+  for (number = 1U; number < 49U; ++number) {
+    run_to_item();
+    tap(L_TAP);
+  }
+  for (number = 0U; number < TRAINING_ATTEMPTS; ++number) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT_EQUAL(49U, training_item_number());
+  expect_answer_state(49U, "Next");
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT(body_off(1, 5));
+  TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
+  TEST_ASSERT(keys("K", "M", "", ""));
+}
+
+/* V-170 Run 4, AC-T38 (5), (6): a tip closure of 900 ms replays the answer; one of 100 ms continues. */
+static void test_v170_tip_closures(void) {
+  size_t calls;
+
+  v170_open_answer_state();
+  harness_run_to(HARNESS_T0 + V170_P);
+  fake_player_finish();
+  mark_quiet();
+  calls = fake_player_call_count();
+  harness_run_to(HARNESS_T0 + V170_P + 999U);
+  harness_pins_for(BUTTON_BIT_ENTER, 820U);
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  TEST_ASSERT_EQUAL((uint16_t)(HARNESS_T0 + V170_P + 1820U), harness_now);
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls));
+  harness_pins_for(BUTTON_BIT_ENTER, 79U);
+  harness_pins_for(0U, BUTTONS_DEBOUNCE_MS);
+  expect_answer_state_quiet_to(V170_P + 2999U);
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  harness_run_to(HARNESS_T0 + V170_P + 3000U);
+  fake_player_finish();
+
+  tip(V170_P + 4000U, 100U);
+  harness_run_to(HARNESS_T0 + V170_P + 4119U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  harness_run_to(HARNESS_T0 + V170_P + 4120U);
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(calls + 1U));
+  expect_blank_moment_before_item_2();
+}
+
+/* V-170 Run 5, AC-T38 (8): a long menu/back leaves the answer state. */
+static void test_v170_leave(void) {
+  v170_open_answer_state();
+  TEST_ASSERT(fake_player_is_running());
+  pins_at(BUTTON_BIT_MENU, V170_U + 100U);
+  harness_pins_for(BUTTON_BIT_MENU, 799U);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_RECEIVING, menu_screen());
+  TEST_ASSERT(fake_player_is_running());
+  harness_pins_for(BUTTON_BIT_MENU, 1U);
+  TEST_ASSERT_EQUAL((uint16_t)(HARNESS_T0 + V170_U + 900U), harness_now);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(fake_player_call_count() - 1U));
+  TEST_ASSERT(!fake_player_is_running());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, training_phase());
+  harness_pins_for(0U, 30U);
+  expect_main_menu_after_leave(0U);
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+}
+
+/* AC-T38 (5): a long enter and a tip closure of 800 ms also replay during the answer playback. */
+static void test_answer_replay_during_playback(void) {
+  size_t calls;
+
+  v170_open_answer_state();
+  mark_quiet();
+  calls = fake_player_call_count();
+  harness_at(V170_U + 50U, LONG_EVENT(ENTER_EVENT));
+  TEST_ASSERT_EQUAL(calls + 1U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls));
+  TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
+  TEST_ASSERT(is_quiet());
+  tip(V170_U + 100U, 800U);
+  harness_run_to(HARNESS_T0 + V170_U + 1000U);
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls + 1U));
+  TEST_ASSERT(fake_player_is_running());
+  expect_answer_state_quiet_to(V170_U + 1500U);
+  expect_answer_state(1U, "Next");
+}
+
+/*
+ * V-121 (UX-64): the answer state labels fit row 7 for every enter label; the gaps between the fields stay off. The
+ * other fields stay blank also at the KMRS level, where all four runs hold labels in phase ITEM.
+ */
+static void test_v121_answer_state_labels(void) {
+  const char* const items[2] = {"S", "K"};
+  int x;
+  uint8_t attempt;
+
+  rx_open(LEVEL_KMRS, SETTINGS_PROSIGN_BOTH, items, 2U);
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    TEST_ASSERT(keys("K", "M", "R", "S"));
+    tap(L_TAP);
+  }
+  TEST_ASSERT(keys("", "", "", "Next"));
+  for (x = 0; x < 128; ++x) {
+    const bool is_gap = ((x >= 27) && (x <= 29)) || ((x >= 55) && (x <= 57)) || ((x >= 83) && (x <= 86));
+    int y;
+    for (y = 56; y < 64; ++y) {
+      if (is_gap || (x < 107) || (x == 127)) {
+        TEST_ASSERT(!pixel(x, y));
+      }
+    }
+  }
+  tap(ENTER_EVENT);
+  TEST_ASSERT(keys("K", "M", "R", "S"));
 }
 
 /* ---------- Level selection: start screen and selector (ui-ux.md 5.16, V-137 to V-151, AC-T32) ---------- */
@@ -1792,7 +2108,10 @@ static void test_v145_v146_replay(void) {
 
 /* Runs a word session to its end: every item right on the first attempt when @p is_passed, else never right. */
 static void run_word_session(bool is_passed) {
+  /* Steps of one inner loop: a fault that keeps ITEM or RESULT fails here, not by the ctest timeout. */
+  const unsigned steps_max = 5000U;
   unsigned guard = 0U;
+  unsigned steps;
 
   while ((training_phase() != TRAINING_PHASE_END) && (guard < 300U)) {
     run_to_item();
@@ -1804,15 +2123,25 @@ static void run_word_session(bool is_passed) {
         pick(item[index]);
       }
     } else {
-      while (training_phase() == TRAINING_PHASE_ITEM) {
+      for (steps = 0U; (training_phase() == TRAINING_PHASE_ITEM) && (steps < steps_max); ++steps) {
         pick('U');
       }
+      if (!TEST_ASSERT(steps < steps_max)) {
+        return;
+      }
     }
-    while (((training_phase() == TRAINING_PHASE_RESULT) || (training_phase() == TRAINING_PHASE_GAP)) &&
-           (guard < 300U)) {
-      fake_player_finish(); /* the answer playback after a third wrong attempt holds RESULT (D-T14) */
-      harness_set_time((uint16_t)(harness_now + 1U));
-      harness_pass();
+    for (steps = 0U; ((training_phase() == TRAINING_PHASE_RESULT) || (training_phase() == TRAINING_PHASE_GAP)) &&
+                     (steps < steps_max);
+         ++steps) {
+      if ((training_phase() == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED)) {
+        tap(ENTER_EVENT); /* the answer state waits for an enter tap (D-T44) */
+      } else {
+        harness_set_time((uint16_t)(harness_now + 1U));
+        harness_pass();
+      }
+    }
+    if (!TEST_ASSERT(steps < steps_max)) {
+      return;
     }
     ++guard;
   }
@@ -1957,6 +2286,14 @@ int main(void) {
   TEST_RUN(test_button_to_run_mapping);
   TEST_RUN(test_label_redraw_writes_row_7_only);
   TEST_RUN(test_leave_in_each_phase);
+  TEST_RUN(test_v170_answer_state_waits);
+  TEST_RUN(test_v170_continue_during_playback);
+  TEST_RUN(test_v170_last_item_finish);
+  TEST_RUN(test_answer_state_next_on_item_49);
+  TEST_RUN(test_v170_tip_closures);
+  TEST_RUN(test_v170_leave);
+  TEST_RUN(test_answer_replay_during_playback);
+  TEST_RUN(test_v121_answer_state_labels);
   TEST_RUN(test_v136_word_pass_rate);
   TEST_RUN(test_v137_start_screen_first_use);
   TEST_RUN(test_v138_start_screen_steps);

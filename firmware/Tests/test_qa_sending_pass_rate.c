@@ -244,7 +244,13 @@ static void run_session(uint8_t mode, uint16_t level, const char* item, unsigned
     }
     if (wrong_count == TRAINING_ATTEMPTS) {
       if (mode == PROGRESS_MODE_RECEIVING) {
-        fake_player_finish(); /* the answer playback holds the result (D-T14) */
+        /* The answer state waits for an enter tap (D-T44, V-136). */
+        TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+        TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+        fake_player_finish();
+        harness_set_time((uint16_t)(harness_now + 1U));
+        harness_event(ENTER_EVENT);
+        TEST_ASSERT_EQUAL((number < count) ? TRAINING_PHASE_GAP : TRAINING_PHASE_END, training_phase());
       }
       continue;
     }
