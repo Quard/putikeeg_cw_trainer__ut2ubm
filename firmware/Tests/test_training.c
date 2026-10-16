@@ -727,7 +727,7 @@ static void check_step_ignored(void) {
   TEST_ASSERT_EQUAL(selected, training_selected_level());
 }
 
-/* AC-T30 (2): no step acts in GAP, ITEM, RESULT and IDLE; a step acts in END. */
+/* AC-T30 (2), AC-T40 (1): no step acts in GAP, ITEM, RESULT, IDLE and END; after the reopen a step acts. */
 static void test_select_step_phases(void) {
   prepare_at_level(TX, 20U, 19U, 8U);
   TEST_ASSERT(training_select_step(false));
@@ -752,6 +752,10 @@ static void test_select_step_phases(void) {
   TEST_ASSERT_EQUAL(TRAINING_EVENT_END, run_session(0U));
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
   TEST_ASSERT_EQUAL(19U, training_selected_level());
+  check_step_ignored();
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
+  TEST_ASSERT(training_reopen_select());
   TEST_ASSERT(!training_select_step(true));
   TEST_ASSERT(training_select_step(false));
   TEST_ASSERT_EQUAL(18U, training_selected_level());
@@ -759,7 +763,7 @@ static void test_select_step_phases(void) {
   TEST_ASSERT_EQUAL(19U, training_selected_level());
 }
 
-/* AC-T30 (3): a start from SELECT and from END runs at the selected level. */
+/* AC-T30 (3): a start from SELECT, also from the SELECT after a session, runs at the selected level. */
 static void test_start_at_selected_level(void) {
   prepare_at_level(TX, 20U, 19U, 8U);
   while (training_selected_level() > 2U) {
@@ -783,6 +787,7 @@ static void test_start_at_selected_level(void) {
   TEST_ASSERT_EQUAL(TRAINING_EVENT_END, run_session(0U));
   TEST_ASSERT_EQUAL(1U, training_score());
   TEST_ASSERT_EQUAL(2U, training_selected_level());
+  TEST_ASSERT(training_reopen_select());
   TEST_ASSERT(training_select_step(false));
   TEST_ASSERT(training_select_step(false));
   TEST_ASSERT_EQUAL(0U, training_selected_level());
@@ -851,6 +856,7 @@ static void check_replay(uint16_t earned, uint16_t level) {
   TEST_ASSERT_EQUAL(earned, progress_level(RX, 20U));
   TEST_ASSERT_EQUAL((uint16_t)(level + 1U), training_selected_level());
   TEST_ASSERT_EQUAL(koch_shown_level((uint16_t)(level + 1U)), training_new_shown_level());
+  TEST_ASSERT(training_reopen_select());
   TEST_ASSERT_EQUAL(earned - level - 1U, step_to_limit(true));
   TEST_ASSERT_EQUAL(earned, training_selected_level());
 }
@@ -907,7 +913,8 @@ static uint16_t walk_below(uint16_t limit) {
   return (uint16_t)((uint16_t)(walk_state >> 16U) % limit);
 }
 
-/* AC-T31 (7): a random walk keeps 0 <= selected <= earned, and only a pass at the earned level changes the store. */
+/* AC-T31 (7), AC-T40 (5): a random walk keeps 0 <= selected <= earned, and only a pass at the earned level changes the
+ * store. */
 static void test_selection_random_walk(void) {
   static const uint8_t speeds[3] = {5U, 20U, 50U};
   static uint8_t record[FAKE_IAP_SIZE];
@@ -919,6 +926,8 @@ static void test_selection_random_walk(void) {
   uint8_t wpm;
   bool is_passed;
   bool is_at_earned;
+  bool is_up;
+  bool is_stepped;
   uint16_t pass_count = 0U;
   uint16_t replay_count = 0U;
 
@@ -955,14 +964,212 @@ static void test_selection_random_walk(void) {
       }
     }
     TEST_ASSERT_EQUAL(is_passed ? (uint16_t)(level + 1U) : level, training_selected_level());
+    /* AC-T40 (5): the steps after the reopen act. */
+    TEST_ASSERT(training_reopen_select());
+    check_selection_invariant();
     for (steps = walk_below(4U); steps > 0U; --steps) {
-      (void)training_select_step(walk_below(2U) == 0U);
+      is_up = (walk_below(2U) == 0U);
+      level = training_selected_level();
+      is_stepped = training_select_step(is_up);
       check_selection_invariant();
+      TEST_ASSERT_EQUAL(is_up ? (level < training_earned_level()) : (level > 0U), is_stepped);
     }
   }
   /* The walk must reach both pass kinds, or it proves little. */
   TEST_ASSERT(pass_count > 50U);
   TEST_ASSERT(replay_count > 50U);
+}
+
+/*
+ * AC-T40 (1), (2): in END no step acts, and training_reopen_select() sets SELECT with the preselection of section 11.4.
+ * The call changes no earned level and gives no IAP command.
+ */
+static void check_reopen(training_outcome_t outcome, uint16_t selected) {
+  const uint16_t earned = training_earned_level();
+
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(outcome, training_outcome());
+  /* AC-T40 (1): no step acts in END. */
+  check_step_ignored();
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(outcome, training_outcome());
+  fake_iap_clear_counters();
+  TEST_ASSERT(training_reopen_select());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(selected, training_selected_level());
+  TEST_ASSERT_EQUAL(koch_shown_level(selected), training_new_shown_level());
+  TEST_ASSERT_EQUAL(earned, training_earned_level());
+  TEST_ASSERT_EQUAL(0U, fake_iap_operation_count());
+  check_selection_invariant();
+}
+
+static void test_reopen_preselection(void) {
+  prepare_selected(19U, 19U);
+  run_selected_session(true);
+  check_reopen(TRAINING_OUTCOME_PASS, 20U);
+  TEST_ASSERT_EQUAL(20U, training_earned_level());
+
+  prepare_selected(7U, 7U);
+  fake_iap_set_fail_operation(1U);
+  run_selected_session(true);
+  check_reopen(TRAINING_OUTCOME_PASS_NOT_SAVED, 8U);
+  TEST_ASSERT_EQUAL(8U, training_earned_level());
+
+  prepare_selected(19U, 4U);
+  run_selected_session(true);
+  check_reopen(TRAINING_OUTCOME_PASS_REPLAY, 5U);
+  TEST_ASSERT_EQUAL(19U, training_earned_level());
+
+  prepare_selected(19U, 4U);
+  run_selected_session(false);
+  check_reopen(TRAINING_OUTCOME_FAIL, 4U);
+
+  prepare_selected(19U, 19U);
+  run_selected_session(false);
+  check_reopen(TRAINING_OUTCOME_FAIL, 19U);
+
+  prepare_selected(65535U, 65535U);
+  run_selected_session(true);
+  check_reopen(TRAINING_OUTCOME_PASS_TOP, 65535U);
+  TEST_ASSERT_EQUAL(65535U, training_earned_level());
+}
+
+/* AC-T40 (3): after the reopen, the selector acts as after training_prepare(), and a start uses the selection. */
+static void test_reopen_then_select_and_start(void) {
+  prepare_selected(19U, 4U);
+  run_selected_session(true);
+  TEST_ASSERT(training_reopen_select());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(now + 60000U)));
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_IGNORED, training_add_char('K'));
+  TEST_ASSERT(!training_undo_char());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(5U, training_selected_level());
+
+  TEST_ASSERT_EQUAL(5U, step_to_limit(false));
+  TEST_ASSERT_EQUAL(0U, training_selected_level());
+  TEST_ASSERT(!training_select_step(false));
+  TEST_ASSERT_EQUAL(19U, step_to_limit(true));
+  TEST_ASSERT_EQUAL(19U, training_selected_level());
+  TEST_ASSERT(!training_select_step(true));
+  while (training_selected_level() > 2U) {
+    TEST_ASSERT(training_select_step(false));
+  }
+
+  at((uint16_t)(now + 10U));
+  training_start();
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(2U, training_level());
+  TEST_ASSERT_EQUAL(KOCH_KIND_WORD, training_kind());
+  TEST_ASSERT_EQUAL(10U, training_item_count());
+  TEST_ASSERT_EQUAL(8U, training_pass_threshold());
+  TEST_ASSERT_EQUAL(0U, training_score());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(now + TRAINING_START_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at((uint16_t)(now + 1U)));
+}
+
+#define REOPEN_LOG_SIZE 16U
+
+/* One poll result of the AC-T40 (4) scenario. */
+typedef struct {
+  uint16_t time;
+  training_event_t event;
+  training_phase_t phase;
+  uint16_t selected;
+} reopen_log_entry_t;
+
+static reopen_log_entry_t reopen_log[2][REOPEN_LOG_SIZE];
+static uint8_t reopen_log_count;
+
+/* With @p is_called, calls training_reopen_select(), which must return false and change no phase or selection. */
+static void maybe_reopen(bool is_called) {
+  const training_phase_t phase = training_phase();
+  const uint16_t selected = training_selected_level();
+
+  if (is_called) {
+    TEST_ASSERT(!training_reopen_select());
+    TEST_ASSERT_EQUAL(phase, training_phase());
+    TEST_ASSERT_EQUAL(selected, training_selected_level());
+  }
+}
+
+static void log_poll(reopen_log_entry_t* log, uint16_t time) {
+  const training_event_t event = poll_at(time);
+
+  if (reopen_log_count < REOPEN_LOG_SIZE) {
+    log[reopen_log_count].time = time;
+    log[reopen_log_count].event = event;
+    log[reopen_log_count].phase = training_phase();
+    log[reopen_log_count].selected = training_selected_level();
+    ++reopen_log_count;
+  }
+}
+
+/* SELECT, GAP, ITEM, RESULT with the hold on and off, a retry, a gap, a second item, IDLE. */
+static void run_reopen_scenario(reopen_log_entry_t* log, bool is_called) {
+  reopen_log_count = 0U;
+  prepare_at_level(TX, 20U, 1U, 5U);
+  TEST_ASSERT(training_select_step(false));
+  maybe_reopen(is_called);
+  log_poll(log, 1100U);
+  maybe_reopen(is_called);
+  at(1000U);
+  training_start();
+  maybe_reopen(is_called);
+  log_poll(log, 1999U);
+  maybe_reopen(is_called);
+  log_poll(log, 2000U);
+  maybe_reopen(is_called);
+  at(2100U);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char('*'));
+  maybe_reopen(is_called);
+  training_hold_result(true);
+  maybe_reopen(is_called);
+  log_poll(log, (uint16_t)(2100U + TRAINING_WRONG_MS));
+  maybe_reopen(is_called);
+  at(5000U);
+  training_hold_result(false);
+  maybe_reopen(is_called);
+  log_poll(log, 5000U);
+  maybe_reopen(is_called);
+  at(5100U);
+  (void)training_add_char(training_item_text()[0]);
+  log_poll(log, 5101U);
+  maybe_reopen(is_called);
+  log_poll(log, 9000U);
+  maybe_reopen(is_called);
+  log_poll(log, (uint16_t)(9000U + TRAINING_SENDING_GAP_MS));
+  maybe_reopen(is_called);
+  training_stop();
+  maybe_reopen(is_called);
+  log_poll(log, 12000U);
+  maybe_reopen(is_called);
+}
+
+/* AC-T40 (4): a second call returns false. Outside END the call changes nothing that a poll can observe. */
+static void test_reopen_outside_end(void) {
+  uint8_t count;
+
+  prepare_selected(19U, 4U);
+  run_selected_session(false);
+  TEST_ASSERT(training_reopen_select());
+  TEST_ASSERT(!training_reopen_select());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(4U, training_selected_level());
+
+  memset(reopen_log, 0, sizeof(reopen_log));
+  run_reopen_scenario(reopen_log[0], false);
+  count = reopen_log_count;
+  run_reopen_scenario(reopen_log[1], true);
+  TEST_ASSERT_EQUAL(count, reopen_log_count);
+  TEST_ASSERT_EQUAL(0, memcmp(reopen_log[0], reopen_log[1], sizeof(reopen_log[0])));
+  /* The scenario must reach every phase, or the comparison proves little. */
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, reopen_log[1][2].event);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, reopen_log[1][3].phase);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, reopen_log[1][4].event);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, reopen_log[1][5].phase);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, reopen_log[1][6].event);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, reopen_log[1][7].event);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, reopen_log[1][count - 1U].phase);
 }
 
 int main(void) {
@@ -993,5 +1200,8 @@ int main(void) {
   TEST_RUN(test_finish_fail_selection);
   TEST_RUN(test_finish_top_and_save_failed);
   TEST_RUN(test_selection_random_walk);
+  TEST_RUN(test_reopen_preselection);
+  TEST_RUN(test_reopen_then_select_and_start);
+  TEST_RUN(test_reopen_outside_end);
   return TEST_FINISH();
 }

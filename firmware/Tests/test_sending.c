@@ -12,6 +12,7 @@
 #include "koch/koch.h"
 #include "modes/training.h"
 #include "support/training_harness.h"
+#include "training_screen_internal.h"
 
 #define LEVEL_KM 0U
 #define LEVEL_WORDS_13 17U
@@ -21,6 +22,20 @@
 #define FB_SIZE (LCD_PAGE_COUNT * LCD_WIDTH)
 
 static uint8_t snapshot_before[FB_SIZE];
+
+/* A Sending step dirties only pages that change, inside pages 0-5 (UX-70, D-T49). */
+#define TX_STEP_PAGES 0x3FU
+/* The switch from the end screen to the start screen: pages 0-4 and 7, and page 5 with a code (UX-70, D-T49). */
+#define TX_SWITCH_PAGES 0x9FU
+#define TX_SWITCH_CODE_PAGES 0xBFU
+
+/* One step that must dirty exactly @p mask, which is also DIRTYCHG. */
+static void tx_step_dirty(button_event_t event, uint8_t mask) {
+  harness_mark_frame();
+  harness_event(event);
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT(dirty_is(mask));
+}
 
 static void snapshot(uint8_t* buffer) {
   uint8_t page;
@@ -883,7 +898,7 @@ static void test_v117_prosign_texts(void) {
   }
 }
 
-/* V-118: P3.2 held into the end screen gives no enter until it opens and closes again. */
+/* V-118: P3.2 held into the end screen gives no enter until it opens and closes again; two presses start. */
 static void test_v118_end_and_enter(void) {
   uint8_t number;
   size_t stops;
@@ -902,11 +917,23 @@ static void test_v118_end_and_enter(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT_EQUAL(stops + 1U, fake_keyer_stop_count());
   TEST_ASSERT(!fake_keyer_is_running());
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(ok_button());
   harness_pins_for(BUTTON_BIT_ENTER, 2000U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT(ok_button());
   TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
   harness_pins_for(0U, 100U);
+  /* The first press opens the start screen at L2; the keyer does not start (UX-69). */
+  harness_mark_frame();
+  harness_pins_for(BUTTON_BIT_ENTER, 30U);
+  TEST_ASSERT(dirty_is(TX_SWITCH_CODE_PAGES));
+  TEST_ASSERT(dirty_matches_change());
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT(hdr("TX 20/20 L2          1/50"));
+  TEST_ASSERT(start_screen_is(2U, 2U, "New char", "R", ".-."));
+  TEST_ASSERT_EQUAL(1U, fake_keyer_start_count());
+  TEST_ASSERT(!fake_keyer_is_running());
   harness_pins_for(BUTTON_BIT_ENTER, 30U);
   harness_pins_for(0U, 30U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
@@ -1083,23 +1110,23 @@ static void test_v136_word_pass_rate(void) {
   tx_run_km_words(LEVEL_FIRST_WORDS, 7U);
   TEST_ASSERT(text_at(2, 7, "Score 7/10"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 8"));
-  TEST_ASSERT(end_screen_is(7U, 10U, 8U, 3U));
+  TEST_ASSERT(end_screen_is(7U, 10U, 8U));
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS, progress_level(PROGRESS_MODE_SENDING, 20U));
 
   tx_run_km_words(LEVEL_FIRST_WORDS, 8U);
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(end_screen_is(8U, 10U, 8U, 3U));
+  TEST_ASSERT(end_screen_is(8U, 10U, 8U));
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS + 1U, progress_level(PROGRESS_MODE_SENDING, 20U));
 
   tx_run_km_words(LEVEL_100_WORDS, 79U);
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
-  TEST_ASSERT(end_screen_is(79U, 100U, 80U, 154U));
+  TEST_ASSERT(end_screen_is(79U, 100U, 80U));
   tx_run_km_words(LEVEL_100_WORDS, 80U);
-  TEST_ASSERT(end_screen_is(80U, 100U, 80U, 154U));
+  TEST_ASSERT(end_screen_is(80U, 100U, 80U));
 
   /* A character session still needs 45 of 50. */
   tx_run_km_words(LEVEL_KM, 44U);
-  TEST_ASSERT(end_screen_is(44U, 50U, 45U, 1U));
+  TEST_ASSERT(end_screen_is(44U, 50U, 45U));
 }
 
 /* V-121: Not passed, need 80 on a session of 100 words (D-T33). */
@@ -1118,6 +1145,10 @@ static void test_v121_not_passed_80(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT(text_at(2, 7, "Score 0/100"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
+  TEST_ASSERT(margins_off());
+  harness_event(ENTER_EVENT);
   TEST_ASSERT(lvl(154U, 154U));
   TEST_ASSERT(start_button());
   TEST_ASSERT(margins_off());
@@ -1125,19 +1156,28 @@ static void test_v121_not_passed_80(void) {
 
 /* ---------- Level selection (ui-ux.md 5.16, V-108, V-137, V-142, V-143, V-147, AC-T33) ---------- */
 
-/* EARN(TX, @p level) at TX Speed 20, then OPEN(TX): the start screen shows. */
-static void tx_earn_open(uint16_t level) {
+/*
+ * EARN(TX, @p level) at TX Speed 20 with the settings @p prosign_style, @p max_word_len and @p is_code_shown, then
+ * OPEN(TX): the start screen shows.
+ */
+static void tx_earn_open_with(uint16_t level, uint8_t prosign_style, uint8_t max_word_len, bool is_code_shown) {
   fake_iap_reset();
   if (level != 0U) {
     progress_fixture_write(PROGRESS_MODE_SENDING, 20U, level);
   }
   harness_power_on();
+  (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, prosign_style);
+  (void)settings_set(SETTINGS_ID_MAX_WORD_LEN, max_word_len);
+  (void)settings_set(SETTINGS_ID_SHOW_CW_CODE, is_code_shown ? 1U : 0U);
   fake_koch_item_reset();
   fake_koch_item_push("K");
   harness_open_start_screen(1U);
   TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
   TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
 }
+
+/* EARN(TX, @p level), OPEN(TX) with the default settings. */
+static void tx_earn_open(uint16_t level) { tx_earn_open_with(level, SETTINGS_PROSIGN_BOTH, 5U, true); }
 
 /* Keys every item right until the end screen. */
 static void tx_pass_session(void) {
@@ -1158,12 +1198,10 @@ static void tx_pass_session(void) {
 static void test_v137_start_screen(void) {
   tx_earn_open(0U);
   TEST_ASSERT(hdr("TX 20/20 L1          1/50"));
-  TEST_ASSERT(body_off(1, 3));
-  TEST_ASSERT(lvl(1U, 1U));
-  TEST_ASSERT(desc("K and M"));
-  TEST_ASSERT(blank_row(6));
-  TEST_ASSERT(start_button());
-  TEST_ASSERT(margins_off());
+  TEST_ASSERT(start_screen_is(1U, 1U, "New chars", "K M", "-.- --"));
+  /* P1: dash 42-47, dot 51-52, dash 56-61, dash 71-76, dash 80-85. */
+  TEST_ASSERT(pixel(42, 43) && pixel(47, 44) && !pixel(48, 43) && pixel(51, 43) && pixel(56, 43) && pixel(61, 43));
+  TEST_ASSERT(!pixel(62, 43) && !pixel(70, 43) && pixel(71, 43) && pixel(76, 43) && pixel(80, 44) && pixel(85, 44));
   snapshot(snapshot_before);
   harness_clear_dirty();
   harness_event(M_TAP);
@@ -1186,12 +1224,13 @@ static void test_v142_tip_starts_keyer_once(void) {
 
   tx_earn_open(19U);
   TEST_ASSERT(hdr("TX 20/20 L20         1/50"));
+  TEST_ASSERT(start_screen_is(20U, 20U, "New char", "J", ".---"));
+  TEST_ASSERT(pixel(49, 43) && !pixel(48, 43) && pixel(77, 43) && !pixel(78, 43));
   TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
-  harness_clear_dirty();
-  harness_event(M_TAP);
-  TEST_ASSERT(dirty_is(PAGE(0) | PAGE(4) | PAGE(5)));
+  tx_step_dirty(M_TAP, PAGE(0) | PAGE(1) | PAGE(3) | PAGE(4) | PAGE(5));
   TEST_ASSERT(hdr("TX 20/20 L19         1/50"));
-  TEST_ASSERT(lvl(19U, 20U));
+  TEST_ASSERT(start_screen_is(19U, 20U, "New char", "N", "-."));
+  TEST_ASSERT(pixel(58, 43) && !pixel(57, 43) && pixel(68, 43) && !pixel(69, 43));
   harness_clear_dirty();
   harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
   TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
@@ -1250,22 +1289,24 @@ static void test_v143_leave_start_screen(void) {
   TEST_ASSERT(lvl(20U, 20U));
 }
 
-/* V-108 runs 4 and 5, AC-T33 (4), (5): the Sending end screen steps, leaves and starts at the press. */
+/*
+ * V-108 runs 4 and 5, AC-T33 (4), (5), AC-T44: on the Sending end screen prev does nothing and menu/back leaves; the
+ * first P3.2 press opens the start screen, the second one starts the session and the keyer once.
+ */
 static void test_v108_end_screen(void) {
   tx_earn_open(0U);
   harness_event(ENTER_EVENT);
   tx_pass_session();
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(lvl(2U, 2U));
-  TEST_ASSERT(desc("New char R"));
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
   TEST_ASSERT_EQUAL(1U, fake_keyer_stop_count());
   TEST_ASSERT(!fake_keyer_is_running());
   harness_clear_dirty();
   harness_event(M_TAP);
-  TEST_ASSERT(lvl(1U, 2U));
-  TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
+  TEST_ASSERT(dirty_is(0U));
+  TEST_ASSERT(ok_button());
   harness_pins_for(BUTTON_BIT_MENU, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT_EQUAL(1U, menu_cursor());
@@ -1278,13 +1319,25 @@ static void test_v108_end_screen(void) {
   harness_event(ENTER_EVENT);
   tx_pass_session();
   TEST_ASSERT_EQUAL(2U, fake_keyer_start_count());
+  harness_clear_dirty();
   harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   harness_pins_for(BUTTON_BIT_ENTER, 1U);
-  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT(dirty_is(TX_SWITCH_PAGES));
   TEST_ASSERT(hdr("TX 20/20 L3          1/10"));
-  TEST_ASSERT_EQUAL(3U, fake_keyer_start_count());
+  TEST_ASSERT(start_screen_is(3U, 3U, "", "Words of 2", ""));
+  TEST_ASSERT_EQUAL(2U, fake_keyer_start_count());
   harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(100U - BUTTONS_DEBOUNCE_MS - 1U));
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(2U, fake_keyer_start_count());
+  TEST_ASSERT(!fake_keyer_is_running());
+  harness_clear_dirty();
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask() & PAGE(0));
+  TEST_ASSERT_EQUAL(3U, fake_keyer_start_count());
   harness_pins_for(0U, 30U);
   TEST_ASSERT_EQUAL(3U, fake_keyer_start_count());
   TEST_ASSERT(fake_keyer_is_running());
@@ -1305,26 +1358,33 @@ static void test_v147_replay_and_pass(void) {
   harness_event(ENTER_EVENT);
   tx_pass_session();
   TEST_ASSERT(text_at(3, 9, "Passed"));
-  TEST_ASSERT(lvl(2U, 20U));
-  TEST_ASSERT(desc("New char R"));
+  TEST_ASSERT(ok_button());
+  harness_mark_frame();
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT(dirty_is(TX_SWITCH_CODE_PAGES));
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT(start_screen_is(2U, 20U, "New char", "R", ".-."));
   TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
   TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
 
-  tx_earn_open(19U);
-  (void)settings_set(SETTINGS_ID_MAX_WORD_LEN, 5U);
+  tx_earn_open_with(19U, SETTINGS_PROSIGN_BOTH, 5U, true);
   harness_event(ENTER_EVENT);
   tx_pass_session();
   TEST_ASSERT(hdr("TX 20/20 L20        50/50"));
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(lvl(21U, 21U));
-  TEST_ASSERT(desc("Words of 5"));
+  TEST_ASSERT(ok_button());
+  harness_mark_frame();
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT(dirty_is(TX_SWITCH_PAGES));
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT(start_screen_is(21U, 21U, "", "Words of 5", ""));
   TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(1U));
   TEST_ASSERT_EQUAL(1U, fake_iap_program_count(0x0200U));
 }
 
 /*
- * V-144 (Sending), D-T43: prev or next pressed 100 ms after the last keyed character and held 2000 ms through the
- * session end gives no step, no repeat and no long event on the end screen. A new press then steps once.
+ * V-144 (Sending), D-T43, AC-T44 (1): prev or next pressed 100 ms after the last keyed character and held 2000 ms
+ * through the session end gives no event on the end screen. A new press does nothing either: no selector there.
  */
 static void test_v144_held_through_end(void) {
   static const uint8_t pins[2] = {BUTTON_BIT_NEXT, BUTTON_BIT_PREV};
@@ -1348,16 +1408,345 @@ static void test_v144_held_through_end(void) {
     harness_pins_for(pins[run], 600U);
     TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
     TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS_REPLAY, training_outcome());
-    TEST_ASSERT(lvl(11U, 20U));
+    TEST_ASSERT(ok_button());
     harness_clear_dirty();
     harness_pins_for(pins[run], 1400U);
     harness_pins_for(0U, 30U);
     TEST_ASSERT(dirty_is(0U));
-    TEST_ASSERT(lvl(11U, 20U));
     harness_pins_for(pins[run], 30U);
     harness_pins_for(0U, 30U);
-    TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
-    TEST_ASSERT(lvl((run == 0U) ? 12U : 10U, 20U));
+    TEST_ASSERT(dirty_is(0U));
+    TEST_ASSERT(ok_button());
+    TEST_ASSERT_EQUAL(10U, training_selected_level());
+    /* The preselection shows after enter: the session level L10 + 1. */
+    harness_event(ENTER_EVENT);
+    TEST_ASSERT(lvl(11U, 20U));
+  }
+}
+
+/* V-171: the Sending start screen shows the code of the new character for both Show CW Code values (UX-67). */
+static void test_v171_start_screen_codes(void) {
+  typedef struct {
+    uint16_t level;
+    const char* label;
+    const char* text;
+    const char* code;
+    int first_x; /* -1: no code */
+    int last_x;
+  } code_row_t;
+  static const code_row_t rows[] = {
+      {0U, "New chars", "K M", "-.- --", 42, 85},  {1U, "New char", "R", ".-.", -1, 0},
+      {19U, "New char", "J", ".---", 49, 77},      {24U, "New char", "0", "-----", 43, 84},
+      {27U, "New char", ",", "--..--", 42, 84},    {58U, "New char", "<BT/=>", "-...-", 49, 78},
+      {60U, "New char", "<SK>", "...-.-", 46, 80}, {61U, "New char", "<AR/+>", ".-.-.", 49, 78},
+      {62U, "", "Words of 5", "", -1, 0},          {63U, "", "Words of 5", "", -1, 0},
+  };
+  size_t index;
+  size_t shown;
+
+  for (index = 0U; index < (sizeof(rows) / sizeof(rows[0])); ++index) {
+    for (shown = 0U; shown < 2U; ++shown) {
+      tx_earn_open_with(rows[index].level, SETTINGS_PROSIGN_BOTH, 5U, shown == 0U);
+      if (!TEST_ASSERT(start_screen_is((unsigned)rows[index].level + 1U, (unsigned)rows[index].level + 1U,
+                                       rows[index].label, rows[index].text, rows[index].code))) {
+        fprintf(stderr, "V-171 row %u, Show CW Code %u\n", (unsigned)index, (unsigned)(shown == 0U));
+      }
+      if (rows[index].first_x >= 0) {
+        TEST_ASSERT(pixel(rows[index].first_x, 43) && !pixel(rows[index].first_x - 1, 43));
+        TEST_ASSERT(pixel(rows[index].last_x, 44) && !pixel(rows[index].last_x + 1, 44));
+      }
+      TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+    }
+  }
+}
+
+/* V-121 (start screen and end screen): the widest texts and codes keep their limits. */
+static void test_v121_start_and_end_screens(void) {
+  fake_iap_reset();
+  progress_fixture_write(PROGRESS_MODE_SENDING, 20U, 65535U);
+  harness_power_on();
+  fake_koch_item_reset();
+  fake_koch_item_push("KMRS");
+  harness_open_start_screen(1U);
+  harness_event(M_TAP);
+  TEST_ASSERT(text_at(1, 2, "<  L65535 of 65535  >"));
+  TEST_ASSERT(start_button());
+  TEST_ASSERT(margins_off());
+
+  tx_earn_open_with(61U, SETTINGS_PROSIGN_BOTH, 8U, false);
+  TEST_ASSERT(desc("New char", "<AR/+>"));
+  TEST_ASSERT(margins_off());
+  tx_earn_open_with(0U, SETTINGS_PROSIGN_BOTH, 8U, false);
+  TEST_ASSERT(desc("New chars", "K M"));
+  TEST_ASSERT(code_is("-.- --"));
+  tx_earn_open_with(62U, SETTINGS_PROSIGN_BOTH, 8U, false);
+  TEST_ASSERT(desc("", "Words of 8"));
+  TEST_ASSERT(code_is(""));
+  TEST_ASSERT(margins_off());
+  tx_earn_open_with(27U, SETTINGS_PROSIGN_BOTH, 8U, false);
+  TEST_ASSERT(code_is("--..--"));
+  TEST_ASSERT(pixel(42, 43) && pixel(84, 43) && !pixel(85, 43));
+
+  /* End screen: Not saved, Passed, new level and OKBTN. */
+  tx_earn_open(0U);
+  fake_iap_set_fail_operation(2U);
+  harness_event(ENTER_EVENT);
+  tx_pass_session();
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS_NOT_SAVED, training_outcome());
+  TEST_ASSERT(text_at(1, 8, "Not saved"));
+  TEST_ASSERT(text_at(2, 7, "Score 50/50"));
+  TEST_ASSERT(text_at(3, 4, "Passed, new level"));
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
+  TEST_ASSERT(margins_off());
+}
+
+/* The code text of the new character of level index @p level ('.', '-', ' ' for the L1 gap), or "" at a word level. */
+static const char* model_code(uint16_t level) {
+  static char text[16];
+  if (level == 0U) {
+    (void)snprintf(text, sizeof(text), "%s ", code_of(koch_char(0U)));
+    (void)snprintf(&text[strlen(text)], sizeof(text) - strlen(text), "%s", code_of(koch_char(1U)));
+    return text;
+  }
+  if (koch_kind(level) != KOCH_KIND_CHAR) {
+    return "";
+  }
+  return code_of(koch_char((uint8_t)(koch_learned_count(level) - 1U)));
+}
+
+/* V-151 (Sending): every start screen from L65 down to L1 has its code inside x 42-85 and y 43-44. */
+static void test_v151_every_sending_start_screen(void) {
+  static const uint8_t styles[3] = {SETTINGS_PROSIGN_PUNCTUATION, SETTINGS_PROSIGN_NAME, SETTINGS_PROSIGN_BOTH};
+  size_t style;
+  int index;
+  int x;
+  int y;
+
+  for (style = 0U; style < 3U; ++style) {
+    tx_earn_open_with(64U, styles[style], (style == 0U) ? 4U : 8U, style != 1U);
+    for (index = 64; index >= 0; --index) {
+      TEST_ASSERT_EQUAL((uint16_t)index, training_selected_level());
+      if (!TEST_ASSERT(code_is(model_code((uint16_t)index)))) {
+        fprintf(stderr, "V-151 level index %d\n", index);
+      }
+      for (y = 40; y < 48; ++y) {
+        for (x = 0; x < 128; ++x) {
+          if (pixel(x, y) && ((x < 42) || (x > 85) || (y < 43) || (y > 44))) {
+            TEST_ASSERT(false);
+          }
+        }
+      }
+      TEST_ASSERT(blank(6));
+      TEST_ASSERT(start_button());
+      TEST_ASSERT(margins_off());
+      harness_event(M_TAP);
+    }
+  }
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+}
+
+/* V-172 (Sending runs 2, 4 and 5): a step dirties exactly the pages whose bytes change (D-T49). */
+static void test_v172_changed_pages(void) {
+  static const uint8_t styles[3] = {SETTINGS_PROSIGN_PUNCTUATION, SETTINGS_PROSIGN_NAME, SETTINGS_PROSIGN_BOTH};
+  static const button_event_t events[4] = {M_TAP, R_TAP, REPEAT_EVENT(M_TAP), REPEAT_EVENT(R_TAP)};
+  uint32_t seed = 0x2468ACE1UL;
+  size_t style;
+  size_t length;
+  unsigned step;
+
+  tx_earn_open(22U);
+  TEST_ASSERT(start_screen_is(23U, 23U, "New char", "F", "..-."));
+  tx_step_dirty(M_TAP, PAGE(0) | PAGE(1) | PAGE(4) | PAGE(5));
+  TEST_ASSERT(start_screen_is(22U, 23U, "New char", "E", "."));
+  tx_step_dirty(R_TAP, PAGE(0) | PAGE(1) | PAGE(4) | PAGE(5));
+
+  tx_earn_open_with(64U, SETTINGS_PROSIGN_BOTH, 5U, true);
+  tx_step_dirty(M_TAP, PAGE(0) | PAGE(1));
+  TEST_ASSERT(start_screen_is(64U, 65U, "", "Words of 5", ""));
+  tx_step_dirty(M_TAP, PAGE(0) | PAGE(1));
+  TEST_ASSERT(start_screen_is(63U, 65U, "", "Words of 5", ""));
+  tx_step_dirty(R_TAP, PAGE(0) | PAGE(1));
+  tx_step_dirty(R_TAP, PAGE(0) | PAGE(1));
+
+  for (style = 0U; style < 3U; ++style) {
+    for (length = 0U; length < 2U; ++length) {
+      tx_earn_open_with(64U, styles[style], (length == 0U) ? 4U : 8U, true);
+      for (step = 0U; step < 200U; ++step) {
+        const uint16_t before = training_selected_level();
+        seed = (seed * 1103515245UL) + 12345UL;
+        harness_mark_frame();
+        harness_event(events[(seed >> 16U) % 4U]);
+        TEST_ASSERT(dirty_matches_change());
+        TEST_ASSERT((lcd_fb_dirty_mask() & (uint8_t)~TX_STEP_PAGES) == 0U);
+        if (before == training_selected_level()) {
+          TEST_ASSERT(dirty_is(0U));
+        }
+      }
+    }
+  }
+  TEST_ASSERT_EQUAL(0U, fake_keyer_start_count());
+}
+
+/* Code geometry of ui-ux.md section 5.13.3 and the L1 code gap of section 5.16.3 (UX-67). */
+#define CODE_DIT_WIDTH 2
+#define CODE_DAH_WIDTH 6
+#define CODE_MARK_GAP 3
+#define CODE_CHAR_GAP 9
+#define CODE_ROW_WIDTH 128
+
+/* Sets the expected marks of @p code ('.' and '-') from @p x on; returns the x after the last mark. */
+static int code_expect(bool* is_on, int x, const char* code) {
+  size_t index;
+  int end = x;
+
+  for (index = 0U; code[index] != '\0'; ++index) {
+    const int width = (code[index] == '-') ? CODE_DAH_WIDTH : CODE_DIT_WIDTH;
+    int k;
+    for (k = 0; k < width; ++k) {
+      if ((x + k) < CODE_ROW_WIDTH) {
+        is_on[x + k] = true;
+      }
+    }
+    end = x + width;
+    x = end + CODE_MARK_GAP;
+  }
+  return end;
+}
+
+/* Row 5 holds only the centered group of @p first and, when it is not NULL, the gap and @p second. */
+static bool code_group_is(const char* first, const char* second) {
+  bool is_on[CODE_ROW_WIDTH];
+  bool is_scratch[CODE_ROW_WIDTH];
+  int width;
+  int x0;
+  int x;
+  int y;
+
+  memset(is_scratch, 0, sizeof(is_scratch));
+  width = code_expect(is_scratch, 0, first);
+  if (second != NULL) {
+    width = code_expect(is_scratch, width + CODE_CHAR_GAP, second);
+  }
+  x0 = (CODE_ROW_WIDTH - width) / 2;
+  memset(is_on, 0, sizeof(is_on));
+  x = code_expect(is_on, x0, first);
+  if (second != NULL) {
+    (void)code_expect(is_on, x + CODE_CHAR_GAP, second);
+  }
+  for (y = 40; y < 48; ++y) {
+    for (x = 0; x < CODE_ROW_WIDTH; ++x) {
+      const bool expected = ((y == 43) || (y == 44)) && is_on[x];
+      if (pixel(x, y) != expected) {
+        fprintf(stderr, "code group %s %s: pixel (%d, %d) is %d\n", first, (second != NULL) ? second : "-", x, y,
+                (int)pixel(x, y));
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/* AC-T46 (3): one mark, its pixels and the x of the next mark. */
+static void test_code_mark(void) {
+  harness_power_on();
+  training_screen_clear_rows(1U, 7U);
+  TEST_ASSERT_EQUAL(7U, training_screen_draw_code_mark(2U, 7U, false));
+  TEST_ASSERT(marks_are(7, 2, "."));
+  TEST_ASSERT_EQUAL(16U, training_screen_draw_code_mark(7U, 7U, true));
+  TEST_ASSERT(marks_are(7, 2, ".-"));
+  TEST_ASSERT_EQUAL(54U + 9U, training_screen_draw_code_mark(54U, TRAINING_SCREEN_CODE_GROUP_ROW, true));
+  TEST_ASSERT(marks_are(5, 54, "-"));
+  TEST_ASSERT(marks_are(7, 2, ".-"));
+  TEST_ASSERT_EQUAL(100U + 5U, training_screen_draw_code_mark(100U, 1U, false));
+  TEST_ASSERT(marks_are(1, 100, "."));
+}
+
+/* AC-T46 (3): the centered code of every Koch character, and groups of two codes with the character gap. */
+static void test_code_group(void) {
+  static const char pairs[][2] = {{'K', 'M'}, {'M', 'K'}, {'E', 'T'}, {'0', ','}, {MORSE_CHAR_AR, 'E'}};
+  char first[8];
+  uint8_t index;
+  size_t pair;
+
+  harness_power_on();
+  for (index = 0U; index < KOCH_CHAR_COUNT; ++index) {
+    const char character = koch_char(index);
+    training_screen_clear_rows(1U, 7U);
+    training_screen_draw_code_group(morse_encode(character), MORSE_PATTERN_EMPTY);
+    if (!TEST_ASSERT(code_group_is(code_of(character), NULL))) {
+      fprintf(stderr, "Koch index %u\n", (unsigned)index);
+    }
+    TEST_ASSERT(blank_row(7));
+  }
+  /* L1 of UX-67: K at x 42, M ends at x 85. */
+  training_screen_clear_rows(1U, 7U);
+  training_screen_draw_code_group(morse_encode('K'), morse_encode('M'));
+  TEST_ASSERT(pixel(42, 43) && !pixel(41, 43) && pixel(85, 44) && !pixel(86, 44));
+  for (pair = 0U; pair < (sizeof(pairs) / sizeof(pairs[0])); ++pair) {
+    training_screen_clear_rows(1U, 7U);
+    training_screen_draw_code_group(morse_encode(pairs[pair][0]), morse_encode(pairs[pair][1]));
+    (void)snprintf(first, sizeof(first), "%s", code_of(pairs[pair][0]));
+    TEST_ASSERT(code_group_is(first, code_of(pairs[pair][1])));
+  }
+  /* The group does not clear its row. */
+  training_screen_clear_rows(1U, 7U);
+  gfx_fill_rect(0, 40, 1, 1, LCD_PIXEL_ON);
+  training_screen_draw_code_group(morse_encode('E'), MORSE_PATTERN_EMPTY);
+  TEST_ASSERT(pixel(0, 40) && pixel(63, 43));
+}
+
+/* The item line of an item of @p count characters as the reference draws it: slot or centered x, 8 x 16 font. */
+static void expect_item_text(const char* text, uint8_t count, uint8_t style) {
+  static char glyphs[KOCH_WORD_LEN_MAX][MORSE_TEXT_SIZE];
+  uint8_t slot;
+  uint8_t length;
+
+  item_expect_reset();
+  for (slot = 0U; text[slot] != '\0'; ++slot) {
+    length = morse_format(text[slot], style, glyphs[slot]);
+    item_expect(ITEM_PART_BIG, (count == 1U) ? (64 - (4 * (int)length)) : (68 - (8 * (int)count) + (16 * (int)slot)),
+                glyphs[slot]);
+  }
+  TEST_ASSERT(item_line_is());
+}
+
+/* AC-T46 (4): training_screen_draw_item_text() draws items of 1 to 8 characters, prosigns included, as before. */
+static void test_item_text_pixels(void) {
+  static const char* const words[KOCH_WORD_LEN_MAX] = {"K",     "KM",     "KMR",     "QSUA",
+                                                       "WPXYZ", "0,9.Q7", "MMWWQQ8", "ABCDEFGH"};
+  static const char singles[] = {'K',           'W',           ',',           '0',          MORSE_CHAR_SK,
+                                 MORSE_CHAR_AR, MORSE_CHAR_BT, MORSE_CHAR_KN, MORSE_CHAR_AS};
+  char text[2];
+  uint8_t count;
+  uint8_t style;
+  size_t index;
+
+  for (count = 1U; count <= KOCH_WORD_LEN_MAX; ++count) {
+    const char* const items[1] = {words[count - 1U]};
+    tx_open((count == 1U) ? LEVEL_KM : LEVEL_WORDS_13, SETTINGS_PROSIGN_BOTH, true, items, 1U);
+    run_to_item();
+    TEST_ASSERT_EQUAL(count, training_item_length());
+    for (style = SETTINGS_PROSIGN_PUNCTUATION; style <= SETTINGS_PROSIGN_BOTH; ++style) {
+      training_screen_draw_item_text(words[count - 1U], style);
+      expect_item_text(words[count - 1U], count, style);
+    }
+    if (count == 1U) {
+      for (index = 0U; index < sizeof(singles); ++index) {
+        text[0] = singles[index];
+        text[1] = '\0';
+        for (style = SETTINGS_PROSIGN_PUNCTUATION; style <= SETTINGS_PROSIGN_BOTH; ++style) {
+          training_screen_draw_item_text(text, style);
+          expect_item_text(text, 1U, style);
+        }
+      }
+    }
+    /* A word slot keeps its x when a prosign text is wider than one cell. */
+    if (count == 3U) {
+      training_screen_draw_item_text("K\x04M", SETTINGS_PROSIGN_BOTH);
+      expect_item_text("K\x04M", 3U, SETTINGS_PROSIGN_BOTH);
+    }
+    TEST_ASSERT(margins_off());
   }
 }
 
@@ -1393,5 +1782,12 @@ int main(void) {
   TEST_RUN(test_v108_end_screen);
   TEST_RUN(test_v147_replay_and_pass);
   TEST_RUN(test_v144_held_through_end);
+  TEST_RUN(test_v171_start_screen_codes);
+  TEST_RUN(test_v172_changed_pages);
+  TEST_RUN(test_v121_start_and_end_screens);
+  TEST_RUN(test_v151_every_sending_start_screen);
+  TEST_RUN(test_code_mark);
+  TEST_RUN(test_code_group);
+  TEST_RUN(test_item_text_pixels);
   return TEST_FINISH();
 }

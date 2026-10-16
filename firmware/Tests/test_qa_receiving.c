@@ -5,8 +5,8 @@
 
 /*
  * QA scenarios of the Receiving mode with the four-button keyboard (references/internal/training_spec.md D-T27 to
- * D-T29, D-T44, sections 8 and 12.2, AC-T8, AC-T19, AC-T23, AC-T27, AC-T38, R-T7, R-T12; ui-ux.md sections 5.12.1,
- * 6.8 and 9.4, UX-51, UX-64).
+ * D-T29, D-T44, D-T45 to D-T47, sections 8, 12.2 and 12.6, AC-T8, AC-T19, AC-T23, AC-T27, AC-T38, AC-T44, R-T7,
+ * R-T10, R-T12; ui-ux.md sections 5.12.1, 5.15, 6.8 and 9.4, UX-51, UX-64, UX-69).
  * The real menu, buttons, engine, keyboard and progress run with a fake player and fake items. The oracles come
  * from the documents: the run split is computed here from (c + 3 - k) / 4, and the label fields from their pixel
  * ranges, not from receiving.c or keyboard.c.
@@ -15,6 +15,7 @@
 #include "koch/keyboard.h"
 #include "koch/koch.h"
 #include "modes/training.h"
+#include "qa/qa_training_screens.h"
 #include "support/training_harness.h"
 
 #define LEVEL_KM 0U
@@ -582,23 +583,31 @@ static void run_km_session_to_end(void) {
 }
 
 /*
- * End screen (ui-ux.md 6.8, 5.16.4, D-T39): a long enter does nothing. Tap mode is off there, so a short tip closure
- * (also a plug glitch, D-5) starts the next session at its press; tap mode is on in the new session.
+ * End screen (ui-ux.md 5.15, 6.8, D-T39, D-T45 (4), B-2, F1): a long enter does nothing. Tap mode is off there, so a
+ * short tip closure (also a plug glitch, D-5, R-T10) opens the start screen at its press and starts no session. A
+ * second closure starts the session; tap mode is on in the new session.
  */
 static void test_end_screen_long_enter_and_short_tip(void) {
+  size_t calls;
+
   rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, "K");
   run_km_session_to_end();
-  {
-    const size_t calls = fake_player_call_count();
-    mark_quiet_start();
-    tap(LONG_EVENT(ENTER_EVENT));
-    TEST_ASSERT(is_quiet_since_mark());
-    TEST_ASSERT_EQUAL(calls, fake_player_call_count());
-  }
-  TEST_ASSERT(start_button());
+  calls = fake_player_call_count();
+  mark_quiet_start();
+  tap(LONG_EVENT(ENTER_EVENT));
+  TEST_ASSERT(is_quiet_since_mark());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT(qa_ok_button());
   harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   harness_pins_for(BUTTON_BIT_ENTER, 40U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase()); /* at the press */
+  harness_pins_for(0U, BUTTONS_DEBOUNCE_MS + 1U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT(qa_start_screen_is("RX 32/32 L2          1/50", 2U, 2U, "New char", "R", ""));
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  /* The second closure starts the session at L2. */
+  harness_pins_for(BUTTON_BIT_ENTER, 60U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase()); /* at the press */
   harness_pins_for(0U, BUTTONS_DEBOUNCE_MS + 1U);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
@@ -1023,6 +1032,9 @@ static void test_qa_next_and_finish_on_last_two_items(void) {
   tap(ENTER_EVENT);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT_EQUAL(48U, training_score());
+  /* V-170 run 3, SL-7: the end screen at once, with the score and the result only. */
+  TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
+  TEST_ASSERT(qa_end_screen_is(NULL, "Score 48/50", "Passed, new level"));
 }
 
 int main(void) {

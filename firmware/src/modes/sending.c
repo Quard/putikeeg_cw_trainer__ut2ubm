@@ -12,8 +12,6 @@
 #include "cw/keyer.h"
 #include "cw/keyer_shared.h"
 #include "cw/morse.h"
-#include "gfx/gfx.h"
-#include "lcd/lcd_fb.h"
 #include "mcu/compiler.h"
 #include "modes/training.h"
 #include "modes/training_screen.h"
@@ -26,13 +24,8 @@
 /* Code rows of ui-ux.md section 5.13.3. */
 #define TX_CODE_MAX_MARKS 12U
 #define TX_CODE_ROW 7U
-#define TX_ANSWER_ROW 5U
+#define TX_ANSWER_ROW TRAINING_SCREEN_CODE_GROUP_ROW
 #define TX_CODE_X 2U
-#define TX_MARK_Y_OFFSET 3U /* marks on y = 8r + 3 and 8r + 4 */
-#define TX_MARK_HEIGHT 2
-#define TX_DOT_WIDTH 2U
-#define TX_DASH_WIDTH 6U
-#define TX_MARK_GAP 3U
 /* The queue holds KEYER_QUEUE_SIZE events, and an overflow adds one. */
 #define TX_EVENTS_PER_POLL (KEYER_QUEUE_SIZE + 1U)
 
@@ -52,8 +45,6 @@ static MEM_XDATA bool sending_is_dropping;
 static MEM_XDATA bool tx_is_word_gap_armed;
 static MEM_XDATA uint8_t tx_mark_count;
 static MEM_XDATA uint8_t tx_code_x;
-static MEM_XDATA uint8_t tx_mark_x;
-static MEM_XDATA uint8_t tx_shift;
 static MEM_XDATA bool tx_is_dah;
 
 static void tx_start_session(void) {
@@ -63,36 +54,6 @@ static void tx_start_session(void) {
   tx_is_word_gap_armed = false;
   tx_pattern = MORSE_PATTERN_EMPTY;
   training_start();
-}
-
-/* Draws one mark at tx_mark_x in row @p row and moves tx_mark_x past it and the gap. */
-static void tx_draw_mark(uint8_t row, MEM_XDATA bool is_dah) {
-  const uint8_t width = is_dah ? TX_DASH_WIDTH : TX_DOT_WIDTH;
-
-  gfx_fill_rect((int16_t)tx_mark_x, (int16_t)((uint8_t)(row * GFX_FONT_5X8_HEIGHT) + TX_MARK_Y_OFFSET), (int16_t)width,
-                TX_MARK_HEIGHT, LCD_PIXEL_ON);
-  tx_mark_x = (uint8_t)(tx_mark_x + width + TX_MARK_GAP);
-}
-
-/* Row 5: the marks of @p pattern centered, x = (128 - w) / 2 (ui-ux.md section 5.13.3). */
-static void tx_draw_answer_code(uint8_t pattern) {
-  uint8_t width = 0U;
-
-  tx_shift = 0U;
-  while ((uint8_t)(pattern >> tx_shift) > MORSE_PATTERN_EMPTY) {
-    width = (uint8_t)(width + ((((pattern >> tx_shift) & 1U) != 0U) ? TX_DASH_WIDTH : TX_DOT_WIDTH) + TX_MARK_GAP);
-    ++tx_shift;
-  }
-  tx_mark_x = (uint8_t)((uint8_t)(LCD_WIDTH - (uint8_t)(width - TX_MARK_GAP)) / 2U);
-  /* The first element is the highest bit below the start marker. */
-  while (tx_shift != 0U) {
-    --tx_shift;
-    tx_is_dah = false;
-    if (((pattern >> tx_shift) & 1U) != 0U) {
-      tx_is_dah = true;
-    }
-    tx_draw_mark(TX_ANSWER_ROW, tx_is_dah);
-  }
 }
 
 /* The item in the 8 x 16 font; in a word item, the bar under the character that the user keys next. */
@@ -123,7 +84,8 @@ static void tx_draw_input(void) {
   training_screen_draw_status(tx_prosign_style);
   training_screen_clear_rows(TX_ANSWER_ROW, TX_ANSWER_ROW);
   if ((training_phase() == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED)) {
-    tx_draw_answer_code(morse_encode(training_item_text()[training_answer_length() - 1U]));
+    training_screen_draw_code_group(morse_encode(training_item_text()[training_answer_length() - 1U]),
+                                    MORSE_PATTERN_EMPTY);
   }
   tx_draw_item_line();
 }
@@ -138,9 +100,7 @@ static void tx_add_element(void) {
   }
   tx_pattern = morse_add_element(tx_pattern, tx_is_dah);
   if (tx_is_code_shown && (tx_mark_count < TX_CODE_MAX_MARKS)) {
-    tx_mark_x = tx_code_x;
-    tx_draw_mark(TX_CODE_ROW, tx_is_dah);
-    tx_code_x = tx_mark_x;
+    tx_code_x = training_screen_draw_code_mark(tx_code_x, TX_CODE_ROW, tx_is_dah);
     ++tx_mark_count;
   }
 }
@@ -279,9 +239,6 @@ bool sending_handle(button_event_t event) {
     tx_start_session();
     training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
     /* The start screen header already shows the start pause of the selected level (D-T42 (4)). */
-    if (phase == TRAINING_PHASE_END) {
-      training_screen_draw_header();
-    }
     tx_draw_input();
   }
   return false;

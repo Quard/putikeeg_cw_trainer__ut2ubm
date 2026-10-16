@@ -81,7 +81,7 @@ void training_start(void) {
 void training_stop(void) { training_phase_value = TRAINING_PHASE_IDLE; }
 
 bool training_select_step(bool is_up) {
-  if ((training_phase_value != TRAINING_PHASE_SELECT) && (training_phase_value != TRAINING_PHASE_END)) {
+  if (training_phase_value != TRAINING_PHASE_SELECT) {
     return false;
   }
   if (is_up) {
@@ -95,6 +95,15 @@ bool training_select_step(bool is_up) {
     }
     --training_selected;
   }
+  return true;
+}
+
+/* No training_set_phase(): SELECT has no delay, and END already cleared the hold. */
+bool training_reopen_select(void) {
+  if (training_phase_value != TRAINING_PHASE_END) {
+    return false;
+  }
+  training_phase_value = TRAINING_PHASE_SELECT;
   return true;
 }
 

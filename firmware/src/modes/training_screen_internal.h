@@ -22,6 +22,8 @@
 #define TRAINING_SCREEN_ITEM_FIRST_ROW 3U /* the item line is rows 3 and 4, y 24-39 */
 #define TRAINING_SCREEN_ITEM_LAST_ROW 4U
 #define TRAINING_SCREEN_LAST_ROW 7U
+/* The centered code group: the Sending answer code and the start screen code, marks on y 43 and 44. */
+#define TRAINING_SCREEN_CODE_GROUP_ROW 5U
 
 extern MEM_XDATA char training_screen_text[TRAINING_SCREEN_COLUMNS + 1U];
 
@@ -47,5 +49,16 @@ void training_screen_draw_item_text(const char MEM_XDATA* text, MEM_XDATA uint8_
 void training_screen_draw_status(uint8_t style);
 /** Draws the block (@p is_block) or the bar under slot @p slot of an item of @p count characters. */
 void training_screen_draw_mark(uint8_t slot, MEM_XDATA uint8_t count, MEM_XDATA bool is_block);
+/**
+ * Draws one code mark in row @p row from pixel x @p x: a dah when @p is_dah, else a dit, on y = 8 row + 3 and
+ * 8 row + 4 (ui-ux.md 5.13.3). Returns the x of the next mark: x + mark width + mark gap.
+ */
+uint8_t training_screen_draw_code_mark(uint8_t x, MEM_XDATA uint8_t row, MEM_XDATA bool is_dah);
+/**
+ * Draws the marks of @p first and, when @p second is above MORSE_PATTERN_EMPTY, the character gap and the marks of
+ * @p second, as one group centered in row TRAINING_SCREEN_CODE_GROUP_ROW: x = (128 - w) / 2, w = the pixel width
+ * from the first mark to the end of the last mark. Does not clear the row.
+ */
+void training_screen_draw_code_group(uint8_t first, MEM_XDATA uint8_t second);
 
 #endif /* MODES_TRAINING_SCREEN_INTERNAL_H */

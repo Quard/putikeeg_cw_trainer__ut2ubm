@@ -311,9 +311,6 @@ bool receiving_handle(button_event_t event) {
       rx_start_session();
       training_screen_clear_rows(TRAINING_SCREEN_STATUS_ROW, TRAINING_SCREEN_LAST_ROW);
       /* The start screen header already shows the start pause of the selected level (D-T42 (4)). */
-      if (phase == TRAINING_PHASE_END) {
-        training_screen_draw_header();
-      }
       rx_draw_session();
     }
     return false;
