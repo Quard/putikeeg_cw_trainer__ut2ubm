@@ -5,14 +5,16 @@
 
 /*
  * QA scenarios of the Sending retry screen and the word-space error (references/internal/training_spec.md D-T30,
- * D-T31, sections 12.3 and 16 AC-T17, AC-T28; ui-ux.md UX-52, sections 5.13.1 to 5.13.3 and 5.14). The real menu,
- * buttons, engine and progress run with a fake keyer and fake items.
+ * D-T31, D-T45 to D-T47, sections 12.3, 12.6 and 16 AC-T17, AC-T28, AC-T43 to AC-T45; ui-ux.md UX-52, UX-67, UX-69,
+ * sections 5.13.1 to 5.13.3, 5.14, 5.15 and 5.16.3). The real menu, buttons, engine and progress run with a fake
+ * keyer and fake items.
  */
 
 #include "cw/keyer_shared.h"
 #include "cw/morse.h"
 #include "koch/koch.h"
 #include "modes/training.h"
+#include "qa/qa_training_screens.h"
 #include "support/training_harness.h"
 
 #define LEVEL_KM 0U
@@ -1127,6 +1129,39 @@ static void walk_step(void) {
   }
 }
 
+/*
+ * The session end of the walk (SL-7, D-T45 (4), B-5): the end screen, then the first enter opens the start screen
+ * with the code of the new character for every Show CW Code value (UX-67) and starts no keyer. The second enter
+ * starts the next session and the keyer once.
+ */
+static unsigned long walk_session_ends;
+
+static void walk_next_session(void) {
+  const size_t starts = fake_keyer_start_count();
+  const uint16_t selected = training_selected_level();
+  char code[16] = "";
+
+  ++walk_session_ends;
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(qa_ok_button());
+  TEST_ASSERT(!fake_keyer_is_running());
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(starts, fake_keyer_start_count());
+  TEST_ASSERT(qa_start_button());
+  if (selected == 0U) {
+    (void)snprintf(code, sizeof(code), "%s ", code_of(koch_char(0U)));
+    (void)strncat(code, code_of(koch_char(1U)), sizeof(code) - strlen(code) - 1U);
+  } else if (koch_kind(selected) != KOCH_KIND_WORD) {
+    (void)snprintf(code, sizeof(code), "%s", code_of(koch_char((uint8_t)(koch_learned_count(selected) - 1U))));
+  }
+  TEST_ASSERT(qa_code(code));
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(starts + 1U, fake_keyer_start_count());
+  TEST_ASSERT_EQUAL(selected, training_level());
+}
+
 static void walk_session(uint16_t level, const char* const* items, size_t count, uint32_t seed, unsigned steps) {
   unsigned step;
 
@@ -1135,8 +1170,7 @@ static void walk_session(uint16_t level, const char* const* items, size_t count,
   model_reset_session();
   for (step = 0U; step < steps; ++step) {
     if (training_phase() == TRAINING_PHASE_END) {
-      TEST_ASSERT(blank_row(6));
-      harness_event(ENTER_EVENT);
+      walk_next_session();
       model_reset_session();
       continue;
     }
@@ -1151,6 +1185,7 @@ static void test_random_walk(void) {
   const unsigned long failures_before = test_failure_count;
 
   walk_pause_errors = 0U;
+  walk_session_ends = 0U;
   walk_failed = 0U;
   walk_retries = 0U;
   for (seed = 1U; seed <= 40U; ++seed) {
@@ -1168,8 +1203,8 @@ static void test_random_walk(void) {
     }
   }
   /* The walk reaches the paths under test. */
-  printf("random walk: %lu pause errors, %lu failed items, %lu retries\n", walk_pause_errors, walk_failed,
-         walk_retries);
+  printf("random walk: %lu pause errors, %lu failed items, %lu retries, %lu session ends\n", walk_pause_errors,
+         walk_failed, walk_retries, walk_session_ends);
   TEST_ASSERT(walk_pause_errors > 20U);
   TEST_ASSERT(walk_failed > 5U);
   TEST_ASSERT(walk_retries > 20U);

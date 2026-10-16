@@ -237,8 +237,8 @@ add_library(menu_group STATIC
     fakes/fake_lcd_pins.c
     fakes/fake_button_pins.c)
 target_include_directories(menu_group PUBLIC
-    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/menu" "${FIRMWARE_DIR}/src/gfx" "${FIRMWARE_DIR}/src/settings"
-    "${FIRMWARE_VERSION_INCLUDE_DIR}")
+    ${HOST_INCLUDE_DIRS} "${FIRMWARE_DIR}/src/menu" "${FIRMWARE_DIR}/src/modes" "${FIRMWARE_DIR}/src/gfx"
+    "${FIRMWARE_DIR}/src/settings" "${FIRMWARE_VERSION_INCLUDE_DIR}")
 # The version test reads the file at run time and compares it with FIRMWARE_VERSION.
 target_compile_definitions(menu_group PUBLIC ${TARGET_DEFINITIONS} FIRMWARE_VERSION_FILE="${FIRMWARE_VERSION_FILE}")
 

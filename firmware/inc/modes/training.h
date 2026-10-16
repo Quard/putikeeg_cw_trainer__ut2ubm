@@ -50,7 +50,7 @@ typedef uint8_t training_phase_t;
 #define TRAINING_PHASE_GAP 1U    /* pause before an item; Sending shows a blank item area */
 #define TRAINING_PHASE_ITEM 2U   /* the item is shown or played; answers count */
 #define TRAINING_PHASE_RESULT 3U /* a check result shows; answers are dropped */
-#define TRAINING_PHASE_END 4U    /* session end screen; the level selector is active */
+#define TRAINING_PHASE_END 4U    /* session end screen: the outcome is ready; no selector acts (D-T46) */
 #define TRAINING_PHASE_SELECT 5U /* start screen: the level selector, no session (D-T36) */
 
 typedef uint8_t training_check_t;
@@ -81,14 +81,19 @@ typedef uint8_t training_outcome_t;
 void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
 /**
  * Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS.
- * No phase check: the modes call it in SELECT and END only.
+ * No phase check: the modes call it in SELECT only (D-T46).
  */
 void training_start(void);
 /**
- * In phase SELECT or END: moves the selected level one step up (@p is_up) or down, inside 0..training_earned_level().
- * No wrap. Returns true when the level changed. Other phases: no change, returns false.
+ * In phase SELECT: moves the selected level one step up (@p is_up) or down, inside 0..training_earned_level().
+ * No wrap. Returns true when the level changed. Other phases, END included: no change, returns false (D-T46).
  */
 bool training_select_step(bool is_up);
+/**
+ * In phase END: sets phase SELECT and keeps the selected level, so the start screen shows the preselection of
+ * section 11.4. Reads no tick, no progress. Returns true. Other phases: no change, returns false (D-T46).
+ */
+bool training_reopen_select(void);
 /** Level index that the next training_start() uses: 0..training_earned_level(). */
 uint16_t training_selected_level(void);
 /** Earned level index: progress_level() of the prepared mode and speed, read at each call. */

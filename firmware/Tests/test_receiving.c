@@ -728,22 +728,32 @@ static void open_km_50(void) {
   rx_open(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 2U);
 }
 
-/* The end screen of a pass at L1 (V-105): the selector preselects the new earned level L2. */
+/* The switch from the end screen to a Receiving start screen: pages 0-4 and 7 change (UX-70, D-T49). */
+#define RX_SWITCH_PAGES 0x9FU
+
+/* The end screen of a pass at L1 (V-105): the score and the result only (SL-7). */
 static void expect_v105_end_screen(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
   TEST_ASSERT(status(NULL));
   TEST_ASSERT(text_at(2, 7, "Score 45/50"));
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(lvl(2U, 2U));
-  TEST_ASSERT(desc("New char R"));
-  TEST_ASSERT(blank_row(6));
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
   TEST_ASSERT(margins_off());
 }
 
-/* V-105, AC-T32 (4) */
+/* The start screen at L2 that the enter press on the end screen of V-105 opens. */
+static void expect_v105_start_screen(void) {
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT(hdr("RX 32/32 L2          1/50"));
+  TEST_ASSERT(start_screen_is(2U, 2U, "New char", "R", ""));
+}
+
+/* V-105, AC-T32 (4), AC-T44 (2) to (4) */
 static void test_v105_pass(void) {
+  size_t calls;
+
   open_km_50();
   run_km_session(45U);
   expect_v105_end_screen();
@@ -752,10 +762,22 @@ static void test_v105_pass(void) {
   TEST_ASSERT_EQUAL(1U, fake_iap_program_count(0x0200U));
   /* No blank moment before the end screen: 50 GAP events only before items 2..50. */
   TEST_ASSERT_EQUAL(50U, training_item_number());
-  /* Tap mode is off on the end screen: the enter press starts the next session at the press. */
+  /* Tap mode is off on the end screen: the enter press opens the start screen at the press (UX-69, UX-70). */
+  calls = fake_player_call_count();
+  harness_clear_dirty();
   harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  expect_v105_start_screen();
+  TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+  /* Tap mode stays off: the release gives no event. */
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  /* The second press starts the session at L2, and page 0 stays clean. */
+  harness_clear_dirty();
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask() & PAGE(0));
   TEST_ASSERT(hdr("RX 32/32 L2          1/50"));
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
   TEST_ASSERT_EQUAL(1U, training_level());
@@ -782,13 +804,20 @@ static void test_v106_fail(void) {
   TEST_ASSERT(status(NULL));
   TEST_ASSERT(text_at(2, 7, "Score 44/50"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 45"));
-  TEST_ASSERT(lvl(1U, 1U));
-  TEST_ASSERT(desc("K and M"));
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
   TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
   TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
+  harness_mark_frame();
   tap(ENTER_EVENT);
+  TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
   TEST_ASSERT(hdr("RX 32/32 L1          1/50"));
+  TEST_ASSERT(start_screen_is(1U, 1U, "New chars", "K M", ""));
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  TEST_ASSERT_EQUAL(0U, training_level());
 }
 
 /* V-107: a failed save keeps the new level in RAM for the main menu, the start screen and the next session. */
@@ -798,8 +827,8 @@ static void test_v107_not_saved(void) {
   run_km_session(50U);
   TEST_ASSERT(text_at(1, 8, "Not saved"));
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(lvl(2U, 2U));
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
   tap(L_TAP);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT(menu_row_is(1, "Receiving", "L2", true));
@@ -818,43 +847,47 @@ static void test_v107_not_saved(void) {
   harness_open_start_screen(0U);
   TEST_ASSERT(lvl(1U, 1U));
   TEST_ASSERT(hdr("RX 32/32 L1          1/50"));
+  /* New run: the same failed write, then enter on the end screen shows the new level from RAM. */
+  open_km_50();
+  fake_iap_set_fail_operation(2U);
+  run_km_session(50U);
+  TEST_ASSERT(text_at(1, 8, "Not saved"));
+  harness_mark_frame();
+  tap(ENTER_EVENT);
+  TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT(hdr("RX 32/32 L2          1/50"));
+  TEST_ASSERT(start_screen_is(2U, 2U, "New char", "R", ""));
 }
 
-/* V-108 run 1, AC-T32 (2): steps on the end screen redraw pages 4 and 5 only; at a limit nothing changes. */
+/* V-108 run 1, AC-T44 (1): prev, next, their holds and the long events do nothing on the end screen. */
 static void test_v108_end_screen_steps(void) {
-  uint8_t before[FB_SIZE];
+  size_t calls;
 
   open_km_50();
   run_km_session(45U);
   expect_v105_end_screen();
-  snapshot(before);
+  calls = fake_player_call_count();
+  snapshot(snapshot_before);
   harness_clear_dirty();
   tap(M_TAP);
-  TEST_ASSERT(lvl(1U, 2U));
-  TEST_ASSERT(desc("K and M"));
-  TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
-  TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
-  harness_clear_dirty();
-  tap(M_TAP);
+  TEST_ASSERT(dirty_is(0U));
+  tap(R_TAP);
+  TEST_ASSERT(dirty_is(0U));
   tap(REPEAT_EVENT(M_TAP));
   tap(LONG_EVENT(M_TAP));
+  tap(LONG_EVENT(ENTER_EVENT));
   TEST_ASSERT(dirty_is(0U));
-  tap(R_TAP);
-  TEST_ASSERT(lvl(2U, 2U));
-  TEST_ASSERT(desc("New char R"));
-  snapshot(snapshot_before);
-  TEST_ASSERT_EQUAL(0, memcmp(before, snapshot_before, FB_SIZE));
-  harness_clear_dirty();
-  tap(R_TAP);
-  TEST_ASSERT(dirty_is(0U));
-  /* next held for 1000 ms: the press, the repeats and the long event change nothing at the earned level. */
   harness_pins_for(BUTTON_BIT_NEXT, 1000U);
   harness_pins_for(0U, 30U);
   TEST_ASSERT(dirty_is(0U));
-  tap(LONG_EVENT(ENTER_EVENT));
+  harness_pins_for(BUTTON_BIT_PREV, 1000U);
+  harness_pins_for(0U, 30U);
   TEST_ASSERT(dirty_is(0U));
   TEST_ASSERT(is_screen_unchanged());
-  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  expect_v105_end_screen();
+  TEST_ASSERT_EQUAL(1U, training_selected_level());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
 }
 
 /* V-108 run 2, AC-T32 (5): a menu/back hold leaves at the press; its long event does nothing on the main menu. */
@@ -875,7 +908,10 @@ static void test_v108_end_screen_leave(void) {
   expect_main_menu_after_leave(0U);
 }
 
-/* V-108 run 3, AC-T32 (3): TIP(t, 1000) on the end screen starts a session at the press, with no pick or replay. */
+/*
+ * V-108 run 3, AC-T44 (2) to (4): TIP(t, 1000) on the end screen opens the start screen at the press and gives
+ * nothing more; TIP(u, 100) then starts the session at L2.
+ */
 static void test_v108_end_screen_tip(void) {
   uint16_t start;
   size_t calls;
@@ -883,13 +919,26 @@ static void test_v108_end_screen_tip(void) {
   open_km_50();
   run_km_session(45U);
   calls = fake_player_call_count();
+  harness_clear_dirty();
   harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   harness_pins_for(BUTTON_BIT_ENTER, 1U);
+  expect_v105_start_screen();
+  TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+  harness_clear_dirty();
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(1000U - BUTTONS_DEBOUNCE_MS - 1U));
+  harness_pins_for(0U, 100U);
+  TEST_ASSERT(dirty_is(0U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+
+  harness_pins_for(BUTTON_BIT_ENTER, BUTTONS_DEBOUNCE_MS);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  harness_pins_for(BUTTON_BIT_ENTER, 1U);
   start = harness_now;
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
-  TEST_ASSERT(hdr("RX 32/32 L2          1/50"));
-  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(1000U - BUTTONS_DEBOUNCE_MS - 1U));
+  TEST_ASSERT_EQUAL(1U, training_level());
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(100U - BUTTONS_DEBOUNCE_MS - 1U));
   harness_pins_for(0U, 10U);
   harness_run_to((uint16_t)(start + 999U));
   TEST_ASSERT_EQUAL(calls, fake_player_call_count());
@@ -1410,22 +1459,22 @@ static void test_v136_word_pass_rate(void) {
   rx_run_km_words(LEVEL_FIRST_WORDS, 7U);
   TEST_ASSERT(text_at(2, 7, "Score 7/10"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 8"));
-  TEST_ASSERT(end_screen_is(7U, 10U, 8U, 3U));
+  TEST_ASSERT(end_screen_is(7U, 10U, 8U));
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS, progress_level(PROGRESS_MODE_RECEIVING, 32U));
 
   rx_run_km_words(LEVEL_FIRST_WORDS, 8U);
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(end_screen_is(8U, 10U, 8U, 3U));
+  TEST_ASSERT(end_screen_is(8U, 10U, 8U));
   TEST_ASSERT_EQUAL(LEVEL_FIRST_WORDS + 1U, progress_level(PROGRESS_MODE_RECEIVING, 32U));
 
   rx_run_km_words(LEVEL_100_WORDS, 79U);
   TEST_ASSERT(text_at(2, 6, "Score 79/100"));
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
-  TEST_ASSERT(end_screen_is(79U, 100U, 80U, 154U));
+  TEST_ASSERT(end_screen_is(79U, 100U, 80U));
 
   rx_run_km_words(LEVEL_100_WORDS, 80U);
   TEST_ASSERT(text_at(3, 4, "Passed, new level"));
-  TEST_ASSERT(end_screen_is(80U, 100U, 80U, 154U));
+  TEST_ASSERT(end_screen_is(80U, 100U, 80U));
 }
 
 /* AC-T19: a long menu/back leaves from every phase; the player stops and tap mode goes off each time. */
@@ -1643,11 +1692,17 @@ static void test_v170_last_item_finish(void) {
   TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
   TEST_ASSERT(text_at(2, 7, "Score 49/50"));
   TEST_ASSERT_EQUAL(49U, training_score());
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(ok_button());
   TEST_ASSERT(margins_off());
   TEST_ASSERT(!fake_player_is_running());
-  /* Tap mode is off: a prev press steps the selector at the press. */
+  /* Tap mode is off: a prev press does nothing on the end screen, and enter opens the start screen at the press. */
+  harness_clear_dirty();
+  harness_pins_for(BUTTON_BIT_PREV, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT(dirty_is(0U));
+  harness_pins_for(BUTTON_BIT_ENTER, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
   TEST_ASSERT(lvl(2U, 2U));
+  harness_pins_for(0U, 30U);
   harness_pins_for(BUTTON_BIT_PREV, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
   TEST_ASSERT(lvl(1U, 2U));
   harness_pins_for(0U, 30U);
@@ -1797,19 +1852,35 @@ static void rx_earn_open(uint16_t level, uint8_t prosign_style, uint8_t max_word
   TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
 }
 
-/* Rows 1-7 of the start screen with the selector LVL(@p shown, @p earned) and DESC(@p description). */
-static bool is_start_screen(unsigned shown, unsigned earned, const char* description) {
-  return body_off(1, 3) && lvl(shown, earned) && desc(description) && blank_row(6) && start_button() && margins_off();
+/* Rows 1-7 of the Receiving start screen: LVL(@p shown, @p earned), DESC(@p label, @p text) and CODE(). */
+static bool is_start_screen(unsigned shown, unsigned earned, const char* label, const char* text) {
+  return start_screen_is(shown, earned, label, text, "");
+}
+
+/* A Receiving step dirties only pages that change, inside pages 0-4: row 5 stays blank (UX-70, D-T49). */
+#define RX_STEP_PAGES 0x1FU
+
+/* Taps @p event once: DIRTYCHG, inside the pages of a Receiving step. */
+static void tap_step(button_event_t event) {
+  harness_mark_frame();
+  tap(event);
+  TEST_ASSERT(dirty_matches_change());
+  TEST_ASSERT((lcd_fb_dirty_mask() & (uint8_t)~RX_STEP_PAGES) == 0U);
+  TEST_ASSERT((lcd_fb_dirty_mask() & PAGE(0)) != 0U);
 }
 
 /* Taps @p event @p count times; each one must step the level. */
 static void tap_steps(button_event_t event, unsigned count) {
   unsigned index;
   for (index = 0U; index < count; ++index) {
-    harness_clear_dirty();
-    tap(event);
-    TEST_ASSERT(dirty_is(PAGE(0) | PAGE(4) | PAGE(5)));
+    tap_step(event);
   }
+}
+
+/* One step that must dirty exactly @p mask. */
+static void tap_step_dirty(button_event_t event, uint8_t mask) {
+  tap_step(event);
+  TEST_ASSERT(dirty_is(mask));
 }
 
 /* V-137, AC-T32 (1): first use. No marker, no step, no sound, no EEPROM access. Tap mode is off. */
@@ -1822,7 +1893,7 @@ static void test_v137_start_screen_first_use(void) {
   TEST_ASSERT_EQUAL(MENU_SCREEN_RECEIVING, menu_screen());
   TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
   TEST_ASSERT(hdr("RX 32/32 L1          1/50"));
-  TEST_ASSERT(is_start_screen(1U, 1U, "K and M"));
+  TEST_ASSERT(is_start_screen(1U, 1U, "New chars", "K M"));
   snapshot(snapshot_before);
   harness_clear_dirty();
   tap(M_TAP);
@@ -1839,24 +1910,26 @@ static void test_v137_start_screen_first_use(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
 }
 
-/* V-138, AC-T32 (2): a step redraws pages 0, 4 and 5; the header follows the selection; a limit redraws nothing. */
+/* V-138, AC-T32 (2): a step dirties only the pages that change; the header follows the selection; a limit redraws
+ * nothing. */
 static void test_v138_start_screen_steps(void) {
   uint8_t start_image[FB_SIZE];
 
   rx_earn_open(19U, SETTINGS_PROSIGN_BOTH, 5U);
   TEST_ASSERT(hdr("RX 32/32 L20         1/50"));
-  TEST_ASSERT(is_start_screen(20U, 20U, "New char J"));
+  TEST_ASSERT(is_start_screen(20U, 20U, "New char", "J"));
   snapshot(start_image);
   harness_clear_dirty();
   tap(R_TAP);
   TEST_ASSERT(dirty_is(0U));
-  tap_steps(M_TAP, 1U);
+  tap_step_dirty(M_TAP, PAGE(0) | PAGE(1) | PAGE(3) | PAGE(4));
   TEST_ASSERT(hdr("RX 32/32 L19         1/50"));
-  TEST_ASSERT(is_start_screen(19U, 20U, "New char N"));
-  tap_steps(M_TAP, 1U);
+  TEST_ASSERT(is_start_screen(19U, 20U, "New char", "N"));
+  tap_step_dirty(M_TAP, RX_STEP_PAGES);
   TEST_ASSERT(hdr("RX 32/32 L18         1/10"));
-  TEST_ASSERT(is_start_screen(18U, 20U, "Words of 4"));
-  tap_steps(R_TAP, 2U);
+  TEST_ASSERT(is_start_screen(18U, 20U, "", "Words of 4"));
+  tap_step_dirty(R_TAP, RX_STEP_PAGES);
+  tap_step_dirty(R_TAP, PAGE(0) | PAGE(1) | PAGE(3) | PAGE(4));
   snapshot(snapshot_before);
   TEST_ASSERT_EQUAL(0, memcmp(start_image, snapshot_before, FB_SIZE));
   /* Long events do nothing (AC-T32 (2)). */
@@ -1910,41 +1983,42 @@ typedef struct {
   uint16_t level;
   uint8_t style;
   uint8_t max_word_len;
-  const char* description;
+  const char* label;
+  const char* text;
   const char* header; /* NULL: not checked */
 } description_row_t;
 
 /* V-140: the description of each kind of level, for each Prosigns value and Max Word Length. */
 static void test_v140_descriptions(void) {
   static const description_row_t rows[] = {
-      {0U, PUNCT, 5U, "K and M", NULL},
-      {0U, NAME, 5U, "K and M", NULL},
-      {0U, BOTH, 5U, "K and M", NULL},
-      {1U, PUNCT, 5U, "New char R", NULL},
-      {1U, BOTH, 5U, "New char R", NULL},
-      {2U, BOTH, 5U, "Words of 2", NULL},
-      {17U, BOTH, 5U, "Words of 4", NULL},
-      {58U, BOTH, 5U, "New char <BT/=>", NULL},
-      {58U, NAME, 5U, "New char <BT>", NULL},
-      {58U, PUNCT, 5U, "New char =", NULL},
-      {60U, BOTH, 5U, "New char <SK>", NULL},
-      {60U, NAME, 5U, "New char <SK>", NULL},
-      {60U, PUNCT, 5U, "New char <SK>", NULL},
-      {61U, BOTH, 5U, "New char <AR/+>", NULL},
-      {61U, NAME, 5U, "New char <AR>", NULL},
-      {61U, PUNCT, 5U, "New char +", NULL},
-      {62U, BOTH, 5U, "Words of 5", "RX 32/32 L63         1/10"},
-      {62U, BOTH, 8U, "Words of 8", "RX 32/32 L63         1/10"},
-      {63U, BOTH, 5U, "Words of 5", "RX 32/32 L64         1/10"},
-      {63U, BOTH, 8U, "Words of 8", "RX 32/32 L64         1/10"},
-      {64U, BOTH, 5U, "Words of 5", "RX 32/32 L65         1/11"},
-      {64U, BOTH, 8U, "Words of 8", "RX 32/32 L65         1/11"},
+      {0U, PUNCT, 5U, "New chars", "K M", NULL},
+      {0U, NAME, 5U, "New chars", "K M", NULL},
+      {0U, BOTH, 5U, "New chars", "K M", NULL},
+      {1U, PUNCT, 5U, "New char", "R", NULL},
+      {1U, BOTH, 5U, "New char", "R", NULL},
+      {2U, BOTH, 5U, "", "Words of 2", NULL},
+      {17U, BOTH, 5U, "", "Words of 4", NULL},
+      {58U, BOTH, 5U, "New char", "<BT/=>", NULL},
+      {58U, NAME, 5U, "New char", "<BT>", NULL},
+      {58U, PUNCT, 5U, "New char", "=", NULL},
+      {60U, BOTH, 5U, "New char", "<SK>", NULL},
+      {60U, NAME, 5U, "New char", "<SK>", NULL},
+      {60U, PUNCT, 5U, "New char", "<SK>", NULL},
+      {61U, BOTH, 5U, "New char", "<AR/+>", NULL},
+      {61U, NAME, 5U, "New char", "<AR>", NULL},
+      {61U, PUNCT, 5U, "New char", "+", NULL},
+      {62U, BOTH, 5U, "", "Words of 5", "RX 32/32 L63         1/10"},
+      {62U, BOTH, 8U, "", "Words of 8", "RX 32/32 L63         1/10"},
+      {63U, BOTH, 5U, "", "Words of 5", "RX 32/32 L64         1/10"},
+      {63U, BOTH, 8U, "", "Words of 8", "RX 32/32 L64         1/10"},
+      {64U, BOTH, 5U, "", "Words of 5", "RX 32/32 L65         1/11"},
+      {64U, BOTH, 8U, "", "Words of 8", "RX 32/32 L65         1/11"},
   };
   size_t index;
 
   for (index = 0U; index < (sizeof(rows) / sizeof(rows[0])); ++index) {
     rx_earn_open(rows[index].level, rows[index].style, rows[index].max_word_len);
-    if (!TEST_ASSERT(desc(rows[index].description))) {
+    if (!TEST_ASSERT(desc(rows[index].label, rows[index].text) && code_is(""))) {
       fprintf(stderr, "V-140 row %u\n", (unsigned)index);
     }
     if (rows[index].header != NULL) {
@@ -2018,7 +2092,7 @@ static void answer_km_items(uint8_t first_correct) {
   }
 }
 
-/* V-144, AC-T32 (6): a button held through the END event gives nothing until a new press. */
+/* V-144, AC-T32 (6), AC-T44 (1): a button held through the END event gives nothing; a new press does nothing. */
 static void test_v144_held_through_end(void) {
   static const uint8_t pins[2] = {BUTTON_BIT_NEXT, BUTTON_BIT_PREV};
   size_t run;
@@ -2033,17 +2107,14 @@ static void test_v144_held_through_end(void) {
     harness_clear_dirty();
     harness_pins_for(pins[run], 1400U);
     TEST_ASSERT(dirty_is(0U));
-    TEST_ASSERT(lvl(2U, 2U));
+    TEST_ASSERT(ok_button());
     harness_pins_for(0U, 30U);
     TEST_ASSERT(dirty_is(0U));
+    /* The end screen has no selector (UX-69). */
     pin_tap(pins[run]);
-    if (run == 0U) {
-      TEST_ASSERT(dirty_is(0U));
-      TEST_ASSERT(lvl(2U, 2U));
-    } else {
-      TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
-      TEST_ASSERT(lvl(1U, 2U));
-    }
+    TEST_ASSERT(dirty_is(0U));
+    TEST_ASSERT(ok_button());
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
   }
 }
 
@@ -2074,18 +2145,28 @@ static void test_v145_v146_replay(void) {
     TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
     TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
     TEST_ASSERT_EQUAL(19U, progress_level(PROGRESS_MODE_RECEIVING, 32U));
+    TEST_ASSERT(body_off(4, 6));
+    TEST_ASSERT(ok_button());
     if (run == 0U) {
       TEST_ASSERT(text_at(2, 7, "Score 47/50"));
       TEST_ASSERT(text_at(3, 9, "Passed"));
-      TEST_ASSERT(lvl(6U, 20U));
-      TEST_ASSERT(desc("Words of 2"));
-      TEST_ASSERT(start_button());
+      harness_clear_dirty();
+      tap(R_TAP);
+      tap(R_TAP);
+      tap(R_TAP);
+      TEST_ASSERT(dirty_is(0U));
+      harness_mark_frame();
+      tap(ENTER_EVENT);
+      TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+      TEST_ASSERT(dirty_matches_change());
+      TEST_ASSERT(hdr("RX 32/32 L6          1/10"));
+      TEST_ASSERT(is_start_screen(6U, 20U, "", "Words of 2"));
+      /* L7 to L8, L10 to L11, ... keep the label "New char": page 2 stays clean. */
       {
-        unsigned step;
-        for (step = 0U; step < 14U; ++step) {
-          harness_clear_dirty();
-          tap(R_TAP);
-          TEST_ASSERT(dirty_is(PAGE(4) | PAGE(5)));
+        unsigned shown;
+        for (shown = 7U; shown <= 20U; ++shown) {
+          const bool is_same_label = ((shown % 3U) == 2U);
+          tap_step_dirty(R_TAP, is_same_label ? (uint8_t)(PAGE(0) | PAGE(1) | PAGE(3) | PAGE(4)) : RX_STEP_PAGES);
         }
       }
       TEST_ASSERT(lvl(20U, 20U));
@@ -2097,9 +2178,16 @@ static void test_v145_v146_replay(void) {
       TEST_ASSERT(menu_row_is(1, "Receiving", "L20", true));
     } else {
       TEST_ASSERT(text_at(3, 3, "Not passed, need 45"));
-      TEST_ASSERT(lvl(5U, 20U));
-      TEST_ASSERT(desc("New char U"));
+      harness_mark_frame();
       tap(ENTER_EVENT);
+      TEST_ASSERT(dirty_is(RX_SWITCH_PAGES));
+      TEST_ASSERT(dirty_matches_change());
+      TEST_ASSERT(hdr("RX 32/32 L5          1/50"));
+      TEST_ASSERT(is_start_screen(5U, 20U, "New char", "U"));
+      harness_clear_dirty();
+      tap(ENTER_EVENT);
+      TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+      TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask() & PAGE(0));
       TEST_ASSERT(hdr("RX 32/32 L5          1/50"));
       TEST_ASSERT_EQUAL(4U, training_level());
     }
@@ -2162,9 +2250,13 @@ static void test_v148_top_levels(void) {
     fake_koch_item_push("KMRS");
     harness_open_start_screen(0U);
     TEST_ASSERT(lvl_markers(65535U, 65535U, true, false));
-    TEST_ASSERT(text_at(4, 2, "<  L65535 of 65535"));
+    TEST_ASSERT(text_at(1, 2, "<  L65535 of 65535"));
     if (run == 1U) {
+      /* D-T50 (1): the header bytes stay, but the header redraw marks page 0. */
+      harness_mark_frame();
       tap(M_TAP);
+      TEST_ASSERT_EQUAL(PAGE(1), harness_changed_pages());
+      TEST_ASSERT(dirty_is(PAGE(0) | PAGE(1)));
       TEST_ASSERT(lvl_markers(65535U, 65535U, true, true));
       TEST_ASSERT_EQUAL(65534U, training_selected_level());
     }
@@ -2172,6 +2264,9 @@ static void test_v148_top_levels(void) {
     run_word_session(true);
     TEST_ASSERT_EQUAL((run == 0U) ? TRAINING_OUTCOME_PASS_TOP : TRAINING_OUTCOME_PASS_REPLAY, training_outcome());
     TEST_ASSERT(text_at(3, 9, "Passed"));
+    TEST_ASSERT(ok_button());
+    tap(ENTER_EVENT);
+    TEST_ASSERT_EQUAL(65535U, training_selected_level());
     TEST_ASSERT(lvl_markers(65535U, 65535U, true, false));
     TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U));
     TEST_ASSERT_EQUAL(0U, fake_iap_command_count(3U));
@@ -2179,18 +2274,47 @@ static void test_v148_top_levels(void) {
   }
 }
 
-/* The description of level index @p level (ui-ux.md 5.16.3), from the level model. */
-static void model_description(uint16_t level, uint8_t style, uint8_t max_word_len, char* text, size_t size) {
+/* The label and the big text of level index @p level (ui-ux.md 5.16.3), from the level model. */
+static const char* model_description(uint16_t level, uint8_t style, uint8_t max_word_len, char* text, size_t size) {
   char glyph[MORSE_TEXT_SIZE];
 
   if (level == 0U) {
-    (void)snprintf(text, size, "K and M");
-  } else if (koch_kind(level) == KOCH_KIND_CHAR) {
-    (void)morse_format(koch_char((uint8_t)(koch_learned_count(level) - 1U)), style, glyph);
-    (void)snprintf(text, size, "New char %s", glyph);
-  } else {
-    (void)snprintf(text, size, "Words of %u", (unsigned)koch_word_length(level, max_word_len));
+    (void)snprintf(text, size, "K M");
+    return "New chars";
   }
+  if (koch_kind(level) == KOCH_KIND_CHAR) {
+    (void)morse_format(koch_char((uint8_t)(koch_learned_count(level) - 1U)), style, glyph);
+    (void)snprintf(text, size, "%s", glyph);
+    return "New char";
+  }
+  (void)snprintf(text, size, "Words of %u", (unsigned)koch_word_length(level, max_word_len));
+  return "";
+}
+
+/* No pixel of y @p y0 to @p y1 is on outside x @p x0 to @p x1. */
+static bool ink_within(int x0, int x1, int y0, int y1) {
+  int x;
+  int y;
+  for (y = y0; y <= y1; ++y) {
+    for (x = 0; x < 128; ++x) {
+      if (pixel(x, y) && ((x < x0) || (x > x1))) {
+        fprintf(stderr, "ink at (%d, %d)\n", x, y);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/* No pixel of y 24-39 is on outside y 25-37 (ui-ux.md 5.16.3 glyph rows). */
+static bool big_rows_within(void) {
+  int x;
+  for (x = 0; x < 128; ++x) {
+    if (pixel(x, 24) || pixel(x, 38) || pixel(x, 39)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /* No ink of row @p r outside the columns @p first to @p last. */
@@ -2208,23 +2332,20 @@ static bool row_ink_within(int r, int first, int last) {
   return true;
 }
 
-/* Checks the selector rows at every selected level from the earned index 64 down to 0. */
-static void walk_selector(uint8_t style, uint8_t max_word_len, bool is_start) {
+/* Checks the start screen at every selected level from the earned index 64 down to 0. */
+static void walk_selector(uint8_t style, uint8_t max_word_len) {
   int index;
   char text[32];
+  const char* label;
 
   for (index = 64; index >= 0; --index) {
     TEST_ASSERT_EQUAL((uint16_t)index, training_selected_level());
-    model_description((uint16_t)index, style, max_word_len, text, sizeof(text));
-    TEST_ASSERT(lvl((unsigned)index + 1U, 65U));
-    TEST_ASSERT(desc(text));
-    TEST_ASSERT(row_ink_within(4, 2, 22));
-    TEST_ASSERT(row_ink_within(5, 5, 19));
-    TEST_ASSERT(blank_row(6));
-    if (is_start) {
-      TEST_ASSERT(body_off(1, 3));
-    }
-    TEST_ASSERT(margins_off());
+    label = model_description((uint16_t)index, style, max_word_len, text, sizeof(text));
+    TEST_ASSERT(is_start_screen((unsigned)index + 1U, 65U, label, text));
+    TEST_ASSERT(row_ink_within(1, 2, 22));
+    TEST_ASSERT(row_ink_within(2, 8, 16));
+    TEST_ASSERT(ink_within(24, 103, 24, 39));
+    TEST_ASSERT(big_rows_within());
     tap(M_TAP);
   }
 }
@@ -2239,17 +2360,76 @@ static void test_v151_every_selector_line(void) {
   for (style = 0U; style < 3U; ++style) {
     for (length = 0U; length < 2U; ++length) {
       rx_earn_open(64U, styles[style], lengths[length]);
-      walk_selector(styles[style], lengths[length], true);
+      walk_selector(styles[style], lengths[length]);
     }
   }
-  /* The end screen: a failed session at L65 preselects L65 again. */
+  /* The end screen: rows 4-6 blank. A failed session at L65 preselects L65 again. */
   rx_earn_open(64U, BOTH, 8U);
   fake_koch_item_reset();
   fake_koch_item_push("KMRS");
   tap(ENTER_EVENT);
   run_word_session(false);
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
-  walk_selector(BOTH, 8U, false);
+  TEST_ASSERT(body_off(4, 6));
+  TEST_ASSERT(ok_button());
+  TEST_ASSERT(row_ink_within(3, 3, 21));
+  TEST_ASSERT(margins_off());
+  tap(ENTER_EVENT);
+  walk_selector(BOTH, 8U);
+}
+
+/* Run 5 of V-172 for one mode: 200 random prev and next presses and repeats, each one DIRTYCHG. */
+static uint32_t walk_seed = 0x13579BDFUL;
+
+static uint32_t walk_next(void) {
+  walk_seed = (walk_seed * 1103515245UL) + 12345UL;
+  return walk_seed >> 16U;
+}
+
+static void walk_changed_pages(uint8_t allowed_pages) {
+  static const button_event_t events[4] = {M_TAP, R_TAP, REPEAT_EVENT(M_TAP), REPEAT_EVENT(R_TAP)};
+  unsigned step;
+
+  for (step = 0U; step < 200U; ++step) {
+    const uint16_t before = training_selected_level();
+    harness_mark_frame();
+    tap(events[walk_next() % 4U]);
+    TEST_ASSERT(dirty_matches_change());
+    TEST_ASSERT((lcd_fb_dirty_mask() & (uint8_t)~allowed_pages) == 0U);
+    if (before == training_selected_level()) {
+      TEST_ASSERT(dirty_is(0U));
+    }
+  }
+}
+
+/* V-172 (Receiving runs 1, 3 and 5): a step dirties exactly the pages whose bytes change (D-T49). */
+static void test_v172_changed_pages(void) {
+  static const uint8_t styles[3] = {PUNCT, NAME, BOTH};
+  static const uint8_t lengths[2] = {4U, 8U};
+  size_t style;
+  size_t length;
+
+  rx_earn_open(22U, BOTH, 5U);
+  TEST_ASSERT(is_start_screen(23U, 23U, "New char", "F"));
+  /* The top halves of the large E and F are equal, so page 3 stays clean. */
+  tap_step_dirty(M_TAP, PAGE(0) | PAGE(1) | PAGE(4));
+  TEST_ASSERT(is_start_screen(22U, 23U, "New char", "E"));
+  tap_step_dirty(R_TAP, PAGE(0) | PAGE(1) | PAGE(4));
+
+  rx_earn_open(64U, BOTH, 5U);
+  tap_step_dirty(M_TAP, PAGE(0) | PAGE(1));
+  TEST_ASSERT(is_start_screen(64U, 65U, "", "Words of 5"));
+  tap_step_dirty(M_TAP, PAGE(0) | PAGE(1));
+  TEST_ASSERT(is_start_screen(63U, 65U, "", "Words of 5"));
+  tap_step_dirty(R_TAP, PAGE(0) | PAGE(1));
+  tap_step_dirty(R_TAP, PAGE(0) | PAGE(1));
+
+  for (style = 0U; style < 3U; ++style) {
+    for (length = 0U; length < 2U; ++length) {
+      rx_earn_open(64U, styles[style], lengths[length]);
+      walk_changed_pages(RX_STEP_PAGES);
+    }
+  }
 }
 
 int main(void) {
@@ -2305,5 +2485,6 @@ int main(void) {
   TEST_RUN(test_v145_v146_replay);
   TEST_RUN(test_v148_top_levels);
   TEST_RUN(test_v151_every_selector_line);
+  TEST_RUN(test_v172_changed_pages);
   return TEST_FINISH();
 }

@@ -154,9 +154,11 @@ static void test_random_walk_invariants(void) {
       const size_t stops_before = fake_keyer_stop_count();
       const bool is_training_screen = (screen == MENU_SCREEN_RECEIVING) || (screen == MENU_SCREEN_SENDING);
       const bool is_mode_screen = is_training_screen || (screen == MENU_SCREEN_FREE_INPUT);
-      /* The start screen and the end screen act on short events (ui-ux.md 5.16.4, D-T35). */
-      const bool is_selector_screen = is_training_screen && ((training_phase() == TRAINING_PHASE_SELECT) ||
-                                                             (training_phase() == TRAINING_PHASE_END));
+      /* The start screen and the end screen act on short events (ui-ux.md 5.15, 5.16.4, D-T35, D-T45). */
+      const training_phase_t phase = training_phase();
+      const bool is_selector_screen =
+          is_training_screen && ((phase == TRAINING_PHASE_SELECT) || (phase == TRAINING_PHASE_END));
+      const uint16_t selected = training_selected_level();
       const menu_item_t MEM_CODE* item = item_under_cursor();
       const size_t stats_before = fake_stats_reset_count();
       const size_t erases_before = fake_iap_erase_count(0U);
@@ -188,7 +190,10 @@ static void test_random_walk_invariants(void) {
         TEST_ASSERT_EQUAL(0, memcmp(before, after, LCD_WIDTH));
       } else {
         if (is_selector_screen) {
-          /* A start from the start screen or the end screen draws the session straight into the framebuffer. */
+          /*
+           * A start from the start screen, and the start screen that enter opens on the end screen, draw straight
+           * into the framebuffer.
+           */
           snapshot(before);
         }
         menu_render();
@@ -222,9 +227,23 @@ static void test_random_walk_invariants(void) {
           TEST_ASSERT_EQUAL(stops_before, fake_keyer_stop_count());
         }
       }
-      /* Sending starts the keyer with a session, from its start screen or end screen (D-T40). */
+      /*
+       * The end screen (D-T45 (4), D-T46, A-L6): prev and next do nothing, and enter opens the start screen at the
+       * same selected level with no session.
+       */
+      if (is_training_screen && (phase == TRAINING_PHASE_END) && !is_long) {
+        if ((code == BUTTON_EVENT_PREV) || (code == BUTTON_EVENT_NEXT)) {
+          TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+          TEST_ASSERT_EQUAL(selected, training_selected_level());
+          TEST_ASSERT_EQUAL(0, memcmp(before, after, FB_SIZE));
+        } else if (code == BUTTON_EVENT_ENTER) {
+          TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+          TEST_ASSERT_EQUAL(selected, training_selected_level());
+        }
+      }
+      /* Sending starts the keyer with a session, only from its start screen (D-T40, D-T46 (6)). */
       if (((screen != menu_screen()) && (menu_screen() == MENU_SCREEN_FREE_INPUT)) ||
-          ((screen == MENU_SCREEN_SENDING) && is_selector_screen && (event == BUTTON_EVENT_ENTER))) {
+          ((screen == MENU_SCREEN_SENDING) && (phase == TRAINING_PHASE_SELECT) && (event == BUTTON_EVENT_ENTER))) {
         if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
           ++free_input_entries;
         }

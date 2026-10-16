@@ -60,7 +60,8 @@ About
 The trainer plays a character or a word. You pick each character with a four-button keyboard. Use it to learn to
 copy Morse code by ear.
 
-1. Open `Receiving`. The start screen shows your level.
+1. Open `Receiving`. The start screen shows your level at the top. Below it, large characters show what the level
+   teaches: the new character, `K M` at L1, or the word length, for example `Words of 4`.
 2. Select a level with `prev` and `next`, and press `enter`.
 3. Listen to the item. Each character has a slot in the middle of the screen.
 4. Pick the characters. The bottom row shows four labels, one above each button. A label shows a character or a
@@ -70,13 +71,18 @@ copy Morse code by ear.
 6. After the third wrong attempt, the answer stays on the screen and plays one time. `Next` shows above `enter`,
    or `Finish` on the last item. Tap `enter` to go on. The `next` button does nothing here. Hold `enter` to hear
    the answer again.
+7. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
+   the level of the next session. Press `enter` again to start it.
 
 | Screen | Button | Short press | Long press |
 | --- | --- | --- | --- |
-| Start and end screen | `menu/back` | Goes to the main menu. | Same as short press. |
-| Start and end screen | `prev` | Selects a lower level. | Selects lower levels fast. |
-| Start and end screen | `next` | Selects a higher level. | Selects higher levels fast. |
-| Start and end screen | `enter` | Starts the session. | Same as short press. |
+| Start screen | `menu/back` | Goes to the main menu. | Same as short press. |
+| Start screen | `prev` | Selects a lower level. | Selects lower levels fast. |
+| Start screen | `next` | Selects a higher level. | Selects higher levels fast. |
+| Start screen | `enter` | Starts the session. | Same as short press. |
+| End screen | `menu/back` | Goes to the main menu. | Same as short press. |
+| End screen | `prev`, `next` | Do nothing. | Do nothing. |
+| End screen | `enter` | Opens the start screen with the level of the next session. | Same as short press. |
 | Session | `menu/back` | Keyboard key 1. | Leaves the session. The session is lost. |
 | Session | `prev` | Keyboard key 2. | Undoes one step: the last group or the last pick. |
 | Session | `next` | Keyboard key 3. | Does nothing. |
@@ -91,20 +97,27 @@ The trainer shows a character or a word. You key it with a paddle or a straight 
 checks each character at once. Use it to learn to send clean Morse code.
 
 1. Insert the plug of the paddle or the key.
-2. Open `Sending`. The start screen shows your level.
+2. Open `Sending`. The start screen shows your level at the top. Below it, large characters show what the level
+   teaches: the new character, `K M` at L1, or the word length, for example `Words of 4`. Below the new character,
+   its dots and dashes show, also with `Show CW Code` = `Off`.
 3. Select a level with `prev` and `next`, and press `enter`.
 4. Key the item at the `TX Speed` setting. In a word, a bar shows the next character to key.
 5. A wrong character ends the attempt. Then key the whole item again. You have three attempts for each item.
+6. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
+   the level of the next session. Press `enter` again to start it.
 
 In a word, do not pause too long between two characters. A long pause is an error. If you need more time, set a
 lower `TX Eff. Speed`.
 
 | Screen | Button | Short press | Long press |
 | --- | --- | --- | --- |
-| Start and end screen | `menu/back` | Goes to the main menu. | Same as short press. |
-| Start and end screen | `prev` | Selects a lower level. | Selects lower levels fast. |
-| Start and end screen | `next` | Selects a higher level. | Selects higher levels fast. |
-| Start and end screen | `enter` | Starts the session. | Same as short press. |
+| Start screen | `menu/back` | Goes to the main menu. | Same as short press. |
+| Start screen | `prev` | Selects a lower level. | Selects lower levels fast. |
+| Start screen | `next` | Selects a higher level. | Selects higher levels fast. |
+| Start screen | `enter` | Starts the session. | Same as short press. |
+| End screen | `menu/back` | Goes to the main menu. | Same as short press. |
+| End screen | `prev`, `next` | Do nothing. | Do nothing. |
+| End screen | `enter` | Opens the start screen with the level of the next session. | Same as short press. |
 | Session | `menu/back` | Does nothing. | Leaves the session. The session is lost. |
 | Session | `prev`, `next` | Do nothing. | Do nothing. |
 | Session | `enter` | Keys like the dit lever. | Keys like the dit lever. |

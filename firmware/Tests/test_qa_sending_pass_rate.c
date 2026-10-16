@@ -5,8 +5,8 @@
 
 /*
  * QA scenarios of the word pass rate (references/internal/training_spec.md D-T33, section 6, 11.4, AC-T6, AC-T18,
- * AC-T29; ui-ux.md section 5.15, V-121 and V-136). Receiving and Sending run through the real menu, buttons, engine,
- * keyboard and progress with a fake player, a fake keyer and fake items.
+ * AC-T29, AC-T43, AC-T44; ui-ux.md section 5.15, V-121 and V-136). Receiving and Sending run through the real menu,
+ * buttons, engine, keyboard and progress with a fake player, a fake keyer and fake items.
  */
 
 #include "cw/morse.h"
@@ -14,6 +14,7 @@
 #include "koch/keyboard.h"
 #include "koch/koch.h"
 #include "modes/training.h"
+#include "qa/qa_training_screens.h"
 #include "support/training_harness.h"
 
 #define RX_WPM 32U      /* default RX Speed */
@@ -283,17 +284,17 @@ static bool is_eeprom_unchanged(void) {
 }
 
 /*
- * The end screen of ui-ux.md 5.15 (rows 1 to 7), every text centered and inside 25 cells. The selector shows the
- * shown level @p selected of the shown earned level @p earned (D-T42).
+ * The end screen of ui-ux.md 5.15 (SL-7, rows 1 to 7), every text centered and inside 25 cells. Then the enter press
+ * opens the start screen: its selector shows the shown level @p selected of the shown earned level @p earned (D-T42,
+ * D-T45 (4)).
  */
 static void expect_end_screen(const char* score, const char* result, unsigned selected, unsigned earned) {
   TEST_ASSERT(strlen(result) <= 25U);
-  TEST_ASSERT(blank_row(1));
-  TEST_ASSERT(centered(2, score));
-  TEST_ASSERT(centered(3, result));
-  TEST_ASSERT(lvl(selected, earned));
-  TEST_ASSERT(blank_row(6));
-  TEST_ASSERT(start_button());
+  TEST_ASSERT(qa_end_screen_is(NULL, score, result));
+  harness_event(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT(qa_lvl(selected, earned));
+  TEST_ASSERT(qa_start_button());
   TEST_ASSERT(margins_off());
 }
 
@@ -349,9 +350,9 @@ static void test_sending_boundaries(void) {
 static void test_top_level_texts(void) {
   run_session(PROGRESS_MODE_SENDING, LEVEL_TOP, "KM", 79U, 0U);
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
-  expect_end_screen("Score 79/100", "Not passed, need 80", 65535U, 65535U);
   TEST_ASSERT(text_at(3, 3, "Not passed, need 80"));
-  TEST_ASSERT(text_at(4, 2, "<  L65535 of 65535"));
+  expect_end_screen("Score 79/100", "Not passed, need 80", 65535U, 65535U);
+  TEST_ASSERT(text_at(1, 2, "<  L65535 of 65535"));
   TEST_ASSERT(is_eeprom_unchanged());
 
   run_session(PROGRESS_MODE_SENDING, LEVEL_TOP, "KM", 100U, 0U);

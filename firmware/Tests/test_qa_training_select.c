@@ -4,10 +4,11 @@
  */
 
 /*
- * QA tests of the level selection engine (references/internal/training_spec.md D-T35 to D-T37, sections 5.10 and
- * 11.4, AC-T30, AC-T31, task Q5). The oracles come from the documents: a pass below the earned level never touches
- * the EEPROM or the progress RAM, the preselection is session level + 1 after a pass and the session level after a
- * fail, the steps stop at 0 and at the earned level and act only in SELECT and END.
+ * QA tests of the level selection engine (references/internal/training_spec.md D-T35 to D-T37, D-T46, sections
+ * 5.10, 11.2 and 11.4, AC-T30, AC-T31, AC-T40, tasks Q5 and Q7). The oracles come from the documents: a pass below
+ * the earned level never touches the EEPROM or the progress RAM, the preselection is session level + 1 after a pass
+ * and the session level after a fail, the steps stop at 0 and at the earned level and act only in SELECT. Only
+ * training_reopen_select() moves END to SELECT, and it keeps the preselection.
  */
 
 #include <stdbool.h>
@@ -61,6 +62,55 @@ static bool is_eeprom_untouched(void) {
          (memcmp(eeprom_before, fake_iap_memory(), FAKE_IAP_SIZE) == 0);
 }
 
+static size_t iap_commands(void) {
+  return fake_iap_command_count(1U) + fake_iap_command_count(2U) + fake_iap_command_count(3U);
+}
+
+/* AC-T40 (4): outside END the reopen call returns false and changes nothing that the caller can see. */
+static void expect_no_reopen(void) {
+  const training_phase_t phase = training_phase();
+  const uint16_t selected = training_selected_level();
+  const size_t ticks = fake_tick_read_count();
+  TEST_ASSERT(!training_reopen_select());
+  TEST_ASSERT_EQUAL(phase, training_phase());
+  TEST_ASSERT_EQUAL(selected, training_selected_level());
+  TEST_ASSERT_EQUAL(ticks, fake_tick_read_count());
+}
+
+/*
+ * D-T46, AC-T40 (1), (2), (4): in END no step acts. training_reopen_select() then gives SELECT with the preselection
+ * of section 11.4: no tick read, no IAP command, the earned level and the outcome stay. A second call returns false.
+ * In that SELECT no session call acts (AC-T40 (3)).
+ */
+static void reopen(void) {
+  const uint16_t selected = training_selected_level();
+  const uint16_t earned = training_earned_level();
+  const training_outcome_t outcome = training_outcome();
+  const size_t commands = iap_commands();
+  size_t ticks;
+
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT(!training_select_step(true));
+  TEST_ASSERT(!training_select_step(false));
+  TEST_ASSERT_EQUAL(selected, training_selected_level());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT_EQUAL(outcome, training_outcome());
+  ticks = fake_tick_read_count();
+  TEST_ASSERT(training_reopen_select());
+  TEST_ASSERT_EQUAL(ticks, fake_tick_read_count());
+  TEST_ASSERT_EQUAL(commands, iap_commands());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(selected, training_selected_level());
+  TEST_ASSERT_EQUAL(earned, training_earned_level());
+  TEST_ASSERT(training_selected_level() <= training_earned_level());
+  expect_no_reopen();
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, training_poll());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_IGNORED, training_add_char('K'));
+  TEST_ASSERT(!training_undo_char());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
+  TEST_ASSERT_EQUAL(selected, training_selected_level());
+}
+
 static void poll_until(training_phase_t phase) {
   unsigned guard = 0U;
   while ((training_phase() != phase) && (guard < 100000U)) {
@@ -84,9 +134,10 @@ static void answer_item(bool is_first_wrong) {
       check = training_add_char(training_item_text()[index]);
     }
     TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, check);
-    /* RESULT: no step acts. */
+    /* RESULT: no step acts, no reopen. */
     TEST_ASSERT(!training_select_step(true));
     TEST_ASSERT(!training_select_step(false));
+    expect_no_reopen();
     poll_until(TRAINING_PHASE_ITEM);
   }
   for (index = 0U; index < training_item_length(); ++index) {
@@ -103,9 +154,10 @@ static void run_session(unsigned first_correct) {
 
   for (number = 1U; number <= count; ++number) {
     poll_until(TRAINING_PHASE_ITEM);
-    /* ITEM and GAP: no step acts. */
+    /* ITEM and GAP: no step acts, no reopen. */
     TEST_ASSERT(!training_select_step(true));
     TEST_ASSERT(!training_select_step(false));
+    expect_no_reopen();
     answer_item(number > first_correct);
   }
   poll_until(TRAINING_PHASE_END);
@@ -151,6 +203,8 @@ static void test_replay_never_saves(void) {
       /* The plan example: L5 passed with L20 earned preselects L6, and the selector still reaches L20. */
       TEST_ASSERT_EQUAL(level + 1U, training_selected_level());
       TEST_ASSERT_EQUAL(level + 2U, training_new_shown_level());
+      reopen();
+      TEST_ASSERT_EQUAL(level + 1U, training_selected_level());
       select_level((mode == RX) ? 19U : 30U);
       TEST_ASSERT(!training_select_step(true));
     }
@@ -193,6 +247,8 @@ static void test_pass_at_earned_saves_own_slot(void) {
     TEST_ASSERT_EQUAL(7U, progress_level(RX, OTHER_WPM));
     TEST_ASSERT_EQUAL(8U, progress_level(TX, OTHER_WPM));
     TEST_ASSERT_EQUAL(training_earned_level(), training_selected_level());
+    reopen();
+    TEST_ASSERT_EQUAL((mode == RX) ? 20U : 31U, training_selected_level());
     TEST_ASSERT(!training_select_step(true));
     /* The stored record holds the new level: a reload gives the same RAM values. */
     TEST_ASSERT_EQUAL(PROGRESS_OK, progress_load());
@@ -216,6 +272,9 @@ static void test_fail_preselects_session_level(void) {
     TEST_ASSERT_EQUAL(levels[index], training_selected_level());
     TEST_ASSERT(is_eeprom_untouched());
     TEST_ASSERT_EQUAL(19U, progress_level(RX, WPM));
+    reopen();
+    TEST_ASSERT_EQUAL(levels[index], training_selected_level());
+    TEST_ASSERT(is_eeprom_untouched());
   }
 }
 
@@ -237,6 +296,8 @@ static void test_save_failure_at_each_operation(void) {
     /* A replay of the old level after the failure still never touches the EEPROM. */
     fake_iap_set_fail_operation(0U);
     fake_iap_clear_counters();
+    reopen();
+    TEST_ASSERT_EQUAL(4U, training_selected_level());
     TEST_ASSERT(training_select_step(false));
     training_start();
     pass_session();
@@ -244,6 +305,7 @@ static void test_save_failure_at_each_operation(void) {
     TEST_ASSERT_EQUAL(0U, fake_iap_command_count(2U) + fake_iap_command_count(3U));
     TEST_ASSERT_EQUAL(4U, training_selected_level());
     /* The next pass at the RAM level saves again. */
+    reopen();
     training_start();
     pass_session();
     TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
@@ -256,6 +318,7 @@ static void test_save_failure_at_each_operation(void) {
 static void test_limits_zero_and_top(void) {
   load(0U, TOP, 0U, 0U);
   training_prepare(RX, WPM, MAX_WORD);
+  expect_no_reopen();
   TEST_ASSERT(!training_select_step(true));
   TEST_ASSERT(!training_select_step(false));
   TEST_ASSERT_EQUAL(0U, training_selected_level());
@@ -273,6 +336,7 @@ static void test_limits_zero_and_top(void) {
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS_REPLAY, training_outcome());
   TEST_ASSERT_EQUAL(TOP, training_selected_level());
   TEST_ASSERT(is_eeprom_untouched());
+  reopen();
   TEST_ASSERT(!training_select_step(true));
 
   training_start();
@@ -283,12 +347,16 @@ static void test_limits_zero_and_top(void) {
   TEST_ASSERT_EQUAL(TOP, training_new_shown_level());
   TEST_ASSERT(is_eeprom_untouched());
   TEST_ASSERT_EQUAL(TOP, progress_level(TX, WPM));
+  reopen();
+  TEST_ASSERT_EQUAL(TOP, training_selected_level());
 
   training_start();
   fail_session();
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
   TEST_ASSERT_EQUAL(TOP, training_selected_level());
   TEST_ASSERT(is_eeprom_untouched());
+  reopen();
+  TEST_ASSERT_EQUAL(TOP, training_selected_level());
 }
 
 /* A pass at the earned index 65534 advances to 65535 and saves; the selection then stops at 65535. */
@@ -300,6 +368,7 @@ static void test_pass_at_65534(void) {
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
   TEST_ASSERT_EQUAL(TOP, progress_level(RX, WPM));
   TEST_ASSERT_EQUAL(TOP, training_selected_level());
+  reopen();
   TEST_ASSERT(!training_select_step(true));
 }
 
@@ -322,14 +391,23 @@ static void test_prepare_resets_selection(void) {
   TEST_ASSERT(is_eeprom_untouched());
 }
 
-/* Steps in END change the next session level; after a stop (IDLE) no step acts. */
-static void test_end_steps_and_idle(void) {
+/*
+ * D-T46, AC-T40 (1) to (3), M1: no step acts in END. The steps after the reopen change the next session level; the
+ * session accessors keep the session that ended. After a stop (IDLE) no step and no reopen act.
+ */
+static void test_end_no_step_then_reopen_and_idle(void) {
   load(19U, 0U, 0U, 0U);
   training_prepare(RX, WPM, MAX_WORD);
+  expect_no_reopen();
   select_level(8U);
   training_start();
+  expect_no_reopen();
   fail_session();
   TEST_ASSERT_EQUAL(8U, training_selected_level());
+  TEST_ASSERT(!training_select_step(true));
+  TEST_ASSERT(!training_select_step(false));
+  TEST_ASSERT_EQUAL(8U, training_selected_level());
+  reopen();
   TEST_ASSERT(training_select_step(true));
   TEST_ASSERT(training_select_step(true));
   TEST_ASSERT_EQUAL(10U, training_selected_level());
@@ -339,9 +417,82 @@ static void test_end_steps_and_idle(void) {
   TEST_ASSERT_EQUAL(10U, training_level());
   TEST_ASSERT_EQUAL(koch_item_count(10U), training_item_count());
   training_stop();
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, training_phase());
+  expect_no_reopen();
   TEST_ASSERT(!training_select_step(true));
   TEST_ASSERT(!training_select_step(false));
   TEST_ASSERT_EQUAL(10U, training_selected_level());
+}
+
+/* One session with every wrong answer held in RESULT (@p is_held) and a reopen call before every poll (@p is_probed).
+ */
+#define TRACE_MAX 400U
+typedef struct {
+  uint16_t time;
+  training_event_t event;
+} trace_entry_t;
+
+static size_t trace_session(bool is_held, bool is_probed, trace_entry_t* trace) {
+  size_t count = 0U;
+  unsigned guard = 0U;
+
+  load(4U, 0U, 0U, 0U);
+  training_prepare(RX, WPM, MAX_WORD);
+  if (is_probed) {
+    expect_no_reopen();
+  }
+  training_start();
+  while ((training_phase() != TRAINING_PHASE_END) && (guard < 100000U)) {
+    training_event_t event;
+    at((uint16_t)(now + STEP_MS));
+    if (is_probed) {
+      expect_no_reopen();
+    }
+    event = training_poll();
+    if ((event != TRAINING_EVENT_NONE) && (count < TRACE_MAX)) {
+      trace[count].time = now;
+      trace[count].event = event;
+      ++count;
+    }
+    if (training_phase() == TRAINING_PHASE_ITEM) {
+      const bool is_wrong = (training_wrong_attempts() == 0U) && ((training_item_number() % 4U) == 0U);
+      training_check_t check = training_add_char(is_wrong ? '?' : training_item_text()[0]);
+      uint8_t index;
+      for (index = 1U; !is_wrong && (check == TRAINING_CHECK_PARTIAL) && (index < training_item_length()); ++index) {
+        check = training_add_char(training_item_text()[index]);
+      }
+      if (is_held && (training_phase() == TRAINING_PHASE_RESULT)) {
+        training_hold_result(true);
+        at((uint16_t)(now + 500U));
+        if (is_probed) {
+          expect_no_reopen();
+        }
+        TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, training_poll());
+        training_hold_result(false);
+      }
+    }
+    ++guard;
+  }
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  return count;
+}
+
+/* AC-T40 (4): the reopen call in IDLE, SELECT, GAP, ITEM and RESULT (hold on and off) changes no poll event or time. */
+static void test_reopen_outside_end_changes_nothing(void) {
+  static trace_entry_t plain[TRACE_MAX];
+  static trace_entry_t probed[TRACE_MAX];
+  bool is_held;
+
+  for (is_held = false;; is_held = true) {
+    const size_t plain_count = trace_session(is_held, false, plain);
+    const size_t probed_count = trace_session(is_held, true, probed);
+    TEST_ASSERT(plain_count > 50U);
+    TEST_ASSERT_EQUAL(plain_count, probed_count);
+    TEST_ASSERT_EQUAL(0, memcmp(plain, probed, plain_count * sizeof(plain[0])));
+    if (is_held) {
+      break;
+    }
+  }
 }
 
 int main(void) {
@@ -353,6 +504,7 @@ int main(void) {
   TEST_RUN(test_limits_zero_and_top);
   TEST_RUN(test_pass_at_65534);
   TEST_RUN(test_prepare_resets_selection);
-  TEST_RUN(test_end_steps_and_idle);
+  TEST_RUN(test_end_no_step_then_reopen_and_idle);
+  TEST_RUN(test_reopen_outside_end_changes_nothing);
   return TEST_FINISH();
 }

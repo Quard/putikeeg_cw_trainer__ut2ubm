@@ -5,8 +5,8 @@ user can see, hear or press. The [user manual](user_manual.md) tells you how to 
 
 ## Version 0.1.2 (in development)
 
-Version 0.1.2 changes the answer state of Receiving. It is not released. Work on it continues, and the next changes
-go into this version too.
+Version 0.1.2 changes the answer state of Receiving, and the start screen and the session end screen of Receiving
+and Sending. It is not released. Work on it continues, and the next changes go into this version too.
 
 ### Koch training: Receiving and Sending
 
@@ -22,6 +22,30 @@ go into this version too.
   0.8 s plays the answer again. A plug insertion can also go on to the next item. Insert the plug before you open
   Receiving.
 - **Sending does not change.** After the third wrong attempt, the answer shows for 2.5 s. Then the next item comes.
+
+### Koch training: start screen and session end screen
+
+These changes apply to Receiving and Sending.
+
+- **New start screen.** The level selector, for example `<  L20 of 20`, is now at the top, directly under the
+  header. Below it, a label shows the kind of the level: `New chars` at L1, `New char` at a character level. At a
+  word level, the label row is blank. In the middle of the screen, the level description shows in the large
+  characters of the items. It is `K M` at L1, and the new character at a character level, for example `J`. At a
+  word level, it is `Words of` and the word length, for example `Words of 4`. In version 0.1.0, one short line
+  under the selector showed the description, for example `New char J` or `K and M`.
+- **CW code on the Sending start screen.** In Sending, the dots and dashes of the new character show below the
+  large character. At L1, the codes of K and M show. The code shows for every value of `Show CW Code`, also with
+  `Off`. So you can see the code before you key the character. In a session, `Show CW Code` works as before. At a
+  word level, no code shows. Receiving shows no code on the start screen.
+- **Simpler session end screen.** The end screen shows only the score and the result, for example `Score 46/50`
+  and `Passed, new level`, with `OK` at the bottom. It has no level selector and no level description.
+- **Two presses to the next session.** Press `enter` on the end screen, or close the tip contact. The start screen
+  shows the level of the next session: the next level after a pass, the same level after a fail. You can change
+  the level with `prev` and `next`. Press `enter` again to start the session. One held press of `enter` opens only
+  the start screen. In version 0.1.0, `enter` on the end screen started the next session at once.
+- **End screen buttons.** `menu/back` opens the main menu. `prev` and `next` do nothing on the end screen. A plug
+  insertion on the end screen can open the start screen. In version 0.1.0, a tip closure on the end screen started
+  a session.
 
 ## Version 0.1.0
 
