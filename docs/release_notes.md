@@ -3,11 +3,12 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
-## Version 0.1.2
+## Version 0.1.2 (in development)
 
 Version 0.1.2 changes the answer state of Receiving, and the start screen and the session end screen of Receiving
 and Sending. It adds the `Ramp` setting for the rise and fall time of the tone. The `Settings > CW` list now scrolls,
-and the device saves the settings in a new format.
+and the device saves the settings in a new format. It is not released. Work on it continues, and the next changes go
+into this version too.
 
 ### Koch training: Receiving and Sending
 
