@@ -263,6 +263,15 @@ static bool title_is(const char* title) {
   return row_matches(0, 0, 127, &text, 1U);
 }
 
+/* The CW title bar with the "i/8" mark right-aligned to column 24 (ui-ux.md section 5.1). */
+static bool cw_title_is(int position) {
+  char mark[8];
+  row_text_t texts[2] = {{0, "Settings > CW", true}, {0, mark, true}};
+  (void)snprintf(mark, sizeof(mark), "%d/8", position);
+  texts[1].column = 25 - (int)strlen(mark);
+  return row_matches(0, 0, 127, texts, 2U);
+}
+
 /* A list row: label in column 0 and, when @p value is not NULL, the value right-aligned to column 22. */
 static bool list_row_is(int r, const char* label, const char* value, bool is_selected) {
   row_text_t texts[2];
@@ -337,11 +346,12 @@ static bool main_menu_is(int selected) {
   return is_ok;
 }
 
-static bool cw_list_is(const char* const values[7], int selected) {
-  static const char* const labels[7] = {"Tone",          "RX Speed", "RX Eff. Speed", "TX Speed",
-                                        "TX Eff. Speed", "Key Type", "Paddle"};
+/* The first window of the CW list (ui-ux.md section 5.5). */
+static bool cw_list_is(const char* const values[8], int selected) {
+  static const char* const labels[8] = {"Tone",     "Ramp",          "RX Speed", "RX Eff. Speed",
+                                        "TX Speed", "TX Eff. Speed", "Key Type", "Paddle"};
   int i;
-  bool is_ok = title_is("Settings > CW");
+  bool is_ok = cw_title_is(selected + 1);
   for (i = 0; i < 7; ++i) {
     is_ok = is_ok && list_row_is(i + 1, labels[i], values[i], i == selected);
   }
@@ -381,7 +391,8 @@ static void test_v01_power_on_empty(void) {
 }
 
 static void test_v02_bad_crc_record(void) {
-  static const char* const cw_values[7] = {"600 Hz", "32 WPM", "32 WPM", "20 WPM", "20 WPM", "Iambic B", "Normal"};
+  static const char* const cw_values[8] = {"600 Hz", "6 ms",   "32 WPM",   "32 WPM",
+                                           "20 WPM", "20 WPM", "Iambic B", "Normal"};
   fake_iap_reset();
   put_record(5U, 3U);
   fake_iap_memory()[14] ^= 0xFFU;
@@ -441,7 +452,7 @@ static void test_v05_enter_and_back(void) {
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
   send(ENTER);
-  TEST_ASSERT(title_is("Settings > CW"));
+  TEST_ASSERT(cw_title_is(1));
   TEST_ASSERT(probe_sel(1));
   send(MENU);
   TEST_ASSERT(title_is("Settings"));
@@ -466,7 +477,7 @@ static void test_v06_edit_tone(void) {
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(list_row_is(1, "Tone", "590 Hz", true));
-  TEST_ASSERT(list_row_is(2, "RX Speed", "32 WPM", false));
+  TEST_ASSERT(list_row_is(3, "RX Speed", "32 WPM", false));
 }
 
 static void test_v07_tone_limits(void) {
@@ -503,18 +514,18 @@ static void test_v08_held_next_in_edit(void) {
 static void test_v09_effective_at_base(void) {
   start_empty();
   open_cw();
-  send_times(NEXT, 2U);
+  send_times(NEXT, 3U);
   send(ENTER);
-  TEST_ASSERT(probe_edit(3, 6));
+  TEST_ASSERT(probe_edit(4, 6));
   send(NEXT);
-  TEST_ASSERT(edit_row_is(3, "RX Eff. Speed", "32 WPM", 6, true, false));
+  TEST_ASSERT(edit_row_is(4, "RX Eff. Speed", "32 WPM", 6, true, false));
   TEST_ASSERT_EQUAL(32U, settings_get(SETTINGS_ID_RX_EFF_WPM));
 }
 
 static void test_v10_lower_base_lowers_effective(void) {
   start_empty();
   open_cw();
-  send_times(NEXT, 2U);
+  send_times(NEXT, 3U);
   send(ENTER);
   send_times(PREV, 7U);
   send(ENTER);
@@ -522,11 +533,11 @@ static void test_v10_lower_base_lowers_effective(void) {
   send(PREV);
   send(ENTER);
   send_times(PREV, 8U);
-  TEST_ASSERT(edit_row_is(2, "RX Speed", "24 WPM", 6, true, true));
-  TEST_ASSERT(list_row_is(3, "RX Eff. Speed", "24 WPM", false));
+  TEST_ASSERT(edit_row_is(3, "RX Speed", "24 WPM", 6, true, true));
+  TEST_ASSERT(list_row_is(4, "RX Eff. Speed", "24 WPM", false));
   send_times(NEXT, 6U);
-  TEST_ASSERT(edit_row_is(2, "RX Speed", "30 WPM", 6, true, true));
-  TEST_ASSERT(list_row_is(3, "RX Eff. Speed", "24 WPM", false));
+  TEST_ASSERT(edit_row_is(3, "RX Speed", "30 WPM", 6, true, true));
+  TEST_ASSERT(list_row_is(4, "RX Eff. Speed", "24 WPM", false));
 }
 
 static void test_v11_key_type_choices(void) {
@@ -657,7 +668,7 @@ static void test_v17_menu_leaves_edit_only(void) {
   send(ENTER);
   send_times(NEXT, 2U);
   send(MENU);
-  TEST_ASSERT(title_is("Settings > CW"));
+  TEST_ASSERT(cw_title_is(1));
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(list_row_is(1, "Tone", "620 Hz", true));
   TEST_ASSERT_EQUAL(0U, fake_iap_operation_count());
@@ -823,8 +834,8 @@ static void test_v27_clamped_record(void) {
   (void)power_on(0U);
   open_cw();
   TEST_ASSERT(list_row_is(1, "Tone", "1000 Hz", true));
-  TEST_ASSERT(list_row_is(2, "RX Speed", "30 WPM", false));
-  TEST_ASSERT(list_row_is(3, "RX Eff. Speed", "30 WPM", false));
+  TEST_ASSERT(list_row_is(3, "RX Speed", "30 WPM", false));
+  TEST_ASSERT(list_row_is(4, "RX Eff. Speed", "30 WPM", false));
 }
 
 static void test_v28_power_off_inside_settings(void) {
@@ -863,7 +874,11 @@ static void test_v32_strings_fit(void) {
   for (node = 0U; node < MENU_NODE_COUNT; ++node) {
     const menu_node_t MEM_CODE* list = &menu_nodes[node];
     TEST_ASSERT(is_ascii_text(list->title, 25U));
-    TEST_ASSERT(list->item_count <= MENU_VISIBLE_ROWS);
+    /* A scrolling list keeps one blank column before its "n/n" mark, so no title is cut (ui-ux.md 5.1). */
+    if (list->item_count > MENU_VISIBLE_ROWS) {
+      TEST_ASSERT(list->item_count <= 9U);
+      TEST_ASSERT(is_ascii_text(list->title, 24U - 3U));
+    }
     for (index = 0U; index < list->item_count; ++index) {
       const menu_item_t MEM_CODE* item = &list->items[index];
       if ((item->kind == MENU_KIND_VALUE) || (item->kind == MENU_KIND_CHOICE)) {
@@ -892,6 +907,7 @@ static void test_v32_strings_fit(void) {
 static void test_edit_every_item_to_limits(void) {
   uint8_t node;
   uint8_t index;
+  int row;
   static const uint8_t nodes[3] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY};
   for (node = 0U; node < 3U; ++node) {
     const menu_node_t MEM_CODE* list = &menu_nodes[nodes[node]];
@@ -912,14 +928,16 @@ static void test_edit_every_item_to_limits(void) {
       send_times(NEXT, index);
       send(ENTER);
       TEST_ASSERT_EQUAL(MENU_SCREEN_EDIT, menu_screen());
-      TEST_ASSERT(probe_edit(index + 1, item->field_width));
+      /* The window moves down only when the cursor passes row 7 (ui-ux.md section 5.5). */
+      row = (index < MENU_VISIBLE_ROWS) ? (index + 1) : (int)MENU_VISIBLE_ROWS;
+      TEST_ASSERT(probe_edit(row, item->field_width));
       send_times(REPEAT(NEXT), 700U);
       TEST_ASSERT_EQUAL(settings_max(item->target), settings_get(item->target));
-      TEST_ASSERT(probe_edit(index + 1, item->field_width));
-      TEST_ASSERT(!pixel(105 - 5 * item->field_width, 8 * (index + 1) + 4));
+      TEST_ASSERT(probe_edit(row, item->field_width));
+      TEST_ASSERT(!pixel(105 - 5 * item->field_width, 8 * row + 4));
       send_times(REPEAT(PREV), 700U);
       TEST_ASSERT_EQUAL(settings_min(item->target), settings_get(item->target));
-      TEST_ASSERT(probe_edit(index + 1, item->field_width));
+      TEST_ASSERT(probe_edit(row, item->field_width));
     }
   }
 }
@@ -949,7 +967,7 @@ static void test_full_navigation(void) {
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_CW, menu_node());
   send(PREV);
-  TEST_ASSERT_EQUAL(6U, menu_cursor());
+  TEST_ASSERT_EQUAL(7U, menu_cursor());
   send(MENU);
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
@@ -1205,7 +1223,8 @@ static void test_v74_long_holds_outside_mode_screens(void) {
 static void test_v76_paddle_row(void) {
   start_empty();
   open_cw();
-  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", false));
+  send(PREV);
+  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", true));
 }
 
 /* V-77 */
@@ -1229,7 +1248,8 @@ static void test_v77_paddle_edit_and_save(void) {
   (void)power_on(0U);
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
   open_cw();
-  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", false));
+  send(PREV);
+  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", true));
 }
 
 /* V-78: a record of the earlier firmware (layout version 1) has flags bit 1 = 0 and no prosign style. */
@@ -1240,7 +1260,8 @@ static void test_v78_earlier_record_reads_normal(void) {
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_PADDLE_SWAP));
   TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_BOTH, settings_get(SETTINGS_ID_PROSIGN_STYLE));
   open_cw();
-  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", false));
+  send(PREV);
+  TEST_ASSERT(list_row_is(7, "Paddle", "Normal", true));
   TEST_ASSERT(list_row_is(6, "Key Type", "Iambic B", false));
   send(MENU);
   TEST_ASSERT(list_row_is(3, "Prosigns", "Both", false));

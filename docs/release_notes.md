@@ -6,7 +6,9 @@ user can see, hear or press. The [user manual](user_manual.md) tells you how to 
 ## Version 0.1.2 (in development)
 
 Version 0.1.2 changes the answer state of Receiving, and the start screen and the session end screen of Receiving
-and Sending. It is not released. Work on it continues, and the next changes go into this version too.
+and Sending. It adds the `Ramp` setting for the rise and fall time of the tone. The `Settings > CW` list now scrolls,
+and the device saves the settings in a new format. It is not released. Work on it continues, and the next changes go
+into this version too.
 
 ### Koch training: Receiving and Sending
 
@@ -46,6 +48,40 @@ These changes apply to Receiving and Sending.
 - **End screen buttons.** `menu/back` opens the main menu. `prev` and `next` do nothing on the end screen. A plug
   insertion on the end screen can open the start screen. In version 0.1.0, a tip closure on the end screen started
   a session.
+
+### Settings: Ramp
+
+- **New setting `Ramp`.** `Settings > CW > Ramp` sets the rise time and the fall time of the tone: 4 to 12 ms, in
+  steps of 1 ms. The default is 6 ms. One value sets both edges of every sound: the sidetone in Free Input and
+  Sending, the playback in Receiving, and the previews. In version 0.1.0, the tone always rose in 8 ms and fell in
+  8 ms.
+- **Shorter default edges.** The default of 6 ms gives a little shorter edges than the fixed 8 ms of version 0.1.0.
+  To get the earlier sound, set `Ramp` to 8 ms.
+- **Ramp preview.** When you edit `Ramp`, the device plays the tone of the `Tone` setting for about 0.3 s with the
+  new rise and fall, as in the `Tone` edit. To compare two values, press `prev` or `next` one time, wait about
+  0.5 s, and press again. Each single press then gives one full beep. When you hold the button, the tone stays on,
+  and you hear only the first rise and the last fall.
+- **Clicks at a low tone.** A short `Ramp` at a low `Tone` can click more, for example 4 ms at 400 Hz. The device
+  changes the level of the tone only once in each period of the tone (2.5 ms at 400 Hz). If you hear a click, set
+  a longer `Ramp` or a higher `Tone`.
+- **Fast speeds.** At 50 WPM with `Ramp` = 12 ms, a dit rises to one step below full level (0.2 % less) and then
+  falls. The length of the elements and of the gaps does not change.
+
+### Menu: the CW list scrolls
+
+- **`Ramp` is item 2.** `Settings > CW` has 8 items: `Tone`, `Ramp`, `RX Speed`, `RX Eff. Speed`, `TX Speed`,
+  `TX Eff. Speed`, `Key Type` and `Paddle`. `Paddle` moved from item 7 to item 8.
+- **Scroll.** The screen shows 7 items. When the cursor moves past the first or the last row, the list moves by one
+  row. A wrap shows the first 7 or the last 7 items. The other lists do not scroll.
+- **Position mark.** The title bar of `Settings > CW` shows the cursor position at its right end, for example `1/8`.
+
+### Saved settings
+
+- **Your settings stay.** If the device keeps the settings of an earlier version, for example 0.1.0, they stay as
+  they were, and `Ramp` is 6 ms. The device shows no message.
+- **New settings format.** At the first save after you change a setting, the device writes a new settings format.
+  An earlier firmware version cannot read it. If you download an earlier version after that save, it uses all
+  default values and shows no message. Set the values again.
 
 ## Version 0.1.0
 

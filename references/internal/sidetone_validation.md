@@ -10,21 +10,37 @@ Scope:
 - Board revision `CW_MINI_V2.0D`.
 - The CW sidetone with the Tone preview, as approved on 2026-10-05 (`sidetone_spec.md` section 22). Host tests
   check the logic. The checks here cover what host tests cannot prove: pins, timing, sound and current.
-- Sidetone checks DC-1 to DC-12 (`sidetone_spec.md` section 17) and Tone preview checks D-10 to D-14
+- The `Settings > CW > Ramp` setting (rise and fall time 4 to 12 ms, default 6 ms) and the Ramp preview, as
+  approved on 2026-10-16 on host evidence only (`sidetone_spec.md` section 24.12).
+- Sidetone checks DC-1 to DC-14 (`sidetone_spec.md` section 17) and Tone preview checks D-10 to D-14
   (`ui-ux.md` section 11).
 
 The user runs these checks on demand, for example after a problem appears. Until a check has a recorded result, its
 behavior stays unverified.
+
+## Open checks of the Ramp setting
+
+No one tested the `Ramp` setting on the device yet. These checks are open:
+
+| Check | Content | Related checks |
+| --- | --- | --- |
+| [DC-5](#dc-5-ramp-shape) (revised) | Ramp shape on the logic analyzer at `Ramp` 4, 6, 8 and 12 ms. | `ui-ux.md` D-47 |
+| [DC-13](#dc-13-click-by-ear-at-the-ramp-limits) (new) | Click by ear at `Ramp` 4 ms and 12 ms, at 400 Hz and 1000 Hz. | `ui-ux.md` D-46 |
+| [DC-14](#dc-14-keyer-and-player-at-50-wpm-with-ramp-12-ms) (new) | Keyer and CW player at 50 WPM with `Ramp` 12 ms. | `ui-ux.md` D-47 |
+
+`sidetone_spec.md` section 24.12 also keeps DC-8, DC-K3 and DC-T1 open at 4 and 12 ms. `ui-ux.md` D-45 to D-47
+check the CW list scroll, the Ramp preview by ear and the ramp in use. D-45 also measures the LCD transfer of a
+window move. If that transfer takes longer than 80 ms during a held button, record it for `architector`.
 
 ## Sources
 
 | Source | Used for |
 | --- | --- |
 | [sidetone_spec.md](sidetone_spec.md) | Check list (section 17), register values, envelope timing, expected numbers. |
-| [ui-ux.md](ui-ux.md) | Tone preview behavior (section 6.5) and checks D-10 to D-14 (section 11). |
+| [ui-ux.md](ui-ux.md) | Tone and Ramp preview behavior (section 6.5), checks D-10 to D-14 and D-45 to D-47 (section 11). |
 | [components_and_wiring.md](components_and_wiring.md) | Pins, routes, quiet levels, earlier measurements. |
 | [sidetone_pwm_envelope_research.md](sidetone_pwm_envelope_research.md) | Earlier measurements, list of target measurements. |
-| `firmware/src/sidetone/sidetone.c`, `firmware/inc/board/sidetone_pwm.h`, `firmware/inc/board/sidetone_config.h`, `firmware/src/menu/menu.c` | Implemented behavior. |
+| `firmware/src/sidetone/sidetone.c`, `firmware/inc/board/sidetone_pwm.h`, `firmware/inc/board/sidetone_config.h`, `firmware/src/menu/menu.c`, `firmware/src/menu/menu_tree.c` | Implemented behavior. |
 
 ## Measurement results 2026-10-02
 
@@ -108,7 +124,7 @@ Fill in this table once per test session.
 | Tester | |
 | Firmware commit (`git rev-parse --short HEAD`) | |
 | Uncommitted changes in `firmware/` (`git status --short firmware`) | |
-| Flash size from `firmware/build/putikeeg_cw_trainer.mem` (15913 B for the approved tree) | |
+| Flash size from `firmware/build/putikeeg_cw_trainer.mem` (29 105 B for the tree approved on 2026-10-16, `sidetone_spec.md` section 24.12) | |
 | `MCU_CLOCK_HZ` from `firmware/build/CMakeCache.txt` (24000000 by default) | |
 | Board revision | `CW_MINI_V2.0D` |
 | Logic analyzer model and sample rate | |
@@ -116,12 +132,12 @@ Fill in this table once per test session.
 | Audio probe points | |
 | Battery voltage at the start | |
 
-Each check also records its tone, volume setting and route. Write the volume as a position of the potentiometer,
-for example "minimum", "middle" or "maximum".
+Each check also records its tone, `Ramp` value, volume setting and route. Write the volume as a position of the
+potentiometer, for example "minimum", "middle" or "maximum".
 
 ### How to play a tone
 
-The Tone preview is the only sound of this firmware (`ui-ux.md` section 6.5):
+The Tone preview and the Ramp preview are the only sounds of the menu (`ui-ux.md` section 6.5):
 
 1. Open `Settings > CW`. Move the cursor to `Tone`.
 2. Press `enter`. The tone plays for 300 ms at the shown value, then stops.
@@ -130,6 +146,19 @@ The Tone preview is the only sound of this firmware (`ui-ux.md` section 6.5):
 4. `enter` or `menu/back` ends the edit and stops the tone at once.
 
 To reach 400 Hz or 1000 Hz, hold `prev` or `next` until the value stops at the limit.
+
+To set the ramp and play a tone with it:
+
+1. Set the tone in the Tone edit. Leave the edit.
+2. Move the cursor to `Ramp`, item 2 of `Settings > CW`. Press `enter`. The tone of the `Tone` setting plays for
+   300 ms with the shown ramp.
+3. In the Ramp edit, `next` and `prev` change the value in 1 ms steps (4 to 12 ms, 6 ms on an empty EEPROM). Each
+   change plays the tone again for 300 ms. A change while the tone still plays does not start a new rise. To hear
+   each value with its own rise, wait about 0.5 s between two presses.
+4. `enter` or `menu/back` ends the edit. The sidetone keeps the new value for every later sound. Leave `Settings`
+   to save it.
+
+All sounds use the `Ramp` value: the previews, Free Input, Receiving and Sending.
 
 The route is automatic. With the headphone plug in (P1.0 LOW), P1.2 plays. Without the plug, P1.1 plays. A plug
 change takes effect at the next start from silence.
@@ -144,7 +173,16 @@ Expected numbers come from `sidetone_spec.md` sections 6.1, 6.3, 7 and 8:
 | 600 Hz | 1.667 ms | 0.833 ms |
 | 1000 Hz | 1.000 ms | 0.500 ms |
 
-The envelope service runs at 4 kHz (250 µs per call). A full rise and a full fall each take 32 calls, 8.0 ms.
+The envelope service runs at 4 kHz (250 µs per call). A full rise and a full fall each take 4 x `Ramp` calls
+(`sidetone_spec.md` section 6.8). The PWM loads a new compare value only once per carrier period, so the number of
+different pulse widths in a ramp is about the ramp time divided by the carrier period:
+
+| `Ramp` | Service calls | Carrier periods at 400 Hz | Carrier periods at 1000 Hz |
+| ---: | ---: | ---: | ---: |
+| 4 ms | 16 | 1.6 | 4 |
+| 6 ms (default) | 24 | 2.4 | 6 |
+| 8 ms | 32 | 3.2 | 8 |
+| 12 ms | 48 | 4.8 | 12 |
 
 ### DC-1 Quiet at power-on, after init and in silence
 
@@ -218,11 +256,15 @@ is the trim of the internal oscillator. Record the measured frequency and the er
 
 ### DC-5 Ramp shape
 
-Setup: channel 0 or 1 for the active route, 8 MHz sample rate or more. Tones 400 Hz and 1000 Hz.
+Status: open (revised on 2026-10-16 for the `Ramp` setting). Not tested on the device.
+
+Setup: channel 0 or 1 for the active route, 8 MHz sample rate or more. Tones 400 Hz and 1000 Hz. `Ramp` 4, 6, 8
+and 12 ms. Do the steps for each combination of tone and ramp.
 
 Steps:
 
-1. Play one tone. Capture the whole 300 ms tone.
+1. Set the tone. In the Ramp edit, set the ramp. The `enter` that opens the edit or the change of the value plays
+   one tone. Capture the whole 300 ms tone.
 2. Measure the time from the first LOW pulse to the first pulse at full width (rise).
 3. Measure the time from the last full-width pulse to the last LOW pulse (fall).
 4. Count the different pulse widths in each ramp.
@@ -230,10 +272,14 @@ Steps:
 
 Expected:
 
-- Rise and fall each about 8 ms. The pulse width grows and shrinks step by step. No pulse is wider than the
-  full-level LOW time.
-- The PWM loads a new compare value only once per carrier period, so several envelope steps merge. At 400 Hz an
-  8 ms ramp spans about 3.2 periods: expect only 3 or 4 different widths. At 1000 Hz expect about 8.
+- Rise and fall each equal the `Ramp` value within one carrier period. The pulse width grows and shrinks step by
+  step. No pulse is wider than the full-level LOW time.
+- The PWM loads a new compare value only once per carrier period, so several envelope steps merge. The number of
+  different widths in a ramp is about the number of carrier periods in the table at the start of
+  [Sidetone checks](#sidetone-checks). At 400 Hz, expect 1 or 2 widths at 4 ms, 2 or 3 at 6 ms, 3 or 4 at 8 ms and
+  4 or 5 at 12 ms. At 1000 Hz, expect about 4, 6, 8 and 12.
+- At 4 ms and 400 Hz, the ramp has very few steps. This is a property of the PWM, not a defect
+  (`sidetone_spec.md` section 6.8, physics note). DC-13 checks the click by ear.
 - After the fall reaches zero, the firmware waits for one carrier update and then disables the output. The wait
   is at most 12 service calls (3 ms). The pin stays HIGH from the last LOW pulse on.
 
@@ -256,7 +302,8 @@ Steps:
 5. Listen at each step.
 
 Expected: no audible click and no spike on the audio trace at the start, the stop, the retune dip or after a route
-change. A retune is a fall, a silence of at most 3 ms and a rise (about 17-19 ms in total).
+change. A retune is a fall, a silence of at most 3 ms and a rise: 2 x `Ramp` plus 1 to 3 ms, about 13-15 ms at the
+default 6 ms. Record the `Ramp` value.
 
 | Result (pass / fail / not run) | Tone, volume, route | Capture file | Notes |
 | --- | --- | --- | --- |
@@ -316,8 +363,8 @@ The host estimate (`sidetone_spec.md` AC-22) has a target of 400 clocks and a ha
 This check needs a measurement build. It fills the free stack with a pattern at start-up and reads it after a long
 run. The firmware has no such build. Ask `architector` before you make one.
 
-The build report of the approved tree gives the stack start 0x30 with 208 bytes free
-(`firmware/build/putikeeg_cw_trainer.mem`). The required margin is at least 64 bytes
+The build report of the tree approved on 2026-10-16 gives the stack start 0x44 with 188 bytes free
+(`firmware/build/putikeeg_cw_trainer.mem`, `sidetone_spec.md` section 24.12). The required margin is at least 64 bytes
 (`sidetone_spec.md` section 14).
 
 Expected: the used stack after a long run, with the menu, held repeats and tone previews, leaves at least 64
@@ -361,8 +408,8 @@ This firmware gives no user path to this case. The EEPROM erase comes only from 
 conditions: you leave the `Settings` screen, and a value differs from the saved value
 (`firmware/src/menu/menu_tree.c`, `menu_go_back()`, `settings_save_if_changed()`). From the Tone edit, that takes
 three button events: `enter` (the fall starts), `menu/back` to `Settings`, and `menu/back` again. The fall lasts
-8 ms. Each press and each release needs 20 ms of debounce (`BUTTONS_DEBOUNCE_MS`). So the erase always comes after
-the fall.
+at most 12 ms (the `Ramp` maximum). Each press and each release needs 20 ms of debounce (`BUTTONS_DEBOUNCE_MS`). So
+the erase always comes after the fall.
 
 The check needs the later keyer, or a measurement build that starts a ramp and an erase together. Ask
 `architector` before you make one. Until then, record this check as "not run".
@@ -373,6 +420,67 @@ Expected: the erase only stretches the ramp. The pulse width stays constant for 
 ramp continues without a click.
 
 | Result (pass / fail / not run) | Tone, volume, route | Capture file | Notes |
+| --- | --- | --- | --- |
+| | | | |
+
+### DC-13 Click by ear at the ramp limits
+
+Status: open (new on 2026-10-16). Not tested on the device.
+
+Setup: oscilloscope on the amplified audio of the active route. Volume at the middle. Speaker, then headphones.
+Tones 400 Hz and 1000 Hz. Run it with `ui-ux.md` D-46.
+
+Steps:
+
+1. Set the tone to 400 Hz.
+2. Open the Ramp edit and set 4 ms. Press `next` about every 0.5 s up to 12 ms, then `prev` back to 4 ms. Each
+   single press plays one tone with its own rise and fall. Listen at each value.
+3. Repeat step 2 at 1000 Hz.
+4. Repeat steps 1 to 3 with the headphones.
+
+Expected:
+
+- At 12 ms, no audible click at the start or at the end of the tone, at both tones and on both routes.
+- At 4 ms and 400 Hz, more click is expected. The PWM loads a new compare value only once per carrier period
+  (2.5 ms at 400 Hz), so the 4 ms ramp reaches the output as only 1 or 2 compare values (`sidetone_spec.md`
+  section 6.8, physics note). This is not a defect.
+- Record the shortest ramp with no click at each tone and on each route.
+
+| Result (pass / fail / not run) | Tone, `Ramp`, volume, route | Capture file | Shortest ramp with no click | Notes |
+| --- | --- | --- | --- | --- |
+| | | | | |
+
+### DC-14 Keyer and player at 50 WPM with Ramp 12 ms
+
+Status: open (new on 2026-10-16). Not tested on the device.
+
+At 50 WPM a dit is 24 ms (96 service calls). With `Ramp` 12 ms, the rise and the fall need 48 calls each, so the dit
+has no time at full level. The rise stops at index 31 of 32 (duty 49.9 % instead of 50 %). The fall ends one call
+(250 µs) before the mark end (`sidetone_spec.md` D-RM5). At every other speed and ramp, the rise reaches full
+level, and the fall ends at the mark end.
+
+Setup: channel 0 or 1 for the active route. Tone 600 Hz or 1000 Hz. `Ramp` 12 ms. Volume at the middle. Run it
+with `ui-ux.md` D-47.
+
+Steps:
+
+1. Set `Key Type` = `Iambic B`, `TX Speed` = 50 WPM, `TX Eff. Speed` = 50 WPM and `Ramp` = 12 ms. Leave `Settings`.
+2. Open Free Input. Hold the dit lever for about 2 s. Capture the dit stream and listen.
+3. Hold the dah lever for about 2 s. Capture the dah stream.
+4. Set `RX Speed` = 50 WPM and `RX Eff. Speed` = 50 WPM. Open `Receiving` and start a session. Capture the
+   playback of one item.
+5. Optional, for comparison: repeat steps 2 and 4 with `Ramp` 4 ms, and at 20 WPM with 6 ms (`ui-ux.md` D-47).
+
+Expected:
+
+- Each dit sounds, and the dits stay separate.
+- The time from the first LOW pulse of one dit to the first LOW pulse of the next dit is 48 ms (2 dits), within one
+  carrier period. For dahs it is 96 ms (4 dits).
+- In the middle of each dit, the widest pulse is a little narrower than the full-level LOW time (duty 49.9 %).
+- No click at the end of a dit. No pulse in the gap between two elements.
+- Record whether the dits sound weaker than the dahs at 12 ms.
+
+| Result (pass / fail / not run) | Tone, `Ramp`, speed, volume, route | Capture file | Notes |
 | --- | --- | --- | --- |
 | | | | |
 
@@ -443,7 +551,7 @@ Steps:
 4. For each step, measure the time from the event to the last LOW pulse.
 
 Expected: after a leave, the output is quiet within about 10 ms of the event. A timeout ends 300 ms after the
-start, plus at most one main-loop pass, plus the 8 ms fall.
+start, plus at most one main-loop pass, plus the fall in the `Ramp` time (6 ms at the default).
 
 | Result (pass / fail / not run) | Tone, volume, route | Capture file | Notes |
 | --- | --- | --- | --- |

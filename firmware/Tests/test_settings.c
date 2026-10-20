@@ -14,9 +14,9 @@
 #define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
 
-static const uint8_t default_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
-                                                             0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U};
+static const uint8_t default_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x03U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                             0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U, 0x0BU};
+static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U};
 
 static void put_record(const uint8_t* record) { memcpy(fake_iap_memory(), record, SETTINGS_RECORD_SIZE); }
 
@@ -47,7 +47,7 @@ static size_t write_operations(void) { return fake_iap_command_count(CMD_PROGRAM
 static void test_crc_check_value(void) {
   static const uint8_t check[9] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
   TEST_ASSERT_EQUAL(0xF4U, crc8_compute(check, 9U));
-  TEST_ASSERT_EQUAL(0x03U, crc8_compute(default_record, 14U));
+  TEST_ASSERT_EQUAL(0x0BU, crc8_compute(default_record, 14U));
   TEST_ASSERT_EQUAL(0x00U, crc8_compute(check, 0U));
 }
 
@@ -99,7 +99,7 @@ static void test_bad_records(void) {
   check_load_failure(record, SETTINGS_LOAD_BAD_CRC);
 
   memcpy(record, default_record, sizeof(record));
-  record[2] = 3U;
+  record[2] = 4U;
   record[14] = crc8_compute(record, 14U);
   check_load_failure(record, SETTINGS_LOAD_BAD_VERSION);
 
@@ -173,9 +173,9 @@ static void test_out_of_range_fields_are_clamped(void) {
 }
 
 static void test_ranges(void) {
-  static const uint16_t mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U};
-  static const uint16_t maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 32U, 50U, 20U, 2U, 1U, 8U, 10U, 63U, 1U, 2U};
-  static const uint16_t steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+  static const uint16_t mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U};
+  static const uint16_t maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 32U, 50U, 20U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U};
+  static const uint16_t steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
   settings_id_t id;
   start_empty();
   for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {
@@ -246,7 +246,7 @@ static void test_record_bytes_after_save(void) {
 }
 
 static void test_save_load_round_trip_and_area(void) {
-  static const uint16_t values[SETTINGS_ID_COUNT] = {990U, 50U, 41U, 7U, 6U, 0U, 0U, 8U, 0U, 63U};
+  static const uint16_t values[SETTINGS_ID_COUNT] = {990U, 50U, 41U, 7U, 6U, 0U, 0U, 8U, 0U, 63U, 0U, 0U, 9U};
   settings_id_t id;
   size_t address;
   start_empty();

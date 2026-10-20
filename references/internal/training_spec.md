@@ -13,7 +13,7 @@ review `approved` on 2026-10-15 (U-32). T15 and Q6 done, final review `approved`
 fixes R1 and R2 (section 22.5). W6 manual and quick guide `approved`. The release notes wait for the version decision.
 Change request D-T45 to D-T47 (start screen with a big level description, split end screen, user decisions
 2026-10-15): specification published on 2026-10-15 (section 17.6). D6 done, review `approved` on 2026-10-15
-(D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
+(D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. Change request D-T51 (the CW player early release follows the `Ramp` setting, plan `noble-bubbling-dahl.md`, 2026-10-16): specification published on 2026-10-16, section 17.7. The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -169,6 +169,7 @@ fails. Do not try another layout.
 | D-T48 | Review of D6 (2026-10-15): `approved`. Accepted UI values of `ui-ux.md`: UX-65 to UX-70, A-L6 to A-L8, 5.15 and 5.16.1 to 5.16.4. Also the revised V-vectors and V-171 of 9.4, and D-42 to D-44. (1) Labels: `New chars` at L1, `New char` at a character level, blank at a word level and in the final word phase. Both texts are centered, so both start in column 8. (2) Big line: `K M` (x 52), the character text in the `Prosigns` style (x 60, 48 or 40), `Words of <len>` (x 24). One rule: `x = 64 - 4 m`. (3) Code row: the L1 code gap is 9 px. It replaces the 3 px mark gap between the last mark of K and the first mark of M. So the L1 group is 44 px wide and starts at x 42. Widest single code: `,` (43 px). (4) End screen band: `OK` in columns 11-12, band x 52-71, y 57-63. This is the SL-5 rule for a label of 2 cells. (5) B-3 is in `ui-ux.md` 5.15. (6) Designer question 1, accepted, revised by D-T49 (1): a step redraws pages 0-5 in both modes, and Receiving writes page 5 blank. One code path for both modes costs less flash than a mode branch that saves one page in Receiving. (7) Designer question 2: no fallback code now. R-T14 stays open with the fallback order of section 19, and D-43 (DC-T11) gives the decision data. (8) No change of `ui-ux.md` is necessary. | The draft meets D-T45 to D-T47, SL-1 to SL-10 and B-1 to B-6. The pixel values of V-137, V-142 and V-171 follow the formulas of SL-2b and SL-2c. |
 | D-T49 | Decisions on the T16 and Q7 results (2026-10-15). (1) Dirty pages, fix required (revises D-T48 (6), SL-4, SL-10 and P5, P6). On a byte change, `gfx` marks the page dirty. Unchanged bytes leave the page clean. `lcd.c` sends only dirty pages. T16 marks pages 0-5 dirty by hand after each step, and all pages at the switch from END to SELECT. These calls send pages with no pixel change over the software SPI: page 5 of Receiving at each step, and an unchanged label or big line. They follow the D-T48 (6) text, so this is a contract fix, not a developer fault. New rule: no screen code marks a page dirty by hand on a step or at the switch. The dirty pages are the pages whose bytes change. A step changes only pages 0-5. (2) Flash, accepted: +339 B is above the +250 B target and below the +400 B hard limit. The cause is the xdata parameter stores of the contract functions and helpers. Fix (1) makes it smaller. (3) xdata, accepted: +1 B is above the +0 B target and below the +2 B hard limit. (4) Stack, accepted: the deepest chain is 71 B (+5 B, target +6 B), the margin 102 B. `architector` checked the new step: `training_screen_draw_item_text()` saves 6 registers around the `screen_draw_big_text()` call. That fits the +5 B. (5) The band draws the label in normal video, inverts y 57-63 and clears y 56. The pixels equal the old band: accepted. (6) QA notes, accepted, not blocking: M7a is killed by one check, and only the new random walk reaches END. | (1) The user asked for as few redrawn pages as possible (`ui-ux.md` UX-70). The forced pages make each step up to 2 page transfers longer, and R-T14 is the open risk of this change. With the rule of `gfx`, the fallbacks (b) and (c) of R-T14 come at no cost. (2) to (4) Each value is inside its hard limit, and a rework to register parameters changes the contract signatures for a few bytes. |
 | D-T50 | Decisions on the C1 to C3 results (2026-10-15). (1) Header at the saturation step, accepted deviation from D-T49 (1). `training_screen_draw_header()` fills row 0 and draws the inverted text again, so page 0 gets dirty at every step. Indexes 65534 and 65535 both show `L65535` with 100 items (D-T5). So at the step between them, the header bytes stay the same, and the step gives `DIRTY(0,1)`, not `DIRTY(1)`. The header code does not change. (2) Flash after C1: 28 561 B (+352 against the T16 baseline, +13 against the first T16 pass), accepted under the +400 B hard limit. The +13 B buys the byte-stable label and big line: the label is one 9-cell text with no clear, and the big line clears only at a change of its length. So a step between two character levels sends pages 0, 1, 3 and 4 only (`ui-ux.md` V-138). (3) The cache `screen_big_length` is safe: every other writer of rows 3 and 4 runs before a full start screen draw, and that draw clears rows 2-6 first. | (1) The case needs about 65 000 passed sessions and costs one page transfer. A byte-stable header costs flash on every build. (2) Fewer page transfers per step lower the R-T14 risk, and the cost is far below the hard limit. |
+| D-T51 | `Ramp` setting (plan `noble-bubbling-dahl.md`, user-approved 2026-10-16, `sidetone_spec.md` section 24). (1) `PLAYER_EARLY_RELEASE_TICKS` is `sidetone_ramp_calls` (4 x `Ramp` ms, 16 to 48), declared in `sidetone/sidetone_shared.h`. `player_shared.h` includes that header. `player_service.h` keeps its code, and its comment names no number. (2) `timing.h`: the dit at `CW_TIMING_WPM_MAX` is at least `2 * SIDETONE_RAMP_MAX_CALLS` (96 >= 96) and longer than `SIDETONE_ZERO_WAIT_CALLS` (section 5.3). (3) At 50 WPM with `Ramp` 12 ms the rise of a dit ends at index 31 of 32 and the fall ends one call before the mark end. Accepted (D-RM5). (4) The player and the modes never call `sidetone_set_ramp_ms()`. (5) Player tests call `sidetone_init()` or `sidetone_set_ramp_ms()` in their setup and use the call count of the ramp under test. | The fall must end at the mark end for every `Ramp` value, as it did for the fixed 8 ms. The player host group links `sidetone.c` already, so the tests need no new fake. The duty is 499 instead of 500 permille: not audible, and no click. |
 | D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
 
 ## 4. Baseline (measured)
@@ -272,8 +273,18 @@ void cw_timing_compute(uint8_t wpm, MEM_XDATA uint8_t eff_wpm);
 
 - The formulas are those of `keyer_spec.md` section 6.7, unchanged, with the same 32-bit step and the same clamp of
   the unit to the dit.
-- The `#error` checks for 4000 calls per second and for the dit at 50 WPM (longer than two sidetone ramps) move to
-  `timing.h`.
+- The `#error` checks for 4000 calls per second and for the dit at 50 WPM move to `timing.h`. The dit check is
+  revised by D-T51:
+
+```c
+/* The early release comes after the start call, the fall ends by the mark end, and ZERO_WAIT ends in the gap. */
+#if ((CW_TIMING_DIT_NUMERATOR + (CW_TIMING_WPM_MAX / 2U)) / CW_TIMING_WPM_MAX) < (2U * SIDETONE_RAMP_MAX_CALLS)
+#error "The dit at CW_TIMING_WPM_MAX must be at least two of the longest sidetone ramps"
+#endif
+#if ((CW_TIMING_DIT_NUMERATOR + (CW_TIMING_WPM_MAX / 2U)) / CW_TIMING_WPM_MAX) <= SIDETONE_ZERO_WAIT_CALLS
+#error "The dit at CW_TIMING_WPM_MAX must be longer than the sidetone ZERO_WAIT limit"
+#endif
+```
 - `keyer_shared.h` loses `KEYER_DIT_TICKS_NUMERATOR` and the three `KEYER_FARNSWORTH_*` macros. `keyer.h` keeps
   `KEYER_WPM_MIN` and `KEYER_WPM_MAX`, defined as `CW_TIMING_WPM_MIN` and `CW_TIMING_WPM_MAX`.
 - `keyer_start()` keeps its signature and its order of section 6.1 of `keyer_spec.md`. Step 2 (clamps) and the
@@ -309,10 +320,10 @@ bool player_is_busy(void);
 void player_stop(void);
 ```
 
-`player_shared.h` (defined in `player.c`):
+`player_shared.h` (defined in `player.c`; it includes `sidetone/sidetone_shared.h` for `sidetone_ramp_calls`, D-T51):
 
 ```c
-#define PLAYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS  /* 32: the fall ends at the mark end */
+#define PLAYER_EARLY_RELEASE_TICKS sidetone_ramp_calls  /* 4 x Ramp ms: the fall ends at the mark end (D-T51) */
 #define PLAYER_CHAR_GAP_UNITS 3U
 
 extern volatile MEM_BIT player_is_enabled;          /* main sets; main and ISR clear */
@@ -1023,9 +1034,11 @@ Exact lengths, in calls:
 | Gap between characters | `3 * unit`. Without Farnsworth, `unit` equals `dit`. |
 | After the last mark | none: `player_is_enabled` clears on the call after the last mark call |
 
-Early release: the request goes off on the call where `player_ticks` becomes 32. The sidetone runs after the player
-in the same ISR call, so the 32-step fall writes compare 0 on the last mark call. The mark keeps its full N calls.
-The shortest mark is 96 calls (dit at 50 WPM), longer than two 32-step ramps (static check in `timing.h`).
+Early release (D-T51): the request goes off on the call where `player_ticks` becomes R = `sidetone_ramp_calls`
+(4 x `Ramp` ms, 16 to 48). The sidetone runs after the player in the same ISR call, so the R-call fall enters
+ZERO_WAIT (compare 0) on the last mark call. The mark keeps its full N calls. The shortest mark is 96 calls (dit at
+50 WPM), at least two of the longest ramps (static check in `timing.h`). At 50 WPM with `Ramp` 12 ms the rise ends
+at index 31 and the fall ends one call earlier (`keyer_spec.md` section 18.2, `sidetone_spec.md` D-RM5).
 
 Reference values:
 
@@ -1046,7 +1059,9 @@ All values fit `uint16_t`. The ISR only compares, counts, shifts and copies. It 
 - The keyer and the player write the same request bit through their macros. D-T12 keeps only one of them enabled.
 - The Tone preview runs only in the Tone edit. No mode screen runs at that time.
 - The tone: `receiving_enter()` and `sending_enter()` call `sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ))`.
-- A stop during a mark gives the normal 8 ms fall, so no click.
+- A stop during a mark gives the normal fall at the set `Ramp` (4 to 12 ms), so no click.
+- The modes do not call `sidetone_set_ramp_ms()`. The sidetone already has the `Ramp` value (`sidetone_spec.md`
+  D-RM6).
 
 ## 10. EEPROM progress record (page 1)
 
@@ -1784,7 +1799,7 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T9 | Progress load. An erased page, a wrong magic, version 0 and 2, a bad CRC and a read failure give their status and level 0 everywhere. A valid record gives its levels, including 0xFFFF. Load never writes. |
 | AC-T10 | Progress save. The written page equals the layout of 10.1. The magic is programmed last. A failure in the erase, the first write or the second write gives SAVE_FAILED and keeps the RAM levels. A power loss after any operation never leaves a valid record with wrong data. |
 | AC-T11 | Advance and reset. Advance at 65534 gives 65535 and true. At 65535 it gives false and no change. Each (mode, wpm) changes only its own two bytes. Reset sets all 92 levels to 0 and saves. Unknown mode: level 0, no advance. |
-| AC-T12 | Player timing. Speeds: 5, 20 and 50 WPM, and 20/10 and 50/5 Farnsworth. Texts: `E`, `T`, `K`, `5`, `0`, `PARIS`, a prosign and an 8-character word. Every mark and gap has the exact length of section 9.2. The request goes off on the call where 32 mark calls remain. Busy clears on the call after the last mark. |
+| AC-T12 | Player timing. Speeds: 5, 20 and 50 WPM, and 20/10 and 50/5 Farnsworth. Texts: `E`, `T`, `K`, `5`, `0`, `PARIS`, a prosign and an 8-character word. Every mark and gap has the exact length of section 9.2. The request goes off on the call where `sidetone_ramp_calls` mark calls remain, at ramps 4, 6, 8 and 12 ms (D-T51). The fall enters ZERO_WAIT on the last mark call, or one call earlier only at 50 WPM and 12 ms. Busy clears on the call after the last mark. |
 | AC-T13 | Player envelope. With the real `sidetone_service()` after each call, compare 0 is written on the last mark call of every element, for the speaker and the headphones. |
 | AC-T14 | Player control. `player_start()` rejects length 0, length 9 and a character without a code, and then plays nothing. A start during a playback restarts from the first element. `player_stop()` clears busy, and the next calls change no player state. A disabled service reads no shared value except `player_is_enabled`. |
 | AC-T15 | Tap mode (D-T28). A tap of `menu/back`, `prev`, `next` or `enter` gives its event at the debounced release. A hold gives only the long event at `BUTTONS_LONG_PRESS_MS` (long `enter` = 0x44), and nothing at the release. The edge case of D-T22 holds for `enter` too. No repeat in tap mode. Long events due in one poll come in the order `menu/back`, `enter`, `prev`, `next`. A hold that started before the switch gives no event, also an `enter` hold (the entry from the menu). `buttons_set_enter_enabled(false)` and `(true)` drop a long-pending `enter`. Off: `enter` gives its event at the press and never a long event (AC-K45), and all existing tap-off button tests pass unchanged. |
@@ -2023,11 +2038,18 @@ reports to `architector` first.
 Exit rule. T16 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
 tests that the 15.3 changes cover can fail. Q7 Part A updates them. Q7 ends with `test.sh` passing in full.
 
+### 17.7 Change D-T51: player early release follows the `Ramp` setting
+
+User decision 2026-10-16 (plan `noble-bubbling-dahl.md`). The task split is in `sidetone_spec.md` section 24.5:
+task R3 covers `player_shared.h`, the `player_service.h` comment, the `timing.h` checks of section 5.3 and the
+revised AC-T12 in `test_player.c`. QA check 4 of `sidetone_spec.md` section 24.6 covers the player. No change in
+`player.c`, `receiving.c`, `sending.c`, `training.c` or the session engine.
+
 ## 18. Device checks (unverified until the user tests on the device)
 
 | ID | Check |
 | --- | --- |
-| DC-T1 | Record the Receiving playback at 20/20 and 50/50 WPM and at 20/10 Farnsworth. Element and gap lengths match section 9.2 within the oscillator trim. No click at mark edges. |
+| DC-T1 | Record the Receiving playback at 20/20 and 50/50 WPM and at 20/10 Farnsworth. Element and gap lengths match section 9.2 within the oscillator trim. No click at mark edges. Repeat 50/50 with `Ramp` 4 and 12 ms (`sidetone_spec.md` DC-14). |
 | DC-T2 | Sending: the blank before the next item is visible, also for a repeated character. The 8 x 16 text is readable. |
 | DC-T3 | Receiving: the four group labels sit above `menu/back`, `prev`, `next` and `enter` in this order (D-T27). |
 | DC-T4 | Tap mode. A tap feels prompt. A long `prev` undoes with no visible group change first. A long `enter` replays with no pick first. |

@@ -27,9 +27,12 @@
 #if CW_TIMING_TICKS_HZ != 4000U
 #error "The CW timing factors assume 4000 Timer 0 calls per second"
 #endif
-/* The early release must come after the rise, and ZERO_WAIT must end before the next element starts. */
-#if ((CW_TIMING_DIT_NUMERATOR + (CW_TIMING_WPM_MAX / 2U)) / CW_TIMING_WPM_MAX) <= (2U * SIDETONE_RAMP_STEPS)
-#error "The dit at CW_TIMING_WPM_MAX must be longer than two sidetone ramps"
+/* The early release comes after the start call, the fall ends by the mark end, and ZERO_WAIT ends in the gap. */
+#if ((CW_TIMING_DIT_NUMERATOR + (CW_TIMING_WPM_MAX / 2U)) / CW_TIMING_WPM_MAX) < (2U * SIDETONE_RAMP_MAX_CALLS)
+#error "The dit at CW_TIMING_WPM_MAX must be at least two of the longest sidetone ramps"
+#endif
+#if ((CW_TIMING_DIT_NUMERATOR + (CW_TIMING_WPM_MAX / 2U)) / CW_TIMING_WPM_MAX) <= SIDETONE_ZERO_WAIT_CALLS
+#error "The dit at CW_TIMING_WPM_MAX must be longer than the sidetone ZERO_WAIT limit"
 #endif
 
 /* Results of the last cw_timing_compute() call, in Timer 0 calls. Main loop only. */

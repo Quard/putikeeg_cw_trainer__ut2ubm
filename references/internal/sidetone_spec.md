@@ -1,6 +1,8 @@
 # CW sidetone with Tone preview: implementation specification
 
-Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-developer`, `qa-embedded`,
+Owner: `architector`. Status: approved for implementation. Change request D-RM1 to D-RM15 (ramp duration setting,
+plan `noble-bubbling-dahl.md`, user-approved 2026-10-16): specification published on 2026-10-16, section 24. R0-R6 and Q-R done, final review `approved` on 2026-10-16 (section 24.12). W-R ready to start. Where
+section 24 and the older text differ, section 24 wins. Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
@@ -9,6 +11,7 @@ Owner: `architector`. Status: approved for implementation. Readers: `c-embedded-
 | --- | --- |
 | This document | Interfaces, memory placement, behavior, register values, task split and acceptance criteria. It refines the approved plan and does not change a user decision. |
 | Plan `curious-snacking-goblet.md` (user-approved) | Scope, user decisions, team steps. |
+| Plan `noble-bubbling-dahl.md` (user-approved 2026-10-16) | Ramp duration setting: range, default, envelope method, menu scroll, Ramp preview (section 24). |
 | `references/internal/sidetone_pwm_envelope_research.md` | Duty table, envelope idea, host-test list. Where this document differs, this document wins (section 3). |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | Tone preview interaction (Q-3, O-3), the preview timing value and the new V-tests. |
 | `references/internal/components_and_wiring.md` | Audio pins, quiet levels, plug detect. |
@@ -66,15 +69,17 @@ Decision: two tables, A and B, with their own ARR values. A bit selects the acti
 writes the inactive table. The ISR only flips the selector bit. The xdata cost stays the same (2 x 66 B + 2 x 2 B).
 Section 6.4 gives the protocol.
 
-### 3.2 One envelope step on every service call (replaces "FALLING, index unchanged")
+### 3.2 One envelope move on every service call, at the set ramp speed (revised by D-RM1)
 
-The plan says that an off request in RISING or STEADY enters FALLING with the index unchanged. That call then
+The first plan said that an off request in RISING or STEADY enters FALLING with the index unchanged. That call then
 writes nothing, so a full fall takes 33 calls and a full rise 32 calls.
 
-Decision: each service call in RISING, STEADY and FALLING moves the index one step toward the target that the
-current requests select (section 6.3). A full rise and a full fall both take exactly 32 calls (8.0 ms at 4 kHz).
-A reversal never resets the index and never loses a call. This gives the later keyer a fixed lead time of
-`SIDETONE_RAMP_STEPS` calls.
+Decision: each service call in RISING, STEADY and FALLING moves the envelope position one increment toward the
+target that the current requests select (section 6.3). The position counts in 1/64 of a table step. The increment
+comes from the ramp setting `N` (4 to 12 ms, section 6.8). A full rise and a full fall both take exactly
+`4 * N` calls: 16 to 48 calls, 4 to 12 ms at 4 kHz. At 8 ms the increment is one table step per call, as in the
+first design. A reversal never resets the position and never loses a call. The keyer and the CW player use the
+same call count, `sidetone_ramp_calls`, as their lead time (section 5.7).
 
 ### 3.3 Write order at index 0
 
@@ -86,7 +91,7 @@ the shadow register still holds the old, non-zero compare. The ISR then disables
 
 A fault can stop the PWMA update flag, for example a cleared EAXFR. Then ZERO_WAIT stays forever, and the tone
 never plays again. Decision: ZERO_WAIT ends after `SIDETONE_ZERO_WAIT_LIMIT` (12) calls also without the flag.
-The index byte counts these calls, because it is 0 in ZERO_WAIT. No extra RAM.
+The envelope position counts these calls, because it is 0 in ZERO_WAIT. No extra RAM.
 
 ### 3.5 Timer 0 setup moves into the board header
 
@@ -267,6 +272,10 @@ Values can be changed with `-D` where marked. Host tests use the default target 
 #define SIDETONE_TONE_MIN_HZ 400U          /* equal to settings_min(SETTINGS_ID_TONE_HZ), host test AC-11 */
 #define SIDETONE_TONE_MAX_HZ 1000U         /* equal to settings_max(SETTINGS_ID_TONE_HZ), host test AC-11 */
 #define SIDETONE_RAMP_STEPS 32U            /* the duty table has SIDETONE_RAMP_STEPS + 1 values */
+#define SIDETONE_RAMP_MIN_MS 4U            /* equal to settings_min(SETTINGS_ID_RAMP_MS), host test AC-28 */
+#define SIDETONE_RAMP_MAX_MS 12U           /* equal to settings_max(SETTINGS_ID_RAMP_MS), host test AC-28 */
+#define SIDETONE_RAMP_CALLS_PER_MS (SIDETONE_SERVICE_HZ / 1000U)                          /* 4 */
+#define SIDETONE_RAMP_MAX_CALLS (SIDETONE_RAMP_CALLS_PER_MS * SIDETONE_RAMP_MAX_MS)        /* 48 */
 #ifndef SIDETONE_PLUG_DEBOUNCE_MS
 #define SIDETONE_PLUG_DEBOUNCE_MS 50U      /* -D; not checked on the device */
 #endif
@@ -285,12 +294,20 @@ Compile-time checks (`#if ... #error`):
 - `SIDETONE_COUNTER_HZ / SIDETONE_TONE_MAX_HZ >= 1000`. Then each step of the permille table changes the compare
   value by at least one count, so the compare table is strictly increasing.
 - `SIDETONE_ZERO_WAIT_LIMIT <= 255`.
+- `SIDETONE_SERVICE_HZ == 4000U`. The increment table of section 6.8 holds values for 4 calls per ms.
+- `1 <= SIDETONE_RAMP_MIN_MS <= SIDETONE_RAMP_MAX_MS` and `SIDETONE_RAMP_MAX_CALLS <= 255` (the call count is one
+  byte).
+
+The macros of this header have no casts where an `#if` uses them. `timing.h` uses `SIDETONE_RAMP_MAX_CALLS` and
+`SIDETONE_ZERO_WAIT_CALLS` in `#if` (`training_spec.md` section 5.3).
 
 ### 5.4 Public API `inc/sidetone/sidetone.h`
 
 ```c
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "mcu/compiler.h"
 
 #if defined(__SDCC_mcs51)
 #include "mcu/stc8h.h"
@@ -300,12 +317,13 @@ typedef uint8_t sidetone_state_t;
 
 #define SIDETONE_STATE_OFF 0U        /* output disabled, confirmed at zero */
 #define SIDETONE_STATE_RISING 1U
-#define SIDETONE_STATE_STEADY 2U     /* index at SIDETONE_RAMP_STEPS, 50 % duty */
+#define SIDETONE_STATE_STEADY 2U     /* position at full scale, 50 % duty */
 #define SIDETONE_STATE_FALLING 3U
 #define SIDETONE_STATE_ZERO_WAIT 4U  /* compare 0 written, waits for the PWMA update flag */
 
-void sidetone_init(uint16_t tone_hz);
+void sidetone_init(uint16_t tone_hz, MEM_XDATA uint8_t ramp_ms);
 void sidetone_set_tone_hz(uint16_t tone_hz);
+void sidetone_set_ramp_ms(uint8_t ramp_ms);
 void sidetone_set_on(bool is_on);
 bool sidetone_is_busy(void);
 sidetone_state_t sidetone_state(void);
@@ -320,8 +338,9 @@ void sidetone_timer0_isr(void) __interrupt(TIMER0_INTERRUPT);
 
 | Function | Context | Behavior |
 | --- | --- | --- |
-| `sidetone_init(tone_hz)` | Main loop, once, at start-up. `EA` can be 1. | Clamps `tone_hz` (section 6.1). Fills table A and its ARR, selects A, clears the pending flag and the on request. Configures PWMA with ARR of A, compares 0, all ENO bits 0. Configures the pins. Samples P1.0 once and takes it as the debounced, requested and active route. State OFF, index 0. Starts Timer 0 last. Silent the whole time. Does not change `EA`. |
+| `sidetone_init(tone_hz, ramp_ms)` | Main loop, once, at start-up. `EA` can be 1. | Clamps `tone_hz` (section 6.1). Sets the ramp with the same clamp and the same two stores as `sidetone_set_ramp_ms(ramp_ms)`, but with no preemption point and no call (section 6.8, D-RM11). Fills table A and its ARR, selects A, clears the pending flag and the on request. Configures PWMA with ARR of A, compares 0, all ENO bits 0. Configures the pins. Samples P1.0 once and takes it as the debounced, requested and active route. State OFF, position 0. Starts Timer 0 last. Silent the whole time. Does not change `EA`. |
 | `sidetone_set_tone_hz(tone_hz)` | Main loop only. | Clamps. When the clamped value equals the last requested value, returns at once. Else writes the inactive table and its ARR through the mailbox (section 6.4) and stores the value as the last requested. The new tone sounds after the next silence (OFF). Runs 33 32-bit multiply-divide operations. No hardware access. |
+| `sidetone_set_ramp_ms(ramp_ms)` | Main loop only. Call it only while the keyer and the CW player are disabled (D-RM6). | Clamps `ramp_ms` to `SIDETONE_RAMP_MIN_MS..SIDETONE_RAMP_MAX_MS`. Writes the increment byte, then `sidetone_ramp_calls` = 4 x the clamped value (section 6.8). No early return for a repeated value. No fall, no restart: a ramp that runs goes on at the new speed. No hardware access, no multiply, no division. |
 | `sidetone_set_on(is_on)` | Main loop only (section 3.10). | Writes the on-request bit with one instruction. The ISR starts or ends the envelope on its next call. |
 | `sidetone_is_busy()` | Main loop. | Returns true for a set on request or for a state other than OFF. False means: the output is disabled and nothing is requested. |
 | `sidetone_state()` | Main loop. | Returns the state byte (one read). |
@@ -366,6 +385,27 @@ void sidetone_timer0_isr(void) __interrupt(TIMER0_INTERRUPT) { sidetone_service(
 There is no separate ISR file. The ISR must be in the same file as `sidetone_service()` (D-R2-1). The host build
 does not see it. TF0 needs no software clear (hardware clears it at the vector, 13.2.1).
 
+### 5.7 Shared ramp call count `inc/sidetone/sidetone_shared.h` (new, D-RM3)
+
+```c
+#include <stdint.h>
+
+#include "mcu/compiler.h"
+
+/*
+ * Service calls of one full rise or fall: 4 x the ramp in ms, 16..48. sidetone_set_ramp_ms() writes it. The keyer
+ * and the CW player read it in the Timer 0 interrupt. One byte, so each access is atomic.
+ */
+extern volatile MEM_DATA uint8_t sidetone_ramp_calls;
+```
+
+- `src/sidetone/sidetone.c` defines `volatile MEM_DATA uint8_t sidetone_ramp_calls;` without a static initializer.
+  `sidetone_init()` writes it before Timer 0 starts.
+- `cw/keyer_shared.h` and `cw/player_shared.h` include this header. They define `KEYER_EARLY_RELEASE_TICKS` and
+  `PLAYER_EARLY_RELEASE_TICKS` as `sidetone_ramp_calls` (`keyer_spec.md` section 18, `training_spec.md` D-T51).
+- Only `sidetone.c` writes it. Only `keyer_service.h`, `player_service.h` and host tests read it. A file that only
+  includes `keyer_shared.h` or `player_shared.h` and does not read it needs no link to `sidetone.c`.
+
 ## 6. Behavior
 
 ### 6.1 Tone math (main loop only)
@@ -401,7 +441,10 @@ At 1000 Hz, `compare[k] = 12 * duty_permille[k]` exactly. Tests use this to read
 | Variable | Type and qualifier | Writer | Readers |
 | --- | --- | --- | --- |
 | state | `static volatile MEM_DATA uint8_t` | ISR (and init) | ISR, main (`sidetone_is_busy`, `sidetone_state`) |
-| index | `static MEM_DATA uint8_t`, 0..32. In ZERO_WAIT it counts the wait calls. | ISR (and init) | ISR |
+| position | `static MEM_DATA uint16_t`, 0..`SIDETONE_POSITION_FULL` (2048), in 1/64 of a table step. The table index is `position >> 6`. In ZERO_WAIT it counts the wait calls. | ISR (and init) | ISR |
+| ramp increment | `static volatile MEM_DATA uint8_t`, 43..128 (section 6.8) | main (`sidetone_set_ramp_ms`, init) | ISR, once per call |
+| `sidetone_ramp_calls` | `volatile MEM_DATA uint8_t`, 16..48, not `static` (section 5.7) | main (`sidetone_set_ramp_ms`, init) | keyer and player in the ISR |
+| ramp increments | `static const MEM_CODE uint8_t[9]` (section 6.8) | - | main |
 | is_on_requested | `static volatile MEM_BIT` | main | ISR |
 | is_tone_pending | `static volatile MEM_BIT` | main sets and clears, ISR clears | ISR |
 | is_table_b_active | `static volatile MEM_BIT` | ISR (and init) | ISR, main |
@@ -422,7 +465,10 @@ Rules:
 
 ### 6.3 Envelope state table (`sidetone_service`, the ISR is the only writer)
 
-Each call first forms the target direction:
+Names: `P` = position, `I` = ramp increment, `FULL` = `SIDETONE_POSITION_FULL` = `SIDETONE_RAMP_STEPS * 64` = 2048.
+`SIDETONE_POSITION_FULL` and `SIDETONE_POSITION_SHIFT` (6) are private macros of `sidetone.c`.
+
+Each call first reads `I` once into a local and forms the target direction:
 
 ```text
 is_up = is_on_requested AND NOT is_tone_pending
@@ -431,25 +477,34 @@ is_up = is_on_requested AND NOT is_tone_pending
 | State | Condition | Actions, in this order | Next state |
 | --- | --- | --- | --- |
 | OFF | `is_on_requested` = 0 | none | OFF |
-| OFF | `is_on_requested` = 1 | 1. When `is_tone_pending`: flip `is_table_b_active`, clear `is_tone_pending`, `SET_ARR(arr of the new active table)`. 2. `is_headphones_active = is_headphones_requested`. 3. `SET_COMPARE_<route>(0)`. 4. `GENERATE_UPDATE()`. 5. `ENABLE_<route>()`. 6. index = 0. | RISING |
-| RISING, STEADY, FALLING | `is_up` and index < 32 | index = index + 1. `SET_COMPARE_<route>(active[index])`. | index = 32: STEADY. Other index: RISING. |
-| RISING, STEADY, FALLING | `is_up` and index = 32 | none | STEADY |
-| RISING, STEADY, FALLING | not `is_up` and index > 1 | index = index - 1. `SET_COMPARE_<route>(active[index])`. | FALLING |
-| RISING, STEADY, FALLING | not `is_up` and index = 1 | index = 0. `SET_COMPARE_<route>(active[0])`. Then `CLEAR_UPDATE_FLAG()`. | ZERO_WAIT |
-| RISING | not `is_up` and index = 0 (off right after the start call) | `CLEAR_UPDATE_FLAG()` (the compare is already 0 and UG loaded it) | ZERO_WAIT |
-| ZERO_WAIT | `IS_UPDATE_FLAG_SET()` | `DISABLE_OUTPUTS()`. index = 0. | OFF |
-| ZERO_WAIT | flag clear, index + 1 < `SIDETONE_ZERO_WAIT_LIMIT` | index = index + 1 | ZERO_WAIT |
-| ZERO_WAIT | flag clear, index + 1 = `SIDETONE_ZERO_WAIT_LIMIT` | `DISABLE_OUTPUTS()`. index = 0. | OFF |
+| OFF | `is_on_requested` = 1 | 1. When `is_tone_pending`: flip `is_table_b_active`, clear `is_tone_pending`, `SET_ARR(arr of the new active table)`. 2. `is_headphones_active = is_headphones_requested`. 3. `SET_COMPARE_<route>(0)`. 4. `GENERATE_UPDATE()`. 5. `ENABLE_<route>()`. 6. P = 0. | RISING |
+| RISING, STEADY, FALLING | `is_up` and P < FULL | P = P + I. When P > FULL: P = FULL. `SET_COMPARE_<route>(active[P >> 6])`. | P = FULL: STEADY. Else RISING. |
+| RISING, STEADY, FALLING | `is_up` and P = FULL | none | STEADY |
+| RISING, STEADY, FALLING | not `is_up` and P > I | P = P - I. `SET_COMPARE_<route>(active[P >> 6])`. | FALLING |
+| RISING, STEADY, FALLING | not `is_up` and 0 < P <= I | P = 0. `SET_COMPARE_<route>(active[0])`. Then `CLEAR_UPDATE_FLAG()`. | ZERO_WAIT |
+| RISING | not `is_up` and P = 0 (off right after the start call) | `CLEAR_UPDATE_FLAG()` (the compare is already 0 and UG loaded it) | ZERO_WAIT |
+| ZERO_WAIT | `IS_UPDATE_FLAG_SET()` | `DISABLE_OUTPUTS()`. P = 0. | OFF |
+| ZERO_WAIT | flag clear, P + 1 < `SIDETONE_ZERO_WAIT_LIMIT` | P = P + 1 | ZERO_WAIT |
+| ZERO_WAIT | flag clear, P + 1 = `SIDETONE_ZERO_WAIT_LIMIT` | `DISABLE_OUTPUTS()`. P = 0. | OFF |
 
 `<route>`: `is_headphones_active` = 1 selects `HEADPHONES`, 0 selects `SPEAKER`. `active[]`: `is_table_b_active` = 1
-selects table B, 0 selects table A.
+selects table B, 0 selects table A. P + I is at most 2048 + 128, so it fits 16 bits.
 
-Properties that follow, and that the tests check:
+Properties that follow, and that the tests check. `N` is the ramp in ms, `R` = `4 * N` = `sidetone_ramp_calls`:
 
-- From OFF with an on request: the start call, then 32 calls to STEADY. Each of the 32 calls writes one compare
-  value, `active[1]` to `active[32]`.
-- From STEADY with the request cleared: 32 calls to ZERO_WAIT. They write `active[31]` to `active[0]`.
-- A reversal at any index moves one step in the new direction on the next call. The index never jumps.
+- From OFF with an on request: the start call, then exactly R calls to STEADY. Call `j` (1..R) writes
+  `active[min(j * I, FULL) >> 6]`. The indexes never go down, and the last one is 32.
+- From STEADY with the request cleared: exactly R calls to ZERO_WAIT. The indexes never go up, and the last write
+  is `active[0]`.
+- At 8 ms (I = 64) the rise writes `active[1]` to `active[32]` and the fall `active[31]` to `active[0]`, one step
+  per call. This is the sequence of the first design.
+- Two writes in a row differ by at most `ceil(I / 64)` table steps: 2 at 4 to 7 ms, 1 at 8 to 12 ms. At 9 to
+  12 ms the same index can come on two calls in a row.
+- At 9 to 12 ms (I < 64) the first rise call writes `active[0]` again: the start call already wrote compare 0.
+- At 9 to 12 ms the fall can write `active[0]` while still in FALLING (0 < P < 64). The next call writes
+  `active[0]` again and clears the flag. The flag clear always comes after a compare 0 write.
+- A reversal at any position moves one increment in the new direction on the next call. The position never jumps.
+- A new increment during a ramp changes only the speed of the rest of that ramp. The position does not jump.
 - A pending tone acts like an off request: STEADY or RISING falls, FALLING keeps falling, and no rise happens until
   OFF applies the new table. In ZERO_WAIT and OFF it is held until the next start.
 - ARR changes only in OFF, and UG happens only in OFF. No UG during a ramp.
@@ -510,13 +565,48 @@ can start the preview.
 ### 6.7 `sidetone_init(tone_hz)` order
 
 1. Clamp, fill table A and `arr_a`. `requested_hz` = clamped. `is_table_b_active` = 0, `is_tone_pending` = 0,
-   `is_on_requested` = 0, state OFF, index 0.
+   `is_on_requested` = 0, state OFF, position 0. Set the ramp from `ramp_ms` with steps 1 to 3 of section 6.8, but
+   with no preemption point (Timer 0 is not running yet).
 2. `SIDETONE_PWM_CONFIGURE(arr_a)`.
 3. `SIDETONE_PINS_CONFIGURE()`.
 4. Route sample (section 6.6).
 5. `SIDETONE_TIMER_START()`.
 
 Timer 0 is not running before step 5, so the ISR cannot see half-set state. Call it once.
+
+### 6.8 Ramp setting (`sidetone_set_ramp_ms`, main loop, D-RM1, D-RM2)
+
+1. `N` = `ramp_ms` clamped to `SIDETONE_RAMP_MIN_MS..SIDETONE_RAMP_MAX_MS` (4..12).
+2. Ramp increment = `sidetone_ramp_increments[N - SIDETONE_RAMP_MIN_MS]` (one `MOV`). Then
+   `SIDETONE_PREEMPTION_POINT()`.
+3. `sidetone_ramp_calls` = `(uint8_t)(N << 2)` (one `MOV`). Then `SIDETONE_PREEMPTION_POINT()`.
+
+`sidetone_ramp_increments` is `static const MEM_CODE uint8_t[]` with 9 values, indexed by `N - 4`. A
+`_Static_assert` ties its length to `SIDETONE_RAMP_MAX_MS - SIDETONE_RAMP_MIN_MS + 1`. Value = `ceil(512 / N)` =
+`ceil(FULL / (4 * N))`:
+
+| N (ms) | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Increment | 128 | 103 | 86 | 74 | 64 | 57 | 52 | 47 | 43 |
+| Calls of a full ramp, `ceil(2048 / increment)` | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 44 | 48 |
+
+`architector` checked each column with a script (2026-10-16): with the rules of section 6.3, a full rise and a
+full fall each take exactly `4 * N` calls. The main loop needs no division and no multiply.
+
+Rules:
+
+- Each of the two stores is one byte, so each is atomic. The pair is not. An ISR call between steps 2 and 3 sees
+  the new increment with the old call count. Effect: at most one keyer or player mark ends its fall up to
+  32 calls (8 ms) away from the mark end. The fall still ends in silence, because the fall rule needs no call
+  count. In this change only `sidetone_init()` and the menu Ramp edit call it. At both times the keyer and the
+  player are disabled (D-RM6).
+- No fall and no restart. A tone that sounds stays on. The next rise or fall uses the new speed.
+- The sidetone never changes the ramp by itself.
+
+Physics note (no defect): the PWM loads a new compare value only at an update event, once per carrier period
+(compare preload OCiPE = 1, datasheet 20.5.6 and 20.7.11). One carrier period is 2.5 ms at 400 Hz and 1 ms at 1000 Hz. A
+4 ms ramp at 400 Hz therefore reaches the output as only 1 or 2 compare values. A short ramp at a low tone can
+click more. Device check DC-13.
 
 ## 7. PWMA and pin configuration
 
@@ -584,7 +674,10 @@ nest. The 4 kHz rate is exact at 24 MHz. The only error is the oscillator trim.
 - The ISR path uses no library helper: no `__mulint`, `__divuint`, `__moduint`, `__mullong`, `__divulong`,
   `__modulong` or other `__` arithmetic routine. These routines are not reentrant and the main loop uses them.
   Use `uint8_t` index arithmetic and separate arrays (section 6.2).
+- The position math of section 6.3 is a 16-bit add, subtract and compare and a shift by the constant 6. SDCC
+  generates all of them inline. The increment is a byte, so no operation needs a multiply. Check the `.asm`.
 - The 32-bit math of section 6.1 runs only in `sidetone_init()` and `sidetone_set_tone_hz()`.
+- `sidetone_set_ramp_ms()` uses a table read and `N << 2`. It has no library helper.
 - The ISR relies on `EAXFR` = 1 and never reads, saves or writes `P_SW2`. `SIDETONE_PWM_CONFIGURE()` sets it with
   `ORL`. No code clears it.
 - No `__critical`, no write to `EA` or the `IE` byte. `ET0` changes only with `SETB` and `CLR`.
@@ -603,7 +696,8 @@ Start-up order (changes in bold):
 
 1. `tick_init()`, 2. `EA = 1`, 3. `eeprom_init()`, 4. `buttons_init()`, 5. `settings_load()`,
 6. recovery defaults (only after a recovery start),
-**7. `sidetone_init(settings_get(SETTINGS_ID_TONE_HZ))`**, then `lcd_init()` and the rest as today.
+**7. `sidetone_init(settings_get(SETTINGS_ID_TONE_HZ), (uint8_t)settings_get(SETTINGS_ID_RAMP_MS))`**, then
+`keyer_init()`, `lcd_init()` and the rest as today.
 
 Main loop, forever:
 
@@ -628,8 +722,9 @@ void menu_poll(void);
 
 `menu_poll()` reads `tick_now()` only while a preview runs, once per call.
 
-`menu.c` includes `sidetone/sidetone.h` and calls only `sidetone_set_tone_hz()` and `sidetone_set_on()`. It does not
-call `sidetone_init`, `sidetone_poll` or `sidetone_service`.
+`menu.c` includes `sidetone/sidetone.h` and calls only `sidetone_set_tone_hz()`, `sidetone_set_ramp_ms()` and
+`sidetone_set_on()`. It does not call `sidetone_init`, `sidetone_poll` or `sidetone_service`. The Ramp preview hooks
+are in `menu_subsystem_spec.md` section 18.5.
 
 ### 10.3 Preview hooks (filled in by `ui-ux-embedded-designer`)
 
@@ -645,13 +740,22 @@ The hooks are the only places where the menu touches the sidetone.
 | H5 | The EDIT screen of the Tone item ends by any path: ENTER, MENU, or `menu_show_message()` over the edit. | `sidetone_set_on(false)`, exactly once per exit. A preview that already timed out gets this call too. The preview ends. |
 | H6 | Any other screen, item or edit. | No sidetone call. |
 
+Ramp item (`ui-ux.md` section 6.5, UX-73, D-RM8): the hooks H1-H6 apply to the Tone item and to the Ramp item. One
+preview state, one start time and `MENU_TONE_PREVIEW_MS` serve both. A Ramp hook that starts the tone (H1, H2) calls
+`sidetone_set_ramp_ms(value)`, then `sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ))`, then
+`sidetone_set_on(true)`. The Tone hooks stay as above and call no `sidetone_set_ramp_ms()`. H3 to H5 are the same
+for both items. `menu_subsystem_spec.md` section 18.5 has the menu code contract.
+
 Constraints for the designer:
 
 - The buttons give press and repeat events only. There is no release event. A rule like "play after release"
   needs a buttons change. Report it to `architector` first.
-- Every tone change while sounding costs one fall, the wait for the carrier update and one rise: about
-  8 + 2.5 + 8 ms at 400 Hz. With the 80 ms repeat, a held button gives a chain of short tones.
-- The sidetone itself adds no delay rule. The tone sounds at most `MENU_TONE_PREVIEW_MS` plus the 8 ms fall.
+- Every tone change while sounding costs one fall, the wait for the carrier update and one rise. Each ramp is
+  the set ramp, 4 to 12 ms: about 4 + 2.5 + 4 ms to 12 + 2.5 + 12 ms at 400 Hz. With the 80 ms repeat, a held
+  button gives a chain of short tones.
+- A ramp change while sounding causes no fall and no rise (section 6.8).
+- The sidetone itself adds no delay rule. The tone sounds at most `MENU_TONE_PREVIEW_MS` plus one fall at the set
+  ramp.
 - Call order within one hook: `sidetone_set_tone_hz()` before `sidetone_set_on(true)`, so the first rise already
   uses the new tone.
 
@@ -717,9 +821,13 @@ fake_sidetone_pwm_event_t fake_sidetone_pwm_event_at(size_t index);  /* kind and
 ### 12.2 `Tests/fakes/fake_sidetone.c/.h` (menu tests)
 
 Implements the functions of `sidetone.h` for the menu group. It keeps an ordered call log (kind and value). The log
-has the calls of `sidetone_init`, `sidetone_set_tone_hz` and `sidetone_set_on`. The fake counts the `sidetone_poll`
-calls. `sidetone_is_busy()` returns a value that the test sets. Accessors: reset, call count, call at index, last
-tone, last on value.
+has the calls of `sidetone_init`, `sidetone_set_tone_hz`, `sidetone_set_ramp_ms` and `sidetone_set_on`. The fake
+counts the `sidetone_poll` calls. `sidetone_is_busy()` returns a value that the test sets. Accessors: reset, call
+count, call at index, last tone, last ramp, last on value.
+
+Additions of D-RM8: `FAKE_SIDETONE_CALL_RAMP 4U` (value: ramp in ms, as passed, not clamped) and
+`uint8_t fake_sidetone_last_ramp(void)` (0 without a call). `sidetone_init(tone, ramp)` logs one `INIT` entry with
+the tone, as before, and stores the ramp as the last ramp. The fake defines no `sidetone_ramp_calls`.
 
 ### 12.3 `Tests/CMakeLists.txt`
 
@@ -737,13 +845,13 @@ menu tests (developer, QA). Every sidetone test ends with `fake_sidetone_pwm_vio
 
 | ID | Criterion | Evidence |
 | --- | --- | --- |
-| AC-1 | Silent init. After `sidetone_init(600)`: one PWM configure with ARR 19999, then pins configure, then one timer start, in this order. No register write before the configure. ENO 0, both compares 0. State OFF, `sidetone_is_busy()` false. | test |
-| AC-2 | Duty table. A full rise at 1000 Hz writes `12 * p` for each of the 33 values of section 6.1. The values are strictly increasing: 0 at the start, 6000 (50 %) at STEADY. | test |
-| AC-3 | Rise timing. With the on request: the first call writes compare 0, UG, then the ENO bit of the route, state RISING. The next 32 calls write `active[1..32]`, one per call. After call 33 the state is STEADY. STEADY with the request held writes nothing. | test |
-| AC-4 | Fall timing. From STEADY with the request cleared: 32 calls write `active[31..0]`. The flag clear comes after the compare 0 write in the log. Then ZERO_WAIT, ENO unchanged. | test |
+| AC-1 | Silent init. After `sidetone_init(600, 6)`: one PWM configure with ARR 19999, then pins configure, then one timer start, in this order. No register write before the configure. ENO 0, both compares 0. State OFF, `sidetone_is_busy()` false. | test |
+| AC-2 | Duty table. A full rise at 1000 Hz and ramp 8 ms writes `12 * p` for each of the 33 values of section 6.1. The values are strictly increasing: 0 at the start, 6000 (50 %) at STEADY. | test |
+| AC-3 | Rise timing, for each ramp N = 4..12. With the on request: the first call writes compare 0, UG, then the ENO bit of the route, state RISING. The next 4N calls write `active[min(j * I, 2048) >> 6]`, j = 1..4N, one per call. After call 4N + 1 the state is STEADY, not earlier. STEADY with the request held writes nothing. | test |
+| AC-4 | Fall timing, for each ramp N = 4..12. From STEADY with the request cleared: exactly 4N calls to ZERO_WAIT. The indexes never go up, and the last write is `active[0]`. The flag clear comes after a compare 0 write in the log. Then ZERO_WAIT, ENO unchanged. | test |
 | AC-5 | ZERO_WAIT. Without the flag, the state stays and busy is true. After `update_event()`, the next call writes ENO 0 and the state is OFF. At that ENO write, the shadow compare of the active channel is 0. | test |
 | AC-6 | ZERO_WAIT limit. With no update event, the state becomes OFF with ENO 0 after exactly `SIDETONE_ZERO_WAIT_LIMIT` (12) calls in ZERO_WAIT. | test |
-| AC-7 | Reversal at every index. The test covers each index 1..31 in RISING and in FALLING, and STEADY. After a request change, the next write is one table step in the new direction. Consecutive compare writes always differ by exactly one table index. Off right after the start call goes to ZERO_WAIT. | test, QA |
+| AC-7 | Reversal at every position, for ramps 4, 6, 8 and 12 ms. The test reverses after each rise call and after each fall call, and in STEADY. After a request change, the next write is one increment in the new direction, never a jump. Two compare writes in a row differ by at most `ceil(I / 64)` table indexes (exactly one at 8 ms). Off right after the start call goes to ZERO_WAIT. | test, QA |
 | AC-8 | Stop, restart and replace in RISING, STEADY, FALLING and ZERO_WAIT give the behavior of section 6.3. | test, QA |
 | AC-9 | Retune. Sounding at 600 Hz, `sidetone_set_tone_hz(800)`: no ARR write until OFF. The envelope falls, waits for the flag and goes OFF. The next call writes ARR 14999, compare 0, UG and ENO. The rise uses the 800 Hz table (compare[32] = 7500). Retune requested in each state behaves as section 6.3. | test, QA |
 | AC-10 | Tone math. ARR and compare[1], [16], [32] equal the table of section 6.1 for 400, 600, 605, 610, 800, 990 and 1000 Hz. | test |
@@ -754,13 +862,19 @@ menu tests (developer, QA). Every sidetone test ends with `fake_sidetone_pwm_vio
 | AC-15 | Mailbox tear. A hook runs `sidetone_service()` (on request set, in each state) at every preemption point of `sidetone_set_tone_hz()`. Then every rise uses an ARR and 33 values of one tone only, the old one or the new one. After the writer returns and the next OFF start comes, the new tone is used. Also with two writer calls in a row before the ISR uses the first. | QA |
 | AC-16 | Busy. `sidetone_is_busy()` is true from `sidetone_set_on(true)` until OFF with the request cleared, and false only then. | test |
 | AC-17 | No UG in a ramp. The count of `GENERATE_UPDATE()` calls equals the number of starts from OFF. ARR writes happen only in the OFF start call. | test |
-| AC-18 | Menu preview. The designer's V-tests for H1-H6 pass with `fake_sidetone.c`. They cover: start at the Tone edit, restart on a change, nothing at a limit, stop on leave, stop on timeout (fake tick). No other screen calls the sidetone. `sidetone_set_tone_hz` comes before `sidetone_set_on(true)` in each hook. | menu tests |
-| AC-19 | No regression. All existing host tests pass unchanged. `firmware/test.sh` passes, with the `check_asm.sh` self-test. | `test.sh` |
+| AC-18 | Menu preview. The designer's V-tests for H1-H6 pass with `fake_sidetone.c`, for the Tone item (V-40 to V-53) and the Ramp item (V-185 to V-191). They cover: start at the edit, restart on a change, nothing at a limit, stop on leave, stop on timeout (fake tick). No other screen calls the sidetone. `sidetone_set_tone_hz` comes directly before `sidetone_set_on(true)` in each hook. On Ramp, `sidetone_set_ramp_ms` comes first. | menu tests |
+| AC-19 | No regression. All existing host tests pass. Allowed test changes are only those of section 24.7. `firmware/test.sh` passes, with the `check_asm.sh` self-test. | `test.sh` |
 | AC-20 | Build. `firmware/build.sh` passes with `check_asm.sh`, including the new R5 registers and their self-tests. | `build.sh` |
 | AC-21 | ISR assembly review. `sidetone_timer0_isr` calls only `_sidetone_service`. `sidetone_service` has no `lcall` and no library helper. It has no `P_SW2` access, no `EA` or `IE` byte write and no port 2 write. Its locals are in DSEG, not OSEG. The ISR ends with `reti`. No `.asm` file of the build has an `sdcc_atomic` symbol. | `.asm` review, QA |
 | AC-22 | ISR time. The report gives the worst-case cycle count of the ISR: entry, OFF + on with a pending tone, exit. The count uses the `.asm` and the STC8H instruction timing. Target at most 400 clocks, hard limit 800 clocks (of 6000 per 250 us). | report |
 | AC-23 | Memory. The report of section 14 is complete and within the hard limits. | report |
 | AC-24 | Start-up and loop order in `main.c` are as in section 10.1. | review |
+| AC-25 | Ramp 8 ms gives the old envelope. With `sidetone_init(tone, 8)`, every compare write, ENO write, UG and flag clear of a full rise, a full fall, every reversal of AC-7 and AC-9 is the same as in the first design (one table step per call). | test |
+| AC-26 | Ramp clamp. `sidetone_set_ramp_ms()` and `sidetone_init()` with 0, 1, 3 give the 4 ms behavior. 13, 100 and 255 give the 12 ms behavior. `sidetone_ramp_calls` is 4 x the clamped value for 0..255. | test |
+| AC-27 | Ramp change during a ramp. A change of the ramp at each call of a rise and of a fall (4 -> 12 ms and 12 -> 4 ms): the position never jumps, the indexes stay monotonic in the current direction, STEADY and ZERO_WAIT come at the end, and no ENO violation occurs. A change in OFF, STEADY or ZERO_WAIT writes no register and changes no state. | test, QA |
+| AC-28 | Range cross-check. `SIDETONE_RAMP_MIN_MS == settings_min(SETTINGS_ID_RAMP_MS)` and `SIDETONE_RAMP_MAX_MS == settings_max(SETTINGS_ID_RAMP_MS)`. | test |
+| AC-29 | Preemption of the ramp writer. A hook runs `sidetone_service()` at each preemption point of `sidetone_set_ramp_ms()` in RISING and FALLING. The envelope ends at STEADY or ZERO_WAIT with no ENO violation. | QA |
+| AC-30 | ISR assembly for the ramp. `sidetone_service` keeps AC-21: no `lcall`, no library helper (the shift by 6 and the 16-bit add and subtract are inline). `sidetone_set_ramp_ms` has no `lcall` and no multiply. `keyer_service` and `player_service` read `_sidetone_ramp_calls` directly. `check_asm.sh` R6 and R7 pass. | `.asm` review, QA |
 
 ## 14. Memory budget and report
 
@@ -877,7 +991,7 @@ Also report:
 | DC-2 | Polarity: P1.1 (PWM1N) and P1.2 (PWM2P) show LOW-active pulses, at most 50 % LOW in STEADY, HIGH at idle. This checks the reading of section 4.1. |
 | DC-3 | No signal on P1.0, P1.3, P5.4 and the port 2 pins. The LCD works while the tone plays. |
 | DC-4 | Tone frequency at 400, 600 and 1000 Hz (expected error: the oscillator trim only). |
-| DC-5 | Ramp on the logic analyzer: about 8 ms rise and fall, first and last pulses, compare coalescing at 400 Hz. |
+| DC-5 | Ramp on the logic analyzer at Ramp 4, 6, 8 and 12 ms: rise and fall time equal the setting within one carrier period, first and last pulses, compare coalescing at 400 Hz. |
 | DC-6 | No click at start, stop, retune and route change, on the speaker and on the headphones. |
 | DC-7 | Plug insert and remove: the route follows at the next silence. P1.0 levels with the internal pull-up. Is the pull-up needed? |
 | DC-8 | Timer 0 ISR time and jitter while the LCD redraws. The full LCD redraw time with the 4 kHz ISR active. |
@@ -885,6 +999,8 @@ Also report:
 | DC-10 | Quiet current: no extra battery current from P1.1 and P1.2 push-pull HIGH (PNP stages fully off). |
 | DC-11 | Preview feel: the designer's device checks from D1. |
 | DC-12 | An EEPROM erase (4-6 ms, the CPU stops) during a fall or a rise only stretches the ramp. The PWM keeps the last compare, and the ramp goes on after the erase without a click. |
+| DC-13 | Click by ear at Ramp 4 ms and 12 ms, at 400 Hz and 1000 Hz, speaker and headphones (with `ui-ux.md` D-46). More click at 4 ms and 400 Hz is expected (section 6.8, physics note). Record the shortest ramp with no click at each tone. |
+| DC-14 | Keyer and player at 50 WPM with Ramp 12 ms (with `ui-ux.md` D-47): dits sound, element and gap times hold, the fall ends at or one call before the mark end (D-RM5). |
 
 ## 18. Risks
 
@@ -977,3 +1093,198 @@ These notes do not change the scope. `references/internal/sidetone_validation.md
 - DC-12 (EEPROM erase during a ramp) cannot happen in this change. A save needs three debounced button events, and
   a fall lasts only 8 ms. The check waits for the keyer change or a measurement build.
 - No measurement firmware is part of this change.
+
+## 24. Change request: ramp duration setting (2026-10-16)
+
+This section is the binding contract of the change. Where it differs from sections 1 to 23, this section wins.
+Plan: `noble-bubbling-dahl.md` (user-approved). Related contracts: `keyer_spec.md` section 18 (keyer early release),
+`training_spec.md` D-T51 (player early release, `timing.h` check), `menu_subsystem_spec.md` section 18 (setting,
+record layout version 3, scrolling, Ramp preview). UI decisions: `ui-ux.md` UX-71 to UX-73, sections 5.3, 5.5,
+6.5, 9.6.
+
+### 24.1 Scope and user decisions
+
+User decisions (fixed):
+
+- A `Settings > CW` item sets the rise and fall time of the sidetone: 4 to 12 ms, step 1 ms, default 6 ms. One value
+  sets both edges of every tone: the previews, Free Input, Receiving and Sending.
+- The service rate (4 kHz) and the 32-step duty table stay. `sidetone_config.h` keeps its timer and PWM values.
+- The CW list gets 8 items, so the menu scrolls as `ui-ux.md` section 5.5 says.
+- The Ramp edit plays a preview, as the Tone edit does.
+- "Done" means: host tests pass, QA approves, `architector` approves. Device behavior stays unverified until the
+  user tests on the device.
+
+Out of scope: a change of the service rate, of the duty table, of the timer or PWM setup; separate rise and fall
+values; a restart of the tone on a ramp change; any change in `firmware/drivers/`.
+
+### 24.2 Decisions
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| D-RM1 | Envelope position (sections 3.2, 6.2, 6.3, 6.8). The 8-bit index becomes `static MEM_DATA uint16_t` position in 1/64 of a table step, 0 to 2048. The table index is `position >> 6`. A `static volatile MEM_DATA uint8_t` increment `ceil(512 / N)` comes from a 9-entry `MEM_CODE` table. A full rise and a full fall take exactly `4 * N` calls. | Plan design. One byte of increment, no division or multiply in the main loop or the ISR. 8 ms keeps the old envelope bit for bit (AC-25). |
+| D-RM2 | API. `void sidetone_init(uint16_t tone_hz, MEM_XDATA uint8_t ramp_ms)` and `void sidetone_set_ramp_ms(uint8_t ramp_ms)`. The sidetone clamps to `SIDETONE_RAMP_MIN_MS..SIDETONE_RAMP_MAX_MS` (4, 12), defined in `sidetone_config.h` next to the tone range. AC-28 ties them to the settings range. | Same pattern as the tone: the sidetone owns its limits, the settings module owns the grid and the default. The second parameter of a non-leaf main-loop function is `MEM_XDATA` (section 9), so it costs no internal RAM. `sidetone.h` includes `mcu/compiler.h` for it. |
+| D-RM3 | Shared call count. `volatile MEM_DATA uint8_t sidetone_ramp_calls`, defined in `sidetone.c`, declared in the new header `inc/sidetone/sidetone_shared.h` (section 5.7). `cw/keyer_shared.h` and `cw/player_shared.h` include it and define `KEYER_EARLY_RELEASE_TICKS` and `PLAYER_EARLY_RELEASE_TICKS` as `sidetone_ramp_calls`. No static initializer: `sidetone_init()` writes it. | The ISR reads shared state as memory, not through a call (`llm.md`). The keyer and player host groups link `src/sidetone/sidetone.c` already (`Tests/CMakeLists.txt`), so their tests link with no new fake. The macro names stay, so `keyer_service.h` and `player_service.h` change only their comments. Files that only include the shared headers (`free_input.c`, `sending.c`, their tests) do not read the byte, so the menu group needs no definition. |
+| D-RM4 | A ramp change only changes the speed. No fall, no restart, no pending flag. | No ISR code for a restart. The user decision UX-73 accepts a steady tone during a held Ramp repeat. |
+| D-RM5 | The speed check. `timing.h` stops the build when the dit at `CW_TIMING_WPM_MAX` is shorter than `2 * SIDETONE_RAMP_MAX_CALLS` (96 < 96 is false, so 50 WPM and 12 ms pass), and when it is not longer than `SIDETONE_ZERO_WAIT_CALLS`. Result at exactly 50 WPM and 12 ms: a dit has 47 rise calls before the release, not 48. The rise reaches position 2021 (index 31, duty 49.9 % instead of 50 %). The fall then takes 47 calls and enters ZERO_WAIT one call before the last mark call. Every other speed and ramp reaches index 32, and its fall enters ZERO_WAIT on the last mark call. | `architector` checked all 9 ramps at 50 WPM with a script. The duty is 499 instead of 500 permille. That level change is not audible, and it gives no click. A strict check would forbid the user range 4 to 12 ms at the user maximum 50 WPM. The plan statement "the dit still reaches full level" is one step too high. |
+| D-RM6 | `sidetone_set_ramp_ms()` is main loop only. Only `sidetone_init()` and the menu Ramp hooks (H1, H2) call it. The keyer and the player are disabled at both times. No mode entry calls it. | The two byte stores are not atomic as a pair (section 6.8). With this rule no mark ever sees a mixed pair. The sidetone always has the Ramp setting value: `sidetone_init()` gets it, and each Ramp edit step sends it. |
+| D-RM7 | ZERO_WAIT counts its calls in the position variable, as it counted in the index byte. | No extra RAM. |
+| D-RM8 | Menu and fakes. `fake_sidetone.c` logs `sidetone_set_ramp_ms()` as kind `FAKE_SIDETONE_CALL_RAMP` (4) with the value as passed. The Ramp hooks call `ramp(value)`, `tone(Tone)`, `on(true)` (UX-73). The Tone hooks are unchanged. | The designer's order keeps the rule "each `on(true)` comes directly after a `tone()`", so the existing Tone tests and their check helpers stay. The extra `tone()` call costs a few bytes and does nothing audible. |
+| D-RM9 | The row "RISING, not `is_up`, P = 0" stays without a compare write. | It keeps the old behavior and the old tests of "off right after the start call". |
+| D-RM10 | `MENU_TONE_PREVIEW_MS` keeps its name. It serves Tone and Ramp. | A rename changes code, tests and `ui-ux.md` for no behavior gain. |
+
+### 24.3 Files
+
+| File | Change |
+| --- | --- |
+| `inc/board/sidetone_config.h` | `SIDETONE_RAMP_MIN_MS`, `SIDETONE_RAMP_MAX_MS`, `SIDETONE_RAMP_CALLS_PER_MS`, `SIDETONE_RAMP_MAX_CALLS` and the checks of section 5.3. Nothing else changes. |
+| `inc/sidetone/sidetone.h` | Section 5.4: `sidetone_init()` signature, `sidetone_set_ramp_ms()`, the STEADY comment, `#include "mcu/compiler.h"`. |
+| `inc/sidetone/sidetone_shared.h` (new) | Section 5.7. SPDX lines first. |
+| `src/sidetone/sidetone.c` | Sections 6.2, 6.3, 6.7, 6.8. The duty table stays. |
+| `inc/cw/keyer_shared.h`, `inc/cw/player_shared.h` | The early release macros (D-RM3). |
+| `inc/cw/keyer_service.h`, `inc/cw/player_service.h` | Only the comments that say "32" (now "the ramp calls"). No code change. |
+| `inc/cw/timing.h` | The checks of D-RM5 (`training_spec.md` D-T51). |
+| `src/main.c` | Section 10.1. |
+| `inc/settings/settings.h`, `src/settings/settings.c`, `src/menu/*`, `inc/menu/menu.h` | `menu_subsystem_spec.md` section 18. |
+| `Tests/fakes/fake_sidetone.c/.h` | Section 12.2 (D-RM8). |
+| Tests | Section 24.7. |
+
+### 24.4 Memory and time budget
+
+Baseline (`build/putikeeg_cw_trainer.mem`, 2026-10-15): flash 28 561 / 61 440 B, xdata 1818 / 3072 B, stack start
+0x41 with 191 B free. R0 measures it again.
+
+| Resource | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- |
+| Flash added by the whole change | at most 450 B | 700 B |
+| xdata added | 3 B (window tops, `menu_subsystem_spec.md` 18.4) | 8 B |
+| New static internal RAM (DSEG + overlay + bit bytes) | 3 B (position +1, increment +1, call count +1) | 4 B |
+| Stack margin: free stack minus (deepest main-loop use + largest ISR frame) | | at least 64 B |
+| Timer 0 ISR worst case | no growth of the worst path of section 13 AC-22 | 800 clocks |
+| RISING and FALLING path of `sidetone_service` | at most +30 clocks against R0 | +60 clocks |
+
+The report uses the table of section 14 and also gives the clock count of the RISING, FALLING and keyer ELEMENT
+paths before and after.
+
+### 24.5 Tasks
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D-R | `ui-ux-embedded-designer` | Done (UX-71 to UX-73, `ui-ux.md` 5.3, 5.5, 6.5, 9.6, D-45 to D-47). `architector` accepted it in section 24.9. | - |
+| R0 | `c-embedded-developer` | Baseline: `firmware/build.sh`, `firmware/test.sh`, memory table, stack estimate, clock counts of the paths of 24.4. | - |
+| R1 | `c-embedded-developer` | Contract and stubs: every header change of 24.3 and `menu_subsystem_spec.md` 18.3, `sidetone_set_ramp_ms()` with a body that only clamps and writes, `sidetone_init()` with the new parameter, all call sites (`main.c`, tests) with the mechanical changes of 24.7, `fake_sidetone` additions, `SETTINGS_ID_RAMP_MS` in the tables. Both scripts pass. QA can write tests from here. | R0 |
+| R2 | `c-embedded-developer` | Sidetone core: sections 6.2, 6.3, 6.8. Tests AC-2 to AC-4, AC-7, AC-25 to AC-28 in `test_sidetone.c`. `.asm` check for AC-30. | R1 |
+| R3 | `c-embedded-developer` | Keyer and player: comments, `timing.h` checks. Tests AC-K13, AC-K14 (revised, `keyer_spec.md` 18) and AC-T12 (revised, `training_spec.md` D-T51). | R2 |
+| R4 | `c-embedded-developer` | Settings layout version 3: `menu_subsystem_spec.md` 5.1, 5.2, 18.2. Tests AC-M1 to AC-M6 of 18.7. | R1 |
+| R5 | `c-embedded-developer` | Menu: tree item, scrolling, `i/n`, Ramp preview: `menu_subsystem_spec.md` 6.1 to 6.3, 18.4 to 18.6. Tests V-173 to V-191 and AC-M7 to AC-M12. | R1, R4 |
+| R6 | `c-embedded-developer` | Close-out: memory table of 24.4 before and after each task, stack estimate, ISR clock counts, `.asm` review notes, `pre-commit run --files <changed files>`, list of assumptions and open device checks. | R2 to R5 |
+| Q-R | `qa-embedded` | Starts its tests after R1, verifies after R6 (24.6). Verdict `approved`, `changes_requested` or `blocked`. | R1, R6 |
+| A-R | `architector` | Final review on top of Q-R. | Q-R |
+| W-R | `technical-writer` | After A-R `approved`: user manual and quick guide (Ramp item, CW scroll), `docs/release_notes.md` after the user picks the version, `sidetone_validation.md` (DC-5, DC-13, DC-14), the implemented-design note of `sidetone_pwm_envelope_research.md`. | A-R |
+
+Each developer task ends with: `firmware/build.sh` passes with `check_asm.sh`, `firmware/test.sh` passes, the memory
+table, the assumptions, the open device checks.
+
+### 24.6 QA checks (`qa-embedded`, `Tests/test_qa_*.c`)
+
+1. Envelope for every ramp 4..12 ms: exact `4 * N` rise and fall calls from OFF and from STEADY, monotonic indexes,
+   the step limit of AC-7, `active[32]` and `active[0]` at the ends. The 8 ms log equals the first design (AC-25),
+   for example with the golden capture of `test_qa_golden_capture.c`.
+2. Reversal at every position and a ramp change at every call (AC-7, AC-27), for 4 -> 12, 12 -> 4 and 6 -> 7 ms.
+3. Preemption: AC-15 (tone mailbox) at ramps 4 and 12 ms, and AC-29 (ramp writer).
+4. Keyer and player: the off request on the call where `4 * N` mark calls remain, for N = 4, 6, 8, 12 at 5, 20 and
+   50 WPM, and Farnsworth 50/5. The fall enters ZERO_WAIT on the last mark call, or one call earlier only at 50 WPM
+   and 12 ms (D-RM5). ZERO_WAIT ends before the next element. `KEYER_IS_MARK_ACTIVE()` and the player busy flag keep
+   the full mark. No lost or late element.
+5. The `timing.h` check: a scratch compile (not committed) with a changed copy shows that 13 ms, or a dit of 95
+   calls, stops the build.
+6. Settings: every vector of `menu_subsystem_spec.md` 18.2, the clamp of bits 4-7, flag independence, power loss
+   during a version 3 save, version 4 as `SETTINGS_LOAD_BAD_VERSION`, no save at start-up after a version 1 or 2
+   load.
+7. Menu: the scroll rule for every cursor position in both directions, press wrap and repeat stop, `i/n` text and
+   cells, push and pop of the window top, edit in the last window, Ramp preview hooks H1 to H6 with the call
+   order of D-RM8, a message over the Ramp edit, no `ramp()` call outside the Ramp edit, the Tone tests unchanged.
+8. `.asm` review: AC-21 and AC-30, `check_asm.sh` R6 and R7, no `sdcc_atomic`, the keyer and player read
+   `_sidetone_ramp_calls` directly.
+9. Review of the memory, stack and clock report against 24.4.
+10. The device checks of 24.8 stay listed as unverified.
+
+### 24.7 Allowed changes of existing tests
+
+- Each `sidetone_init(tone)` call gets a second argument. Tests that expect the first design use 8.
+- Uses of `SIDETONE_RAMP_STEPS` as a call count, and `EARLY_RELEASE 32U` in `test_keyer.c` and `test_player.c`,
+  become the call count of the ramp under test (`sidetone_ramp_calls` or `4 * N`). The expected values at 8 ms do
+  not change.
+- Keyer and player tests call `sidetone_init()` or `sidetone_set_ramp_ms()` in their setup, because the call count
+  has no static initializer.
+- Settings tests: the layout version, the saved record bytes (version 3), and the "version 3 gives
+  `SETTINGS_LOAD_BAD_VERSION`" vector, which becomes version 4 (`menu_subsystem_spec.md` 18.2).
+- Menu tests: the CW item indexes after `Tone` move by one, the CW list screens get `i/n` and the window.
+- Accepted on 2026-10-16 (D-RM12), because the new id or layout version 3 forces them: the per-id tables of
+  `test_settings.c`; the `SETTINGS_ID_COUNT == 13` checks; the `_v2` arrays of `test_settings_paddle.c` renamed
+  `_v3`; expected flags `| 0x60` in `test_settings_prosign.c`; the V-32 check `item_count <= 7` in `test_menu.c`
+  replaced by a title-fit check; the V-52 loop of `test_menu_preview.c` over rows 2 to 6 (Ramp is a preview item);
+  the compare 0 classification of the fall end in `test_keyer_envelope.c` (`keyer_spec.md` 18.2); comments that
+  name 32 or version 2.
+- No other change of an existing test. A test that needs another change is reported to `architector`.
+
+### 24.8 Device checks (unverified until the user tests on the device)
+
+DC-5 (revised), DC-13 and DC-14 of section 17, with `ui-ux.md` D-45 to D-47. D-45 also measures the full-screen
+transfer of a window move. When it takes longer than 80 ms during a held button, `architector` decides on a
+split of the transfer (`AGENTS.md`).
+
+### 24.9 Review of the UI decisions (2026-10-16)
+
+`architector` accepts UX-71 to UX-73 and `ui-ux.md` 5.3, 5.5, 6.5 and 9.6 for this contract:
+
+- Item order in CW: `Tone`, `Ramp`, `RX Speed`, `RX Eff. Speed`, `TX Speed`, `TX Eff. Speed`, `Key Type`, `Paddle`.
+- Window rule, `i/n` and the redraw pages: `menu_subsystem_spec.md` 6.2.
+- Ramp hooks: D-RM8. The rename of `MENU_TONE_PREVIEW_MS` is rejected (D-RM10).
+- Correction for the designer: D-47 says that each dit reaches full level at 50 WPM and 12 ms. It reaches index 31
+  of 32 (D-RM5). The check itself stays.
+
+### 24.10 Decisions on the R0-R6 results (2026-10-16)
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| D-RM11 | Accepted: `sidetone_init()` does not call `sidetone_set_ramp_ms()`. Both use the private macro `SIDETONE_WRITE_INCREMENT` (clamp in place, increment store). `sidetone_init()` then stores `sidetone_ramp_calls` with no preemption point. | Same values as the function. `sidetone_set_ramp_ms()` stays a leaf (AC-30), and the preemption count of `sidetone_init()` does not change. Timer 0 is not running in init, so a preemption point there tests nothing. |
+| D-RM12 | Accepted: the test changes listed in 24.7 under D-RM12. | Each one follows from the new id, layout version 3, the scroll rule or the fall-end definition. None weakens a check. |
+| D-RM13 | Accepted: the table index is built from the two bytes of the position, `((P >> 8) << 2) \| ((uint8_t)P >> 6)`, which equals `P >> 6` for 0 to 2048. ZERO_WAIT counts in the low byte and stores the count back as the full position, so the high byte stays 0. | Shorter code than a 16-bit shift. The values of section 6.3 do not change. |
+| D-RM14 | Budget results: flash +544 B (target 450 B, hard limit 700 B), xdata +5 B (target 3 B, hard limit 8 B), internal RAM +3 B, stack margin 131 B, RISING +24 and FALLING +29 clocks (limit +30), worst ISR path about +28 clocks (target "no growth", hard limit 800 clocks). Accepted when QA confirms the numbers. The final review checks where the flash and the 2 B of xdata above the targets go. | All values are inside their hard limits. The ISR growth is the price of the 16-bit position on the RISING and FALLING paths. The worst path stays far below 800 clocks. |
+
+### 24.11 Risks
+
+| Risk | Handling |
+| --- | --- |
+| A short ramp at a low tone clicks. | Physics note of 6.8, DC-13, D-46. The user picks the value. |
+| The 16-bit position math makes the ISR slower. | 24.4 limits, AC-30. Constant shift, byte increment. |
+| A full-screen redraw at each window move is slow over the software SPI. | D-45. A split of the transfer is an `architector` decision. |
+| Earlier firmware reads a version 3 record as `SETTINGS_LOAD_BAD_VERSION` and uses its defaults (downgrade). | Accepted, as for version 2 (`keyer_spec.md` 17.4.2). The release notes say it. |
+
+### 24.12 Final review (2026-10-16)
+
+Verdict: `approved`, host evidence only. QA verdict Q-R: `approved`.
+
+| Item | Result (checked again by `architector`) |
+| --- | --- |
+| `test.sh` | 88 of 88 tests pass. `check_asm.sh` self-test: 168 of 168. |
+| `build.sh` | Passes. `check_asm.sh` reports no violation (R6, R7). No `sdcc_atomic` text in the build `.asm` files. |
+| Memory | Flash 28 561 -> 29 105 B (+544, target 450, hard limit 700). xdata 1818 -> 1823 B (+5: window tops 3 B and two 1-byte xdata parameters; target 3, hard limit 8). Stack start 0x41 -> 0x44 (+3 B internal RAM), 188 B free. Stack margin at least 131 B. |
+| ISR | `sidetone_timer0_isr` has exactly the three calls and ends with `reti`. `sidetone_service` and `sidetone_set_ramp_ms` have no `lcall` and no library helper. RISING 72 -> 94 clocks, FALLING 69 -> 98 clocks (QA count), worst ISR path about +26 clocks (D-RM14). |
+| Contract | D-RM1 to D-RM15 hold in the code: envelope position, increment table, `sidetone_shared.h`, early release macros, `timing.h` checks, settings layout version 3 with the D-RM15 check, CW order `Tone`, `Ramp`, ..., `Paddle`, window rule, `i/n`, Ramp hooks. |
+| Format | `pre-commit run --files` on the changed firmware files: `reuse lint-file` and `clang-format` pass. |
+
+Findings, no change required:
+
+- QA F1: in `settings.c` the version 1 and version 2 masks change no result, because the default stores after them
+  overwrite the cleared bits. They stay: sections 5.1 and 18.2 state the rule for each version, as for
+  `RECORD_FLAGS_USED_V1` in `keyer_spec.md` 17.12.
+- QA F2: the extra loop-bound case in `draw_list()` cannot be observed. Accepted.
+- `test_menu_prosign.c` V-83 no longer checks `Reversed` on the first CW screen. The check after the save and
+  after the re-init covers it. Accepted.
+- `ui-ux.md` section 4.1 says that a cursor move "dirties" two pages. The owner `ui-ux-embedded-designer` changes it
+  to "changes the pixels of" with the other page texts (menu spec 6.2). This does not block the change.
+
+Open: the device checks DC-5, DC-8, DC-13, DC-14, DC-K3, DC-T1 at 4 and 12 ms, and `ui-ux.md` D-45 to D-47. They stay
+unverified until the user tests on the device.
+

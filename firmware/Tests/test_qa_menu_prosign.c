@@ -184,7 +184,8 @@ static void test_every_value_shows_in_full(void) {
     uint8_t index;
     for (index = 0U; index < node->item_count; ++index) {
       const menu_item_t* item = &node->items[index];
-      const int row = index + 1;
+      /* NEXT presses from the first item: the window moves only when the cursor passes row 7. */
+      const int row = (index < MENU_VISIBLE_ROWS) ? (index + 1) : (int)MENU_VISIBLE_ROWS;
       uint16_t min;
       uint16_t max;
       uint16_t step;

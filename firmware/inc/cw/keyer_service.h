@@ -197,7 +197,7 @@ static void keyer_service(void) {
         keyer_ticks = keyer_dit_ticks;
         keyer_phase = KEYER_PHASE_GAP;
       } else if (keyer_ticks <= KEYER_EARLY_RELEASE_TICKS) {
-        /* The 32-call fall then writes compare 0 on the last ELEMENT call. */
+        /* The ramp fall then writes compare 0 on the last ELEMENT call. */
         KEYER_SIDETONE_OFF();
       }
     } else if (keyer_ticks == 0U) {

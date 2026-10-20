@@ -67,7 +67,7 @@ static void player_service(void) {
         player_ticks = player_char_gap_ticks;
       }
     } else if (player_ticks <= PLAYER_EARLY_RELEASE_TICKS) {
-      /* The sidetone runs after the player, so the 32-step fall then writes compare 0 on the last mark call. */
+      /* The sidetone runs after the player, so the ramp fall then writes compare 0 on the last mark call. */
       PLAYER_SIDETONE_OFF();
     }
   } else if (player_ticks == 0U) {

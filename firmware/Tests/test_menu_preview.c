@@ -535,8 +535,8 @@ static void test_v52_no_sound_outside_tone_edit(void) {
   steps(REPEAT(NEXT), 6U);
   steps(REPEAT(PREV), 6U);
   poll_500();
-  /* 4. Every value and choice except Tone, to both limits. */
-  for (row = 1U; row < 6U; ++row) {
+  /* 4. Every value and choice except Tone and Ramp, to both limits. */
+  for (row = 2U; row < 7U; ++row) {
     edit_to_both_limits(row);
   }
   step(MENU);

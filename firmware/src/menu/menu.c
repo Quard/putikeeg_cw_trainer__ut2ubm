@@ -25,6 +25,7 @@
 
 MEM_XDATA uint8_t menu_stack_nodes[MENU_STACK_DEPTH];
 MEM_XDATA uint8_t menu_stack_cursors[MENU_STACK_DEPTH];
+MEM_XDATA uint8_t menu_stack_tops[MENU_STACK_DEPTH];
 MEM_XDATA uint8_t menu_depth;
 MEM_XDATA uint8_t menu_current_screen;
 MEM_XDATA uint8_t menu_current_choice;
@@ -37,7 +38,7 @@ static MEM_XDATA bool handle_is_repeat;
 static MEM_XDATA bool handle_is_long;
 static MEM_XDATA uint16_t edit_value;
 
-/* Tone preview, references/internal/ui-ux.md section 6.5. */
+/* Tone and Ramp preview, references/internal/ui-ux.md section 6.5. */
 static MEM_XDATA bool menu_is_preview_running;
 static MEM_XDATA uint16_t menu_preview_start;
 
@@ -55,34 +56,45 @@ static void menu_show_screen(uint8_t screen) {
   menu_is_redraw_pending = true;
 }
 
-/* EDIT opens only on value and choice items, so the settings id alone identifies the Tone edit. */
-static bool menu_is_tone_edit(void) {
+static bool menu_is_preview_item(settings_id_t id) {
+  return (id == SETTINGS_ID_TONE_HZ) || (id == SETTINGS_ID_RAMP_MS);
+}
+
+/* EDIT opens only on value and choice items, so the settings id alone identifies a Tone or Ramp edit. */
+static bool menu_is_preview_edit(void) {
   if (menu_current_screen != MENU_SCREEN_EDIT) {
     return false;
   }
-  return menu_current_item()->target == SETTINGS_ID_TONE_HZ;
+  return menu_is_preview_item(menu_current_item()->target);
 }
 
-/* H1, H2: the tone first, so the rise already uses it. */
-static void menu_preview_play(void) {
+/* H1, H2: the ramp and the tone first, so the rise already uses them. */
+static void menu_preview_play(settings_id_t id) {
+  if (id == SETTINGS_ID_RAMP_MS) {
+    sidetone_set_ramp_ms((uint8_t)settings_get(SETTINGS_ID_RAMP_MS));
+  }
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
   sidetone_set_on(true);
   menu_preview_start = tick_now();
   menu_is_preview_running = true;
 }
 
-/* H5: every exit from the Tone edit stops the tone, also after the timeout. */
-static void menu_leave_tone_edit(void) {
-  if (menu_is_tone_edit()) {
+/* H5: every exit from a Tone or Ramp edit stops the tone, also after the timeout. */
+static void menu_leave_preview_edit(void) {
+  if (menu_is_preview_edit()) {
     sidetone_set_on(false);
     menu_is_preview_running = false;
   }
 }
 
-/* Moves the list cursor. A press wraps at the ends; a repeat stops there. */
+/*
+ * Moves the list cursor. A press wraps at the ends; a repeat stops there. The window then moves only as far as the
+ * cursor needs (ui-ux.md section 5.5).
+ */
 static void menu_move_cursor(bool is_down) {
   const uint8_t last = (uint8_t)(menu_top_node()->item_count - 1U);
   uint8_t cursor = menu_stack_cursors[MENU_TOP];
+  uint8_t top;
 
   if (is_down) {
     if (cursor < last) {
@@ -99,6 +111,13 @@ static void menu_move_cursor(bool is_down) {
   }
   if (cursor != menu_stack_cursors[MENU_TOP]) {
     menu_stack_cursors[MENU_TOP] = cursor;
+    top = menu_stack_tops[MENU_TOP];
+    if (cursor < top) {
+      top = cursor;
+    } else if (cursor >= (uint8_t)(top + MENU_VISIBLE_ROWS)) {
+      top = (uint8_t)(cursor - (MENU_VISIBLE_ROWS - 1U));
+    }
+    menu_stack_tops[MENU_TOP] = top;
     menu_is_redraw_pending = true;
   }
 }
@@ -111,6 +130,7 @@ static void menu_enter_item(void) {
     if (menu_depth < MENU_STACK_DEPTH) {
       menu_stack_nodes[menu_depth] = item->target;
       menu_stack_cursors[menu_depth] = 0U;
+      menu_stack_tops[menu_depth] = 0U;
       ++menu_depth;
       menu_is_redraw_pending = true;
     }
@@ -132,8 +152,8 @@ static void menu_enter_item(void) {
     menu_show_screen(MENU_SCREEN_ABOUT);
   } else {
     menu_show_screen(MENU_SCREEN_EDIT);
-    if (item->target == SETTINGS_ID_TONE_HZ) {
-      menu_preview_play();
+    if (menu_is_preview_item(item->target)) {
+      menu_preview_play(item->target);
     }
   }
 }
@@ -171,7 +191,7 @@ static void menu_handle_edit(void) {
   const uint16_t step = settings_step(id);
 
   if ((handle_code == BUTTON_EVENT_ENTER) || (handle_code == BUTTON_EVENT_MENU)) {
-    menu_leave_tone_edit();
+    menu_leave_preview_edit();
     menu_show_screen(MENU_SCREEN_LIST);
     return;
   }
@@ -191,8 +211,8 @@ static void menu_handle_edit(void) {
     lcd_set_contrast((uint8_t)settings_get(id));
   } else if (id == SETTINGS_ID_BACKLIGHT) {
     backlight_set_level((uint8_t)settings_get(id));
-  } else if (id == SETTINGS_ID_TONE_HZ) {
-    menu_preview_play();
+  } else if (menu_is_preview_item(id)) {
+    menu_preview_play(id);
   }
   menu_is_redraw_pending = true;
 }
@@ -283,6 +303,7 @@ static void menu_handle_other_screen(void) {
 void menu_init(void) {
   menu_stack_nodes[0] = MENU_NODE_MAIN;
   menu_stack_cursors[0] = 0U;
+  menu_stack_tops[0] = 0U;
   menu_depth = 1U;
   menu_current_choice = MENU_DIALOG_NO;
   menu_current_message = MENU_MESSAGE_NONE;
@@ -348,7 +369,7 @@ void menu_show_message(uint8_t message_id) {
   if (menu_current_screen == MENU_SCREEN_SPLASH) {
     return;
   }
-  menu_leave_tone_edit();
+  menu_leave_preview_edit();
   menu_leave_mode();
   menu_show_screen(MENU_SCREEN_MESSAGE);
 }

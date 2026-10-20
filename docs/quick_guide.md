@@ -43,6 +43,10 @@ About
 
 `L12` is your level in this mode. `>` shows an item that opens a submenu.
 
+The screen has room for 7 items. `Settings > CW` has 8 items, so it scrolls. Its title bar shows the cursor
+position at the right end, for example `1/8` for item 1 of 8. When the cursor moves past the first or the last row,
+the list moves by one row.
+
 | Screen | Button | Short press | Long press |
 | --- | --- | --- | --- |
 | Menu list | `menu/back` | Goes back one level. | Same as short press. |
@@ -156,6 +160,7 @@ leave `Settings` and go back to the main menu, the trainer saves the settings. B
 | Menu | Setting | What it does | Values | Default |
 | --- | --- | --- | --- | --- |
 | `Settings > CW` | `Tone` | The pitch of the sound. | 400 to 1000 Hz | 600 Hz |
+| `Settings > CW` | `Ramp` | The rise time and the fall time of each tone. A short ramp gives hard edges. A long ramp gives soft edges. | 4 to 12 ms | 6 ms |
 | `Settings > CW` | `RX Speed` | The character speed in `Receiving`. | 5 to 50 WPM | 32 WPM |
 | `Settings > CW` | `RX Eff. Speed` | The overall speed in `Receiving` (Farnsworth). A lower value adds longer pauses between characters and words. | 5 WPM to `RX Speed` | 32 WPM |
 | `Settings > CW` | `TX Speed` | The keyer speed in `Sending` and `Free Input`. | 5 to 50 WPM | 20 WPM |
@@ -170,6 +175,14 @@ leave `Settings` and go back to the main menu, the trainer saves the settings. B
 | `Settings` | `Reset Statistics` | Sets all levels back to L1. Select `Yes` and press `enter` to reset. | - | - |
 
 `RX` means receive and `TX` means send.
+
+When you edit `Tone` or `Ramp`, the trainer plays the tone for about 0.3 s at the start of the edit and after each
+change. To compare `Ramp` values, press `prev` or `next` one time, wait about 0.5 s, and press again. If you hold
+the button in the `Ramp` edit, the tone stays on, and you hear only the first rise and the last fall.
+
+A short `Ramp` at a low `Tone` can click, for example 4 ms at 400 Hz. If you hear a click, set a longer `Ramp` or a
+higher `Tone`. Earlier firmware versions had no `Ramp` setting and used a fixed ramp of 8 ms. To get that sound, set
+`Ramp` to 8 ms.
 
 ## If you cannot read the screen
 

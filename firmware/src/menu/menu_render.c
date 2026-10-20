@@ -37,6 +37,8 @@ _Static_assert((MENU_MODE_SPEED_ID(MENU_MODE_RECEIVING) == SETTINGS_ID_RX_WPM) &
 #define BUTTON_ROW 5U
 #define BAND_HEIGHT 7
 #define VALUE_TEXT_SIZE 12U /* "Punctuation" and NUL */
+/* The "i/n" mark writes n after at most 3 digits and '/'. */
+_Static_assert(VALUE_TEXT_SIZE >= (4U + GFX_U16_TEXT_SIZE), "value_text must hold the i/n mark");
 
 /* Dialog and message buttons: first highlight cell; the text starts one cell later (ui-ux.md 5.7, 5.8). */
 #define BUTTON_NO_FIRST_CELL 7U
@@ -120,6 +122,11 @@ static void draw_button(uint8_t first_cell, MEM_XDATA uint8_t cells, const char*
   }
 }
 
+/* Draws value_text so that its last character is in column @p end_column - 1. */
+static void draw_value_text(uint8_t end_column, MEM_XDATA uint8_t color) {
+  draw_text((uint8_t)(end_column - value_length), value_text, color);
+}
+
 static void append_text(const char MEM_CODE* text) {
   while ((*text != '\0') && (value_length < (VALUE_TEXT_SIZE - 1U))) {
     value_text[value_length] = *text;
@@ -161,7 +168,7 @@ static void draw_value(const menu_item_t MEM_CODE* item, MEM_XDATA bool is_edit)
     }
     color = GFX_TEXT_INVERTED;
   }
-  draw_text((uint8_t)(VALUE_END_COLUMN - value_length), value_text, color);
+  draw_value_text(VALUE_END_COLUMN, color);
 }
 
 /*
@@ -172,8 +179,8 @@ static void draw_mode_level(uint8_t mode) {
   item_value = koch_shown_level(progress_level(mode, (uint8_t)settings_get(MENU_MODE_SPEED_ID(mode))));
   value_text[0] = 'L';
   value_length = (uint8_t)(gfx_format_u16(item_value, &value_text[1]) + 1U);
-  draw_text((uint8_t)(VALUE_END_COLUMN - value_length), value_text,
-            (render_index == menu_stack_cursors[menu_depth - 1U]) ? GFX_TEXT_INVERTED : GFX_TEXT_NORMAL);
+  draw_value_text(VALUE_END_COLUMN,
+                  (render_index == menu_stack_cursors[menu_depth - 1U]) ? GFX_TEXT_INVERTED : GFX_TEXT_NORMAL);
 }
 
 static void draw_item_row(const menu_item_t MEM_CODE* item) {
@@ -198,13 +205,28 @@ static void draw_item_row(const menu_item_t MEM_CODE* item) {
   }
 }
 
+/* "i/n" in the title bar, inverted, with its last character in column 24 (ui-ux.md section 5.1). */
+static void draw_position_mark(uint8_t item_count) {
+  value_length = gfx_format_u16((uint16_t)(menu_stack_cursors[menu_depth - 1U] + 1U), value_text);
+  value_text[value_length] = '/';
+  ++value_length;
+  value_length = (uint8_t)(value_length + gfx_format_u16(item_count, &value_text[value_length]));
+  draw_value_text(GRID_COLUMNS, GFX_TEXT_INVERTED);
+}
+
+/* Rows 1-7 show the items from the window top on (ui-ux.md section 5.5). */
 static void draw_list(void) {
   const menu_node_t MEM_CODE* node = &menu_nodes[menu_stack_nodes[menu_depth - 1U]];
 
   draw_title(node->title);
-  for (render_index = 0U; render_index < node->item_count; ++render_index) {
-    render_row = (uint8_t)(FIRST_ITEM_ROW + render_index);
+  if (node->item_count > MENU_VISIBLE_ROWS) {
+    draw_position_mark(node->item_count);
+  }
+  render_row = FIRST_ITEM_ROW;
+  for (render_index = menu_stack_tops[menu_depth - 1U];
+       (render_index < node->item_count) && (render_row <= MENU_VISIBLE_ROWS); ++render_index) {
     draw_item_row(&node->items[render_index]);
+    ++render_row;
   }
 }
 

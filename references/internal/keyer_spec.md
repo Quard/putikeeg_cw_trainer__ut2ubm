@@ -272,6 +272,7 @@ keyer_event_t keyer_read_event(void);
 ```c
 #include "board/sidetone_config.h"
 #include "mcu/compiler.h"
+#include "sidetone/sidetone_shared.h"
 
 typedef uint8_t keyer_phase_t;
 #define KEYER_PHASE_IDLE 0U
@@ -284,7 +285,7 @@ typedef uint8_t keyer_phase_t;
 #define KEYER_FILTER_OPEN_MAX 3U                   /* closed samples of 8 at or below which it votes open */
 #define KEYER_QUEUE_SIZE 8U                        /* power of 2, divides 256 */
 #define KEYER_QUEUE_MASK (KEYER_QUEUE_SIZE - 1U)
-#define KEYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS  /* 32: the fall ends at the mark end */
+#define KEYER_EARLY_RELEASE_TICKS sidetone_ramp_calls  /* 4 x Ramp ms: the fall ends at the mark end */
 #define KEYER_CHAR_GAP_DITS 2U
 #define KEYER_WORD_GAP_UNITS 5U
 #define KEYER_DIT_TICKS_NUMERATOR 4800UL           /* KEYER_SERVICE_HZ * 1.2 s */
@@ -313,9 +314,10 @@ The four tick values and the three mode bits together are the keyer parameters. 
 
 - `KEYER_SERVICE_HZ == 4000U`. The three timing factors assume it.
 - `KEYER_QUEUE_SIZE` is a power of 2 and at most 128.
-- The dit at `KEYER_WPM_MAX` is longer than `2 * SIDETONE_RAMP_STEPS` calls (96 > 64). Formula:
-  `(KEYER_DIT_TICKS_NUMERATOR + KEYER_WPM_MAX / 2) / KEYER_WPM_MAX > 2 * SIDETONE_RAMP_STEPS`. Result: the early
-  release comes after the rise, and `ZERO_WAIT` ends before the next element starts.
+- The speed check is in `cw/timing.h` (`training_spec.md` section 5.3 and D-T51). The dit at `CW_TIMING_WPM_MAX` is
+  at least `2 * SIDETONE_RAMP_MAX_CALLS` calls (96 >= 96) and longer than `SIDETONE_ZERO_WAIT_CALLS`. Result: the
+  early release comes after the start call, the fall ends by the mark end, and `ZERO_WAIT` ends before the next
+  element starts. Section 18 gives the one case where the rise ends one call short.
 
 ### 5.6 `inc/cw/keyer_service.h` (ISR side)
 
@@ -497,15 +499,15 @@ The call that enters ELEMENT or GAP loads N into `keyer_ticks`. The phase then l
 included. On each later call in that phase, the service first subtracts 1. The phase ends on the call where the
 result is 0.
 
-Example at 20 WPM (d = 240), Iambic, Paddle `Normal`, settled open filters. The raw tip closes at call 1 and opens at
-call 100:
+Example at 20 WPM (d = 240), Iambic, Paddle `Normal`, `Ramp` 6 ms (R = `sidetone_ramp_calls` = 24), settled open
+filters. The raw tip closes at call 1 and opens at call 100:
 
 | Call | What happens |
 | --- | --- |
 | 1-4 | The tip count rises 1..4. Logical open. IDLE. |
 | 5 | Voted closed. A dit starts: ELEMENT, `keyer_ticks` = 240, `KEYER_SIDETONE_ON()`. |
 | 104 | The tip votes open (5th open sample). ELEMENT continues. |
-| 213 | `keyer_ticks` becomes 32: `KEYER_SIDETONE_OFF()`. The 32-call fall writes compare 0 on call 244. |
+| 221 | `keyer_ticks` becomes 24: `KEYER_SIDETONE_OFF()`. The 24-call fall enters ZERO_WAIT (compare 0) on call 244. |
 | 245 | `keyer_ticks` becomes 0: event DIT. GAP, `keyer_ticks` = 240. The space starts: `keyer_space_ticks` = 1. |
 | 485 | Gap end. No request: IDLE. |
 | 724 | `keyer_space_ticks` = 480 = 2 d: event CHAR_GAP. |
@@ -579,8 +581,10 @@ Defined results that the tests check:
   Both levers then open before the gap end. Result: A adds no element, B adds it.
 - A short tap of the same lever during a gap sets its memory, and the element repeats.
 - A release counts at the gap end only after the filter votes open, on a call before the gap-end call or on it.
-- Sidetone request for a generated element: on from the start call. Off from the call where `keyer_ticks` becomes 32.
-  The 32-call fall (8 ms) then writes compare 0 on the last ELEMENT call. The logical mark keeps its full N calls.
+- Sidetone request for a generated element: on from the start call. Off from the call where `keyer_ticks` becomes
+  R = `sidetone_ramp_calls` (4 x `Ramp` ms, 16 to 48). The R-call fall (4 to 12 ms) then enters ZERO_WAIT on the
+  last ELEMENT call. Only at 50 WPM with `Ramp` 12 ms it enters ZERO_WAIT one call earlier (section 18.2). The
+  logical mark keeps its full N calls.
 - Sidetone request for a straight key: on during STRAIGHT_DOWN, off at the release call.
 
 ### 6.6 Gap step
@@ -1056,8 +1060,8 @@ Keyer (`test_keyer*.c`):
 | AC-K10 | Iambic decisions: one dit, one dah, a held repeat, and a held squeeze that alternates and starts with a dit. An opposite tap during ELEMENT and during GAP adds that element in A and B. A same-lever tap during GAP repeats the element. |
 | AC-K11 | A versus B. The squeeze opens logically at one of these calls: early in an element, the second call of an element, the last ELEMENT call, in the gap, the gap-end call. In each case B gives the sequence of A plus exactly one element of the other kind. A sweep over every release call at 50 WPM, for at least 10 dits after the start, finds no exception (D-K2). |
 | AC-K12 | Overlap tap. The rule of section 6.5 holds for A and for B. |
-| AC-K13 | Early release. For every generated element, the sidetone request goes off on the call where 32 ELEMENT calls remain. `KEYER_IS_MARK_ACTIVE()` still lasts the full N calls. |
-| AC-K14 | Envelope integration. The test runs the real `sidetone_service()` after each `keyer_service()`. The compare 0 write of the fall comes on the last ELEMENT call. Cases: 5, 20 and 50 WPM, speaker and headphones. |
+| AC-K13 | Early release (revised by section 18). For every generated element, the sidetone request goes off on the call where `sidetone_ramp_calls` ELEMENT calls remain. Ramps 4, 6, 8 and 12 ms. `KEYER_IS_MARK_ACTIVE()` still lasts the full N calls. |
+| AC-K14 | Envelope integration (revised by section 18). The test runs the real `sidetone_service()` after each `keyer_service()`. The fall end (the ZERO_WAIT entry: `active[0]`, then the flag clear, section 18.2) comes on the last ELEMENT call. Cases: 5, 20 and 50 WPM, ramps 4, 6, 8 and 12 ms, speaker and headphones. Exception: at 50 WPM and 12 ms the rise ends at index 31 and the fall end comes one call before the last ELEMENT call. |
 | AC-K15 | Gap events. CHAR_GAP comes once, on the call where the space reaches `2 dit` calls. WORD_GAP comes once, on the call where it reaches `5 fu`. A new mark before the threshold cancels the event. No gap event comes before the first mark after a start. Straight and Iambic. |
 | AC-K16 | Farnsworth. Every row of the table in section 6.7 holds. |
 | AC-K17 | Queue. 8 events are stored and read in order. The 9th sets the overflow bit and is dropped. Events while the bit is set are dropped. A read gives the 8 events, then `KEYER_EVENT_OVERFLOW`, then `KEYER_EVENT_NONE`. After that, new events flow. |
@@ -1225,7 +1229,7 @@ The UI device checks are D-15 to D-24 of `ui-ux.md`. These keyer checks come in 
 | --- | --- |
 | DC-K1 | P5.5 idles high with the internal pull-up, with no plug and with an open paddle. Ring to sleeve pulls it low. Record the level. |
 | DC-K2 | Jack sleeve to ground, tip to P3.2: the polarity is as assumed (research "Hardware facts", checks 1-4). |
-| DC-K3 | Element and gap lengths on the logic analyzer at 5, 20 and 50 WPM. The expected error is the oscillator trim only. The 8 ms fall ends at the mark end. |
+| DC-K3 | Element and gap lengths on the logic analyzer at 5, 20 and 50 WPM. The expected error is the oscillator trim only. The fall at the set `Ramp` ends at the mark end. Check `Ramp` 4, 6 and 12 ms. |
 | DC-K4 | Iambic A and B squeeze release with a logic capture of P1.1 or P1.2 and the paddle pins. B adds one element, A does not (with D-18). |
 | DC-K5 | Timer 0 ISR time and jitter while the text scrolls. This needs a measurement build. Ask `architector` first. |
 | DC-K6 | Contact bounce of a real paddle: no split elements at light and firm pressure. |
@@ -1764,3 +1768,39 @@ Accepted findings, no change required:
   explicitly.
 
 Open: device checks DC-P1 to DC-P3 and D-25 of `ui-ux.md`. They stay unverified until the user tests on the device.
+
+## 18. Sidetone ramp setting: keyer early release (2026-10-16)
+
+This section is binding for the change of `sidetone_spec.md` section 24 (plan `noble-bubbling-dahl.md`). Where it
+differs from sections 1 to 17, this section wins.
+
+### 18.1 Contract
+
+- `cw/keyer_shared.h` includes `sidetone/sidetone_shared.h` and defines
+  `#define KEYER_EARLY_RELEASE_TICKS sidetone_ramp_calls`. The comment says "4 x Ramp ms: the fall ends at the mark
+  end".
+- `cw/keyer_service.h` keeps its code. The test `keyer_ticks <= KEYER_EARLY_RELEASE_TICKS` now reads the shared byte
+  (a direct memory access, `llm.md`). Its comment says "The ramp fall then writes compare 0 on the last ELEMENT call"
+  and names no number.
+- `keyer.c`, `keyer_start()` and the keyer parameters do not change. A ramp change needs no keyer restart, but it
+  never happens while the keyer runs (`sidetone_spec.md` D-RM6).
+- Straight key: no early release, as before. The tone falls at the set ramp after the release call.
+
+### 18.2 Timing
+
+`R` = `sidetone_ramp_calls` = 4 x `Ramp` ms. A generated element of `d` calls starts on call 0. The rise gets the
+calls 1 to `d - R - 1`. The request goes off on call `d - R`. The fall gets the calls `d - R` to `d - 1`.
+
+- "Fall end" below means the call that enters ZERO_WAIT: it writes `active[0]` and then clears the update flag. At
+  `Ramp` 9 to 12 ms the fall also writes `active[0]` on the call before it (`sidetone_spec.md` section 6.3).
+- For `d >= 2 R + 1` the rise reaches index 32, and the fall end is call `d - 1`, the last ELEMENT call.
+- The only case with `d = 2 R` is 50 WPM (d = 96) with `Ramp` 12 ms (R = 48). The rise gets 47 calls and reaches
+  position 2021 (index 31, duty 49.9 %). The fall takes 47 calls, and the fall end is call 94, one call before the
+  last ELEMENT call. This is accepted (`sidetone_spec.md` D-RM5).
+- `ZERO_WAIT` takes at most `SIDETONE_ZERO_WAIT_LIMIT` (12) calls. Every gap is at least 96 calls, so the next
+  element always starts from OFF.
+
+### 18.3 Tests and tasks
+
+The revised AC-K13 and AC-K14 (section 11) are part of task R3 of `sidetone_spec.md` section 24.5. QA check 4 of
+`sidetone_spec.md` section 24.6 covers them. Device check: DC-K3 (revised) and DC-14 of `sidetone_spec.md`.

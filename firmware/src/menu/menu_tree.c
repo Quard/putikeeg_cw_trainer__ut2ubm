@@ -39,6 +39,7 @@ static const menu_item_t MEM_CODE menu_settings_items[] = {
 
 static const menu_item_t MEM_CODE menu_cw_items[] = {
     {"Tone", "Hz", NULL, MENU_KIND_VALUE, SETTINGS_ID_TONE_HZ, 7U},
+    {"Ramp", "ms", NULL, MENU_KIND_VALUE, SETTINGS_ID_RAMP_MS, 5U},
     {"RX Speed", "WPM", NULL, MENU_KIND_VALUE, SETTINGS_ID_RX_WPM, 6U},
     {"RX Eff. Speed", "WPM", NULL, MENU_KIND_VALUE, SETTINGS_ID_RX_EFF_WPM, 6U},
     {"TX Speed", "WPM", NULL, MENU_KIND_VALUE, SETTINGS_ID_TX_WPM, 6U},
@@ -51,12 +52,6 @@ static const menu_item_t MEM_CODE menu_display_items[] = {
     {"Backlight", NULL, menu_backlight_texts, MENU_KIND_VALUE, SETTINGS_ID_BACKLIGHT, 3U},
     {"Contrast", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_CONTRAST, 2U},
 };
-
-/* The menu has no scrolling (spec section 6.2), so no list may have more items than visible rows. */
-_Static_assert(MENU_ITEM_COUNT(menu_main_items) <= MENU_VISIBLE_ROWS, "main menu needs scrolling");
-_Static_assert(MENU_ITEM_COUNT(menu_settings_items) <= MENU_VISIBLE_ROWS, "Settings needs scrolling");
-_Static_assert(MENU_ITEM_COUNT(menu_cw_items) <= MENU_VISIBLE_ROWS, "CW needs scrolling");
-_Static_assert(MENU_ITEM_COUNT(menu_display_items) <= MENU_VISIBLE_ROWS, "Display needs scrolling");
 
 /* Indexed by MENU_NODE_*. */
 const menu_node_t MEM_CODE menu_nodes[MENU_NODE_COUNT] = {

@@ -44,7 +44,7 @@
 #define MENU_STACK_DEPTH 3U
 
 #ifndef MENU_TONE_PREVIEW_MS
-#define MENU_TONE_PREVIEW_MS 300U /* ui-ux.md section 6.5, decision UX-21 */
+#define MENU_TONE_PREVIEW_MS 300U /* Tone or Ramp preview; ui-ux.md section 6.5, decisions UX-21 and UX-73 */
 #endif
 
 #ifndef MENU_SPLASH_MS
@@ -66,7 +66,7 @@ void menu_handle(button_event_t event);
 
 /**
  * Runs the time-based menu work: the end of the startup screen after MENU_SPLASH_MS, the mode screen work once its
- * frame is drawn, and the Tone preview timeout. Main loop, each pass.
+ * frame is drawn, and the Tone or Ramp preview timeout. Main loop, each pass.
  */
 void menu_poll(void);
 
@@ -83,8 +83,8 @@ uint8_t menu_dialog_choice(void); /* MENU_DIALOG_*; meaningful on MENU_SCREEN_DI
 uint8_t menu_message(void);       /* MENU_MESSAGE_*; meaningful on MENU_SCREEN_MESSAGE */
 
 /**
- * Shows screen MESSAGE with @p message_id over the current list and ends a Tone edit. Ignores unknown ids. On the
- * startup screen, it only stores the id; the end of the startup screen shows the message.
+ * Shows screen MESSAGE with @p message_id over the current list and ends a Tone or Ramp preview edit. Ignores unknown
+ * ids. On the startup screen, it only stores the id; the end of the startup screen shows the message.
  */
 void menu_show_message(uint8_t message_id);
 

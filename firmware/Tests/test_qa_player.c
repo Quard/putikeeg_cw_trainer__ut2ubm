@@ -50,7 +50,7 @@ static void test_rejected_start_during_mark_stops_tone(void) {
 
   for (index = 0U; index < sizeof(rejects) / sizeof(rejects[0]); ++index) {
     fake_sidetone_pwm_reset();
-    sidetone_init(600U);
+    sidetone_init(600U, 8U);
     TEST_ASSERT(start_text("T", 1U));
     run(100U); /* inside the 720-call dah at 20 WPM */
     TEST_ASSERT(player_is_busy());
@@ -70,7 +70,7 @@ static void test_rejected_start_during_mark_stops_tone(void) {
 /* A restart in the gap of a character starts a new mark at once and plays the new text from its first element. */
 static void test_restart_in_gap(void) {
   fake_sidetone_pwm_reset();
-  sidetone_init(600U);
+  sidetone_init(600U, 8U);
   TEST_ASSERT(start_text("E", 1U));
   run(240U + 10U); /* past the 240-call dit at 20 WPM: the playback has ended */
   TEST_ASSERT(!player_is_busy());

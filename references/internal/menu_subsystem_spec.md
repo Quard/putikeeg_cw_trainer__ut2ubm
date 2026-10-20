@@ -2,7 +2,8 @@
 
 Owner: `architector`. Status: approved for implementation. Change request D-A1 to D-A15 (firmware version,
 start-up screen, `About` item, approved plan of 2026-10-08): specification published on 2026-10-08, section 17.
-Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
+Change request `Ramp` setting (plan `noble-bubbling-dahl.md`, user-approved 2026-10-16): specification published on
+2026-10-16, section 18. It revises sections 4.8, 5.1, 5.2, 6.1, 6.2 and 6.3 in place. Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
 
@@ -12,6 +13,7 @@ Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `tech
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | Screen layout, label strings, value formats, edit-mode marker, dialog and placeholder layout, auto-repeat and debounce timing values. |
 | `references/context/STC8H_datasheet.md` | Register facts. Section 8 lists the facts that the developer must check. |
 | `references/internal/keyer_spec.md` (owner `architector`) | Adds long-press events, P3.2 ownership, the `Paddle` setting (flags bit 1) and the Free Input mode screen. Its sections 6.12 to 6.14 are binding for these items. Its section 17 adds the prosign display setting (flags bits 2-3, layout version 2, the Settings item) and is binding for it. This document repeats these items in sections 4.5, 4.8, 4.10, 5, 6.1, 6.3, 6.4, 7 and 14. |
+| `references/internal/sidetone_spec.md` section 24 (owner `architector`) | The sidetone side of the `Ramp` setting: `sidetone_set_ramp_ms()`, `sidetone_init()` with the ramp, the Ramp preview call order (D-RM8). |
 | `AGENTS.md` | Project rules (memory, software SPI, interrupts, team workflow). |
 
 Precedence rules:
@@ -23,7 +25,7 @@ Precedence rules:
   yourself.
 - After implementation starts, only `architector` changes this document.
 
-`AGENTS.md` names `llm.md`. That file does not exist (`llm.txt` is empty). Do not create it.
+`AGENTS.md` names `llm.md` at the repository root for agent-maintained instructions.
 
 ## 2. Scope
 
@@ -616,7 +618,8 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_CONTRAST 9U
 #define SETTINGS_ID_PADDLE_SWAP 10U  /* 0 Normal, 1 Reversed (keyer_spec.md section 6.13) */
 #define SETTINGS_ID_PROSIGN_STYLE 11U  /* SETTINGS_PROSIGN_* (keyer_spec.md section 17) */
-#define SETTINGS_ID_COUNT 12U
+#define SETTINGS_ID_RAMP_MS 12U        /* sidetone rise and fall time, 4..12 ms (section 18) */
+#define SETTINGS_ID_COUNT 13U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
@@ -641,7 +644,7 @@ typedef uint8_t settings_save_status_t;
 #define SETTINGS_RECORD_SIZE 15U
 #define SETTINGS_MAGIC_0 0x43U        /* 'C' */
 #define SETTINGS_MAGIC_1 0x57U        /* 'W' */
-#define SETTINGS_LAYOUT_VERSION 2U
+#define SETTINGS_LAYOUT_VERSION 3U
 
 settings_load_status_t settings_load(void);
 settings_save_status_t settings_save_if_changed(void);
@@ -659,8 +662,9 @@ void settings_use_display_defaults(void);
 
 - Call it once at start-up, before any other settings call.
 - It reads the record (section 5). It checks in this order: read status, magic, version, CRC.
-- Layout versions 1 and 2 pass the version check. A version 1 record loads as section 5.1 says: its values stay,
-  and `Prosigns` takes its default.
+- Layout versions 1, 2 and 3 pass the version check. A version 1 or 2 record loads as section 5.1 says: its values
+  stay, and the settings that its layout does not have take their defaults (`Prosigns` for version 1, `Ramp` for
+  versions 1 and 2).
 - On a failure, all values take their defaults and the function returns the matching status.
 - On success, every field goes through the clamp rule (section 5.3). Base speeds come before effective speeds.
 - It never writes the EEPROM.
@@ -822,14 +826,14 @@ only file that sets `EA`.
 | --- | --- | --- | --- |
 | 0 | 1 | magic 0 | `0x43` |
 | 1 | 1 | magic 1 | `0x57` |
-| 2 | 1 | layout version | `0x02`. A load also accepts `0x01` (see below). |
+| 2 | 1 | layout version | `0x03`. A load also accepts `0x01` and `0x02` (see below). |
 | 3 | 2 | tone, Hz | little-endian (low byte at 3) |
 | 5 | 1 | RX speed, WPM | |
 | 6 | 1 | effective RX speed, WPM | |
 | 7 | 1 | TX speed, WPM | |
 | 8 | 1 | effective TX speed, WPM | |
 | 9 | 1 | key type | 0 straight, 1 iambic A, 2 iambic B |
-| 10 | 1 | flags | Bit 0 = show CW code. Bit 1 = paddle swap (1 = `Reversed`). Bits 2-3 = prosign style (`SETTINGS_PROSIGN_*`, 3 loads as 2). Bits 4-7 are written as 0 and ignored on load. |
+| 10 | 1 | flags | Bit 0 = show CW code. Bit 1 = paddle swap (1 = `Reversed`). Bits 2-3 = prosign style (`SETTINGS_PROSIGN_*`, 3 loads as 2). Bits 4-7 = `Ramp` in ms (0-3 load as 4, 13-15 load as 12). |
 | 11 | 1 | max word length | |
 | 12 | 1 | backlight level | |
 | 13 | 1 | contrast | |
@@ -840,13 +844,32 @@ Serialize and parse byte by byte. Never copy a C struct. Bytes 0x00F-0x1FF of pa
 CRC-8: polynomial `0x07`, initial value `0x00`, no reflection, no final XOR, MSB first, bitwise (no table). Check
 value: ASCII `123456789` gives `0xF4`.
 
-Default record (test vector): `43 57 02 58 02 20 20 14 14 02 09 05 08 20 03`.
+Default record (test vector): `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B`.
 
-`keyer_spec.md` section 17.4.2 gives the other test vectors of version 2 and version 1.
+Section 18.2 gives the test vectors of version 3. `keyer_spec.md` section 17.4.2 gives the vectors of versions 2
+and 1. Its "version 3 gives `SETTINGS_LOAD_BAD_VERSION`" vector is replaced by the version 4 vector of 18.2.
 
 Flag fields: `settings_get()` returns `(flags & mask) >> shift` of the id: bit 0 for `SETTINGS_ID_SHOW_CW_CODE`,
-bit 1 for `SETTINGS_ID_PADDLE_SWAP`, bits 2-3 for `SETTINGS_ID_PROSIGN_STYLE`. `settings_set()` for these ids changes
-only the bits of the id. The `Paddle` setting changed neither the layout nor the version.
+bit 1 for `SETTINGS_ID_PADDLE_SWAP`, bits 2-3 for `SETTINGS_ID_PROSIGN_STYLE`, bits 4-7 for `SETTINGS_ID_RAMP_MS`
+(mask 0xF0, shift 4). `settings_set()` for these ids changes only the bits of the id. The `Paddle` setting changed
+neither the layout nor the version.
+
+Layout version 3 (section 18). Versions 1 and 2 have no `Ramp`: bits 4-7 of their flags byte have no meaning.
+Load of a record with a valid CRC:
+
+| Version | Flags bits kept | Then store the default of | Then |
+| --- | --- | --- | --- |
+| 3 | 0-7 | - | Clamp every field (section 5.3). |
+| 2 | 0-3 (clear 4-7) | `SETTINGS_ID_RAMP_MS` (6) | Clamp every field. |
+| 1 | 0-1 (clear 2-7) | `SETTINGS_ID_PROSIGN_STYLE` (2), `SETTINGS_ID_RAMP_MS` (6) | Clamp every field. |
+| Other (0, 4-255) | - | all ids (`SETTINGS_LOAD_BAD_VERSION`) | - |
+
+After a valid load, the status is `SETTINGS_LOAD_OK` and the record in RAM gets version 3. The baseline takes these
+values, so no save happens until an edit step (UX-15). The load never writes the EEPROM. Every save writes
+version 3. Earlier firmware reads a version 3 record as `SETTINGS_LOAD_BAD_VERSION` and uses its defaults. This is
+accepted, as for version 2.
+
+The older text below describes the version 2 rules of `keyer_spec.md` section 17.
 
 Layout version 2 (`keyer_spec.md` section 17, decision D-P6). The layout of version 1 is the same, but bits 2-3 of
 its flags byte have no meaning. Load of a version 1 record with a valid CRC:
@@ -878,6 +901,7 @@ Version 1 test vectors, for load tests only: `43 57 01 58 02 20 20 14 14 02 01 0
 | `CONTRAST` | Contrast | 0 | 63 | 1 | `LCD_DEFAULT_CONTRAST` (32) | none |
 | `PADDLE_SWAP` | Paddle | 0 | 1 | 1 | 0 (Normal) | choice (0 Normal, 1 Reversed) |
 | `PROSIGN_STYLE` | Prosigns | 0 | 2 | 1 | 2 (Both) | choice (0 Punctuation, 1 Prosign, 2 Both) |
+| `RAMP_MS` | Ramp (sidetone rise and fall time) | 4 | 12 | 1 | 6 | ms |
 
 The final unit and choice strings come from `ui-ux.md`.
 
@@ -922,12 +946,15 @@ Node `MENU_NODE_CW` (title `Settings > CW`):
 | Index | Item | Kind | Target |
 | --- | --- | --- | --- |
 | 0 | `Tone` | value | `SETTINGS_ID_TONE_HZ` |
-| 1 | `RX Speed` | value | `SETTINGS_ID_RX_WPM` |
-| 2 | `RX Eff. Speed` | value | `SETTINGS_ID_RX_EFF_WPM` |
-| 3 | `TX Speed` | value | `SETTINGS_ID_TX_WPM` |
-| 4 | `TX Eff. Speed` | value | `SETTINGS_ID_TX_EFF_WPM` |
-| 5 | `Key Type` | choice | `SETTINGS_ID_KEY_TYPE` (`Straight`, `Iambic A`, `Iambic B`) |
-| 6 | `Paddle` | choice | `SETTINGS_ID_PADDLE_SWAP` (`Normal`, `Reversed`), field width 8 |
+| 1 | `Ramp` | value | `SETTINGS_ID_RAMP_MS`, unit `ms`, field width 5 (`ui-ux.md` UX-71) |
+| 2 | `RX Speed` | value | `SETTINGS_ID_RX_WPM` |
+| 3 | `RX Eff. Speed` | value | `SETTINGS_ID_RX_EFF_WPM` |
+| 4 | `TX Speed` | value | `SETTINGS_ID_TX_WPM` |
+| 5 | `TX Eff. Speed` | value | `SETTINGS_ID_TX_EFF_WPM` |
+| 6 | `Key Type` | choice | `SETTINGS_ID_KEY_TYPE` (`Straight`, `Iambic A`, `Iambic B`) |
+| 7 | `Paddle` | choice | `SETTINGS_ID_PADDLE_SWAP` (`Normal`, `Reversed`), field width 8 |
+
+The indexes here are 0-based. `ui-ux.md` counts the items from 1.
 
 Node `MENU_NODE_DISPLAY` (title `Settings > Display`):
 
@@ -939,11 +966,41 @@ Node `MENU_NODE_DISPLAY` (title `Settings > Display`):
 `MENU_MODE_*` and `MENU_ACTION_*` are private constants in `menu_internal.h`. The maximum depth is 3 (main,
 Settings, CW or Display), which is `MENU_STACK_DEPTH`.
 
-### 6.2 No scrolling
+### 6.2 Scrolling (`ui-ux.md` section 5.5, UX-72)
 
-No node has more than `MENU_VISIBLE_ROWS` (7) items. For a node with more than 7 items, a compile-time check in
-`menu_tree.c` stops the build. Thus the menu has no scroll state and no `i/n` indicator. When a later list
-needs more items, `architector` adds the scroll rule of `ui-ux.md` section 5.5 to this document first.
+The rule is generic: it applies to every node with more than `MENU_VISIBLE_ROWS` (7) items. In this version only
+CW (8 items) scrolls.
+
+State: `MEM_XDATA uint8_t menu_stack_tops[MENU_STACK_DEPTH]`, defined in `menu.c`, declared in `menu_internal.h`.
+It is the 0-based index of the item in row 1 for each stack level. `c` = cursor, `t` = top, both 0-based.
+
+- Push of a child node (LIST, ENTER on submenu): child cursor 0 and child top 0.
+- Pop (LIST, MENU): the parent cursor and the parent top do not change.
+- `menu_init()`: top 0 at level 0.
+- After each cursor change in `menu_move_cursor()`, press or repeat, wrap or not: if `c < t`, then `t = c`. If
+  `c > t + 6`, then `t = c - 6`. Else `t` does not change. This one rule also gives the wrap result: the last 7
+  items after a wrap to the last item, the first 7 after a wrap to item 0.
+- No other event moves the window. Edit steps, the effective-speed clamp and messages never change `c` or `t`.
+- A cursor change that does not change `t` and a window move both set the redraw flag, as a cursor change does
+  today. `menu_render()` redraws the full screen, as today. It starts with a full clear of `lcd_fb`, so every page
+  that has ink before or after the redraw becomes dirty. A cursor step therefore sends the same pages as a cursor
+  step in a list today, and a window move sends no more. `ui-ux.md` 5.5 names the pages whose pixels change (3 for
+  a step, 8 for a window move). No new transfer rule: D-45 measures the time on the device.
+- Host tests of the pages (V-174 to V-176, V-182) compare the `lcd_fb` bytes before and after the event. They check
+  the pages whose pixels change, not the dirty mask (decision 2026-10-16).
+
+Render (`draw_list()`):
+
+- Row `1 + k` shows item `t + k`, for `k` = 0 to `min(6, n - 1 - t)`. The selection and the edit test use the item
+  index, as today.
+- For `n > MENU_VISIBLE_ROWS`, the title bar also shows `i/n` with `i = c + 1`, as decimal text with no leading
+  zeros (`gfx_format_u16()`). It is inverted, and its last character is in column 24. Draw order: the title as
+  today, then the `i/n` text. The title of every scrolling node in this version fits in `24 - len(i/n)` columns, so
+  no title is cut (UX-72). A host test checks this for the CW title with the longest `i/n` of the tree (`8/8`).
+- For `n <= 7` the render is as before: no `i/n`, no change of a pixel.
+
+Compile-time checks in `menu_tree.c`: the four "needs scrolling" `_Static_assert`s go away, because every list
+can scroll. No new item-count check is added.
 
 ### 6.3 State machine
 
@@ -956,9 +1013,9 @@ long events (`keyer_spec.md` section 6.14, `ui-ux.md` UX-31).
 
 | Screen | Event | Action |
 | --- | --- | --- |
-| LIST | NEXT | Cursor + 1. At the last item, a press goes to item 0 and a repeat stays. |
-| LIST | PREV | Cursor - 1. At item 0, a press goes to the last item and a repeat stays. |
-| LIST | ENTER on submenu | Push the child node with cursor 0. |
+| LIST | NEXT | Cursor + 1. At the last item, a press goes to item 0 and a repeat stays. Then the window rule of section 6.2. |
+| LIST | PREV | Cursor - 1. At item 0, a press goes to the last item and a repeat stays. Then the window rule of section 6.2. |
+| LIST | ENTER on submenu | Push the child node with cursor 0 and top 0. |
 | LIST | ENTER on mode `Free Input` | Screen FREE_INPUT with a redraw request, then `free_input_enter()`. |
 | LIST | ENTER on mode `Receiving` or `Sending` | Screen PLACEHOLDER for that mode. |
 | LIST | ENTER on value or choice | Screen EDIT on the same row. |
@@ -968,7 +1025,7 @@ long events (`keyer_spec.md` section 6.14, `ui-ux.md` UX-31).
 | LIST | MENU at root | Nothing, no redraw. |
 | EDIT | NEXT | `settings_set(id, value + step)`. At max, nothing changes. |
 | EDIT | PREV | For `value < step`, set 0. Else set `value - step`. Both go through `settings_set`. At min, nothing changes. |
-| EDIT | after a change | Contrast: `lcd_set_contrast(value)`. Backlight: `backlight_set_level(value)`. Other ids: nothing. |
+| EDIT | after a change | Contrast: `lcd_set_contrast(value)`. Backlight: `backlight_set_level(value)`. Tone and Ramp: preview hook H2 (section 18.5). Other ids: nothing. |
 | EDIT | ENTER or MENU | Screen LIST. The value stays. MENU in EDIT does not leave the node. |
 | PLACEHOLDER | Long MENU | Screen LIST, same cursor. |
 | PLACEHOLDER | Long NEXT or long PREV, and every event without the long flag | Nothing. |
@@ -1874,3 +1931,129 @@ object compares with `0x1388`. The splash tests use times relative to `MENU_SPLA
 28 083 B, xdata 1817 B and stack start 0x41 with 191 B free, as before. `test.sh` passes 79 of 79 tests and the
 168 `check_asm` self-test cases. `ui-ux.md` (UX-59, V-152 to V-161), `docs/user_manual.md` and
 `docs/release_notes.md` say 5 s; the other 2 s values there are unrelated hold times. DC-A2 stays open.
+
+## 18. Change request: `Ramp` setting, CW scrolling and Ramp preview (2026-10-16)
+
+This section is the binding contract of the menu and settings part of the change. The sidetone, keyer and player
+parts are in `sidetone_spec.md` section 24, `keyer_spec.md` section 18 and `training_spec.md` D-T51. The task split
+is `sidetone_spec.md` section 24.5 (tasks R4 and R5). Where this section differs from sections 1 to 17, this
+section wins. `ui-ux.md` UX-71 to UX-73 (sections 5.3, 5.5, 6.5, 9.6) win for labels, strings, layout and the hook
+order.
+
+### 18.1 User decisions and UI inputs
+
+- `Settings > CW` item `Ramp`: value item, `4 ms` to `12 ms`, step 1, field width 5, default 6 ms. Item 2 of CW
+  (index 1), directly after `Tone`. `Paddle` becomes item 8 (index 7). UX-71.
+- The CW list scrolls with the rule of section 6.2 (UX-72).
+- The Ramp edit plays a preview with the hooks H1-H6 and `MENU_TONE_PREVIEW_MS` (300 ms), as the Tone edit does
+  (UX-73).
+
+### 18.2 Settings (`settings.h`, `settings.c`, task R4)
+
+Interface changes (section 4.8): `SETTINGS_ID_RAMP_MS 12U`, `SETTINGS_ID_COUNT 13U`, `SETTINGS_LAYOUT_VERSION 3U`.
+The doc comment of `settings_load()` names versions 1, 2 and 3 and the defaults of 5.1. No new function.
+
+Private changes in `settings.c`:
+
+| Table or macro | Value for `SETTINGS_ID_RAMP_MS`, or the new value |
+| --- | --- |
+| `settings_offsets` | `RECORD_FLAGS` |
+| `settings_flag_masks` | `RECORD_FLAG_RAMP_MS` = 0xF0 |
+| `settings_flag_shifts` | 4 |
+| `settings_mins`, `settings_maxes`, `settings_steps`, `settings_defaults` | 4, 12, 1, 6 |
+| `RECORD_FLAGS_USED` | removed: version 3 keeps every bit, so it needs no mask |
+| `RECORD_FLAGS_USED_V2` (new) | 0x0F |
+| `RECORD_FLAGS_USED_V1` | 0x03, unchanged |
+
+- `settings_check_record()` accepts the range `RECORD_LAYOUT_VERSION_1` (1) to `SETTINGS_LAYOUT_VERSION` (3).
+- `settings_load()` follows the table of section 5.1: for version 1 and 2 it masks the flags and then stores the
+  missing defaults, before the clamp loop. The clamp loop stays in id order.
+- `settings_set_defaults()` stores each default and does not clear the flags byte first, because the flag ids
+  cover all 8 bits. A compile-time check makes this rule safe: the OR of the four flag masks is 0xFF (required,
+  D-RM15 below). The default flags byte is 0x69 (show code 1, paddle 0, prosigns 2, ramp 6).
+- D-RM15 (2026-10-16): add `_Static_assert((RECORD_FLAG_SHOW_CW_CODE | RECORD_FLAG_PADDLE_SWAP |
+  RECORD_FLAG_PROSIGN_STYLE | RECORD_FLAG_RAMP_MS) == 0xFFU, ...)` to `settings.c`. Without it, a later flag id that
+  leaves a bit free would keep a bit of a bad record.
+- `settings_store()` stays a leaf (no `lcall`, no library helper). `settings_get()` keeps its form.
+
+Test vectors (CRC-8 of section 5.1, computed by `architector` with a script on 2026-10-16):
+
+| Record | Bytes 0..14 | Load result |
+| --- | --- | --- |
+| Version 3, defaults | `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B` | OK, `Ramp` 6 |
+| Version 3, `Ramp` 4 | `43 57 03 58 02 20 20 14 14 02 49 05 08 20 C5` | OK, `Ramp` 4 |
+| Version 3, `Ramp` 8 | `43 57 03 58 02 20 20 14 14 02 89 05 08 20 6F` | OK, `Ramp` 8 |
+| Version 3, `Ramp` 12 | `43 57 03 58 02 20 20 14 14 02 C9 05 08 20 F4` | OK, `Ramp` 12 |
+| Version 3, `Reversed`, `Both`, `Ramp` 6 | `43 57 03 58 02 20 20 14 14 02 6B 05 08 20 27` | OK |
+| Version 3, `Punctuation`, `Ramp` 6 | `43 57 03 58 02 20 20 14 14 02 61 05 08 20 BB` | OK |
+| Version 3, bits 2-3 = 3, `Reversed`, `Ramp` 6 | `43 57 03 58 02 20 20 14 14 02 6F 05 08 20 7F` | OK, `Both`, `Reversed` |
+| Version 3, bits 4-7 = 0 | `43 57 03 58 02 20 20 14 14 02 09 05 08 20 5E` | OK, `Ramp` 4 (clamp). This vector gave `SETTINGS_LOAD_BAD_VERSION` before. |
+| Version 3, bits 4-7 = 15 | `43 57 03 58 02 20 20 14 14 02 F9 05 08 20 5D` | OK, `Ramp` 12 (clamp) |
+| Version 2, defaults | `43 57 02 58 02 20 20 14 14 02 09 05 08 20 03` | OK, `Ramp` 6, no unsaved change |
+| Version 2, bits 4-7 = 15 | `43 57 02 58 02 20 20 14 14 02 F9 05 08 20 00` | OK, `Ramp` 6 |
+| Version 1, `Reversed` | `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` | OK, `Reversed`, `Both`, `Ramp` 6 |
+| Version 1, bits 2-7 set | `43 57 01 58 02 20 20 14 14 02 F3 05 08 20 7B` | OK, `Reversed`, `Both`, `Ramp` 6 |
+| Version 4, valid CRC | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 9F` | `SETTINGS_LOAD_BAD_VERSION`, defaults |
+
+### 18.3 Menu interface changes (task R5)
+
+- `menu_internal.h`: `extern MEM_XDATA uint8_t menu_stack_tops[MENU_STACK_DEPTH];` with the comment "index of the
+  item in row 1 of each level". Host tests read it through this header.
+- `menu.h`: no new function. The comments of `menu_poll()`, `menu_show_message()` and `MENU_TONE_PREVIEW_MS` say
+  "Tone or Ramp preview". The name `MENU_TONE_PREVIEW_MS` stays (`sidetone_spec.md` D-RM10).
+- `menu_tree.c`: the CW item `{"Ramp", "ms", NULL, MENU_KIND_VALUE, SETTINGS_ID_RAMP_MS, 5U}` at index 1. The four
+  "needs scrolling" `_Static_assert`s go away (section 6.2).
+- `menu_render.c`: `VALUE_TEXT_SIZE` stays 12 (`12 ms` has 5 characters).
+
+### 18.4 Scrolling (task R5)
+
+Section 6.2 is the contract. Code places:
+
+- `menu.c`: `menu_stack_tops`, its writes in `menu_init()`, the push in `menu_enter_item()` and the window rule at
+  the end of `menu_move_cursor()`. The window rule runs only when the cursor changed.
+- `menu_render.c`: `draw_list()` draws the window and the `i/n` mark. The selection test stays
+  `render_index == cursor`, with `render_index` = item index and `render_row = FIRST_ITEM_ROW + render_index - top`.
+- xdata: 3 B. No new internal RAM.
+
+### 18.5 Ramp preview hooks (task R5)
+
+`ui-ux.md` section 6.5 is the behavior contract. Code contract in `menu.c`:
+
+- `menu_is_tone_edit()` becomes `menu_is_preview_edit()`: screen EDIT and the item target is `SETTINGS_ID_TONE_HZ`
+  or `SETTINGS_ID_RAMP_MS`. `menu_leave_tone_edit()` becomes `menu_leave_preview_edit()` with the same body
+  (H5). `menu_show_message()` calls it as today.
+- `menu_preview_play(settings_id_t id)`: when `id == SETTINGS_ID_RAMP_MS`, first
+  `sidetone_set_ramp_ms((uint8_t)settings_get(SETTINGS_ID_RAMP_MS))`. Then, for both items,
+  `sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ))`, `sidetone_set_on(true)`, start = `tick_now()`,
+  running. So Tone gives `tone, on` and Ramp gives `ramp, tone, on` (D-RM8).
+- H1: `menu_enter_item()` calls `menu_preview_play(item->target)` for the Tone and the Ramp item.
+- H2: `menu_handle_edit()` calls `menu_preview_play(id)` after a change of the Tone or the Ramp value.
+- H3, H4, H6: as today. `menu_poll()` keeps one timer for both items.
+- No other code calls `sidetone_set_ramp_ms()`. The modes do not call it (`sidetone_spec.md` D-RM6).
+
+### 18.6 `main.c` (task R5)
+
+`sidetone_init(settings_get(SETTINGS_ID_TONE_HZ), (uint8_t)settings_get(SETTINGS_ID_RAMP_MS))` (`sidetone_spec.md`
+section 10.1). The rest of the start-up order does not change.
+
+### 18.7 Acceptance criteria
+
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| AC-M1 | Ranges: `settings_min`, `settings_max`, `settings_step` of `SETTINGS_ID_RAMP_MS` are 4, 12, 1. The default after a failed load is 6. `settings_set()` clamps 0..3 to 4 and 13..65535 to 12. | test |
+| AC-M2 | Every vector of 18.2 gives its load result. A version 1 or 2 load leaves `settings_has_unsaved_changes()` false, and a Settings exit with no edit step writes nothing. | test, QA |
+| AC-M3 | Round trip of all 9 ramp values through a save and a load. Every save writes version 3. The default save writes the version 3 default vector. | test |
+| AC-M4 | Flag independence: a change of `Ramp` keeps bits 0-3, and a change of each other flag id keeps bits 4-7. | test, QA |
+| AC-M5 | `settings_store()` has no `lcall` and no library helper (`.asm`). | review |
+| AC-M6 | Power loss and CMD_FAIL during a version 3 save behave as section 4.8 says. | QA |
+| AC-M7 | Tree: CW has 8 items in the order of 18.1. `Ramp` shows `4 ms` to `12 ms` right-aligned to column 22 with fw 5. | V-173 and following |
+| AC-M8 | Window rule for every cursor position, in both directions, with presses, repeats, both wraps and a repeat at both ends. Push gives top 0. Pop keeps the parent cursor and top. Edit steps never move the window. | V-tests of 9.6, QA |
+| AC-M9 | `i/n` from `1/8` to `8/8`, inverted, last character in column 24, on CW only. Lists with 7 items or fewer have the same pixels as before. The CW title is not cut. | V-tests of 9.6 |
+| AC-M10 | Ramp preview: V-185 to V-191 and the global `SLOG` rule of `ui-ux.md` 9.1. The Tone preview tests V-40 to V-53 pass with no change other than the CW item indexes. | menu tests |
+| AC-M11 | `main.c` passes the Ramp setting to `sidetone_init()`. | review |
+| AC-M12 | Memory of `sidetone_spec.md` 24.4: menu xdata +3 B, no new internal RAM in the menu. | report |
+
+### 18.8 Device checks (unverified until the user tests on the device)
+
+`ui-ux.md` D-45 (scroll on the glass and the transfer time of a window move), D-46 (Ramp preview by ear), D-47
+(Ramp in use at 50 WPM). `sidetone_spec.md` DC-13 and DC-14.
