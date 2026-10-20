@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "mcu/compiler.h"
+
 #if defined(__SDCC_mcs51)
 #include "mcu/stc8h.h"
 #endif
@@ -23,7 +25,7 @@ typedef uint8_t sidetone_state_t;
 
 #define SIDETONE_STATE_OFF 0U /* output disabled, confirmed at zero */
 #define SIDETONE_STATE_RISING 1U
-#define SIDETONE_STATE_STEADY 2U /* index at SIDETONE_RAMP_STEPS, 50 % duty */
+#define SIDETONE_STATE_STEADY 2U /* position at full scale, 50 % duty */
 #define SIDETONE_STATE_FALLING 3U
 #define SIDETONE_STATE_ZERO_WAIT 4U /* compare 0 written, waits for the PWMA update flag */
 
@@ -31,8 +33,9 @@ typedef uint8_t sidetone_state_t;
  * Sets up the tone tables, PWMA, the audio pins and the plug route, then starts Timer 0. Stays silent and does not
  * change EA. Call it once, at start-up.
  * @param tone_hz Start tone, clamped to SIDETONE_TONE_MIN_HZ..SIDETONE_TONE_MAX_HZ.
+ * @param ramp_ms Start rise and fall time, as sidetone_set_ramp_ms() takes it.
  */
-void sidetone_init(uint16_t tone_hz);
+void sidetone_init(uint16_t tone_hz, MEM_XDATA uint8_t ramp_ms);
 
 /**
  * Requests a new tone. It sounds after the next silence. A repeated request with the same clamped value does
@@ -40,6 +43,13 @@ void sidetone_init(uint16_t tone_hz);
  * @param tone_hz Tone in Hz, clamped to SIDETONE_TONE_MIN_HZ..SIDETONE_TONE_MAX_HZ.
  */
 void sidetone_set_tone_hz(uint16_t tone_hz);
+
+/**
+ * Sets the rise and fall time. A ramp that runs goes on at the new speed; nothing restarts. Call it only while the
+ * keyer and the CW player are disabled.
+ * @param ramp_ms Ramp in ms, clamped to SIDETONE_RAMP_MIN_MS..SIDETONE_RAMP_MAX_MS.
+ */
+void sidetone_set_ramp_ms(uint8_t ramp_ms);
 
 /** Requests the tone on or off. The envelope starts or ends at the next Timer 0 service. */
 void sidetone_set_on(bool is_on);

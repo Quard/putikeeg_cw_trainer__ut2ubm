@@ -14,11 +14,11 @@
 
 #include <stdint.h>
 
-#include "board/sidetone_config.h"
 #include "cw/player.h"
 #include "mcu/compiler.h"
+#include "sidetone/sidetone_shared.h"
 
-#define PLAYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS /* 32: the fall ends at the mark end */
+#define PLAYER_EARLY_RELEASE_TICKS sidetone_ramp_calls /* 4 x Ramp ms: the fall ends at the mark end */
 #define PLAYER_CHAR_GAP_UNITS 3U
 
 /*

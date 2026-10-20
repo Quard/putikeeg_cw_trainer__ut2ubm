@@ -36,7 +36,7 @@ void main(void) {
   if (buttons_is_recovery_start()) {
     settings_use_display_defaults();
   }
-  sidetone_init(settings_get(SETTINGS_ID_TONE_HZ));
+  sidetone_init(settings_get(SETTINGS_ID_TONE_HZ), (uint8_t)settings_get(SETTINGS_ID_RAMP_MS));
   keyer_init();
   lcd_init();
   lcd_set_contrast((uint8_t)settings_get(SETTINGS_ID_CONTRAST));

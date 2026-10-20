@@ -21,6 +21,8 @@
 
 static bool test_is_tone_requested;
 static void test_request_tone(bool is_on) { test_is_tone_requested = is_on; }
+/* Ramp of the case under test; setup() sends it to the sidetone, so the early release follows it. */
+static uint8_t test_ramp_ms = 8U;
 
 #define KEYER_SIDETONE_ON() test_request_tone(true)
 #define KEYER_SIDETONE_OFF() test_request_tone(false)
@@ -105,6 +107,7 @@ static void start(uint8_t key_type, bool is_swapped, uint8_t wpm, uint8_t eff_wp
 
 static void setup(void) {
   fake_paddle_pins_reset();
+  sidetone_set_ramp_ms(test_ramp_ms);
   keyer_init();
   set_contacts(false, false);
 }
@@ -466,6 +469,7 @@ static void check_element_timing(uint16_t dit, const char* expected) {
   size_t call;
   bool is_release_exact = true;
 
+  TEST_ASSERT_EQUAL(4U * test_ramp_ms, KEYER_EARLY_RELEASE_TICKS);
   mark_count = find_runs(is_mark_phase, marks, 64U);
   gap_count = find_runs(is_gap_phase, gaps, 64U);
   TEST_ASSERT_EQUAL(strlen(expected), mark_count);
@@ -846,6 +850,21 @@ static void test_early_release(void) {
   check_element_timing(dit, ".-.-.-.-");
 }
 
+/* AC-K13 (keyer_spec.md section 18): the early release follows the Ramp setting. */
+static void test_early_release_at_every_ramp(void) {
+  static const uint8_t ramps[3] = {4U, 6U, 12U};
+  size_t ramp;
+
+  for (ramp = 0U; ramp < 3U; ++ramp) {
+    test_ramp_ms = ramps[ramp];
+    timing_case(5U);
+    timing_case(20U);
+    timing_case(50U);
+    test_early_release();
+  }
+  test_ramp_ms = 8U;
+}
+
 /* AC-K15 */
 static size_t event_call_of(keyer_event_t event, size_t occurrence) {
   size_t index;
@@ -1204,6 +1223,7 @@ int main(void) {
   TEST_RUN(test_straight);
   TEST_RUN(test_straight_saturation);
   TEST_RUN(test_exact_timing);
+  TEST_RUN(test_early_release_at_every_ramp);
   TEST_RUN(test_dit_formula);
   TEST_RUN(test_farnsworth_table);
   TEST_RUN(test_iambic_decisions);

@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "fake_paddle_pins.h"
+#include "sidetone/sidetone.h"
 #include "test_assert.h"
 
 static bool qa_is_tone_requested;
@@ -334,6 +335,7 @@ static unsigned long calls_total;
 static void setup(void) {
   memset(&model, 0, sizeof(model));
   fake_paddle_pins_reset();
+  sidetone_set_ramp_ms(8U);
   keyer_init();
   model.head = keyer_queue_head;
   model.tail = keyer_queue_tail;

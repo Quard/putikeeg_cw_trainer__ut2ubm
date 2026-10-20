@@ -65,9 +65,12 @@ static const vector_t v1_vectors[] = {
      0U,
      2U},
 };
-static const uint8_t v3_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x03U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
-                                                        0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x5EU};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U};
+static const uint8_t v4_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x04U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                        0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U, 0x9FU};
+/* menu_subsystem_spec.md section 18.2: the saved form of v2_vectors[1], Punctuation and Ramp 6 ms. */
+static const uint8_t v3_punctuation_record[SETTINGS_RECORD_SIZE] = {
+    0x43U, 0x57U, 0x03U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x61U, 0x05U, 0x08U, 0x20U, 0xBBU};
+static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U};
 
 #define V2_COUNT (sizeof(v2_vectors) / sizeof(v2_vectors[0]))
 #define V1_COUNT (sizeof(v1_vectors) / sizeof(v1_vectors[0]))
@@ -117,8 +120,9 @@ static void test_vectors_have_valid_crc(void) {
   for (index = 0U; index < V1_COUNT; ++index) {
     TEST_ASSERT_EQUAL(v1_vectors[index].bytes[RECORD_CRC], crc8_compute(v1_vectors[index].bytes, 14U));
   }
-  TEST_ASSERT_EQUAL(v3_record[RECORD_CRC], crc8_compute(v3_record, 14U));
-  TEST_ASSERT_EQUAL(2U, SETTINGS_LAYOUT_VERSION);
+  TEST_ASSERT_EQUAL(v4_record[RECORD_CRC], crc8_compute(v4_record, 14U));
+  TEST_ASSERT_EQUAL(v3_punctuation_record[RECORD_CRC], crc8_compute(v3_punctuation_record, 14U));
+  TEST_ASSERT_EQUAL(3U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(15U, SETTINGS_RECORD_SIZE);
 }
 
@@ -127,7 +131,7 @@ static void test_values(void) {
   static const uint16_t stored[] = {0U, 1U, 2U};
   size_t index;
 
-  TEST_ASSERT_EQUAL(12U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(13U, SETTINGS_ID_COUNT);
   TEST_ASSERT_EQUAL(11U, SETTINGS_ID_PROSIGN_STYLE);
   TEST_ASSERT_EQUAL(0U, SETTINGS_PROSIGN_PUNCTUATION);
   TEST_ASSERT_EQUAL(1U, SETTINGS_PROSIGN_NAME);
@@ -207,8 +211,8 @@ static void test_flag_bits(void) {
             continue;
           }
           TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-          TEST_ASSERT_EQUAL(flags, fake_iap_memory()[RECORD_FLAGS]);
-          TEST_ASSERT_EQUAL(0U, fake_iap_memory()[RECORD_FLAGS] & 0xF0U);
+          TEST_ASSERT_EQUAL(flags | 0x60U, fake_iap_memory()[RECORD_FLAGS]);
+          TEST_ASSERT_EQUAL(0x60U, fake_iap_memory()[RECORD_FLAGS] & 0xF0U);
           TEST_ASSERT(is_saved_record_valid());
           TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
           TEST_ASSERT(flags_are(show_cw_code, paddle, prosigns));
@@ -235,6 +239,8 @@ static void test_version_2_vectors(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   memcpy(expected, v2_vectors[0].bytes, sizeof(expected));
+  expected[RECORD_VERSION] = 0x03U;
+  expected[RECORD_FLAGS] = 0x69U;
   expected[RECORD_TONE_LOW] = 0xBCU;
   expected[RECORD_TONE_HIGH] = 0x02U;
   expected[RECORD_CRC] = crc8_compute(expected, 14U);
@@ -322,9 +328,9 @@ static void test_save_after_version_1_load(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   TEST_ASSERT(is_saved_record_valid());
-  TEST_ASSERT_EQUAL(0x02U, fake_iap_memory()[RECORD_VERSION]);
+  TEST_ASSERT_EQUAL(0x03U, fake_iap_memory()[RECORD_VERSION]);
   TEST_ASSERT_EQUAL(2U, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
-  TEST_ASSERT_EQUAL(0x0BU, fake_iap_memory()[RECORD_FLAGS]);
+  TEST_ASSERT_EQUAL(0x6BU, fake_iap_memory()[RECORD_FLAGS]);
   TEST_ASSERT_EQUAL(0xBCU, fake_iap_memory()[RECORD_TONE_LOW]);
   TEST_ASSERT_EQUAL(0x02U, fake_iap_memory()[RECORD_TONE_HIGH]);
   TEST_ASSERT_EQUAL(0, memcmp(&v1_vectors[1].bytes[5], &fake_iap_memory()[5], 5U));
@@ -337,7 +343,7 @@ static void test_save_after_version_1_load(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_PROSIGN_STYLE, SETTINGS_PROSIGN_PUNCTUATION));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   TEST_ASSERT_EQUAL(0U, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
-  TEST_ASSERT_EQUAL(0, memcmp(v2_vectors[1].bytes, fake_iap_memory(), SETTINGS_RECORD_SIZE));
+  TEST_ASSERT_EQUAL(0, memcmp(v3_punctuation_record, fake_iap_memory(), SETTINGS_RECORD_SIZE));
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
   TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_PUNCTUATION, settings_get(SETTINGS_ID_PROSIGN_STYLE));
 }
@@ -348,7 +354,7 @@ static void test_other_versions(void) {
 
   for (version = 0U; version <= 255U; ++version) {
     uint8_t record[SETTINGS_RECORD_SIZE];
-    if ((version == 1U) || (version == 2U)) {
+    if ((version >= 1U) && (version <= 3U)) {
       continue;
     }
     memcpy(record, v2_vectors[2].bytes, sizeof(record));
@@ -359,7 +365,7 @@ static void test_other_versions(void) {
     TEST_ASSERT_EQUAL(0U, write_operations());
     TEST_ASSERT(!settings_has_unsaved_changes());
   }
-  TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, load(v3_record));
+  TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, load(v4_record));
   TEST_ASSERT(are_defaults());
   TEST_ASSERT_EQUAL(0U, write_operations());
 }

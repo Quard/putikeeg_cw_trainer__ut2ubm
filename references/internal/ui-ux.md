@@ -16,7 +16,8 @@ Status of the content:
 
 - Product: Putikeeg CW Trainer, board CW_MINI_V2.0D, custom firmware.
 - UI scope in this version:
-  - The menu tree, the Settings editor, the `Paddle` setting and the `Prosigns` setting (section 5.10).
+  - The menu tree, the Settings editor, the `Paddle` setting and the `Prosigns` setting (section 5.10). The `Ramp`
+    setting and the scroll of the CW list (sections 5.3 and 5.5, UX-71, UX-72).
   - The Koch training modes Receiving and Sending (sections 5.11 to 5.15, 6.8 and 6.9): the header, the group
     keyboard, the result feedback, the transitions between items and the session end screen.
   - Level selection in Receiving and Sending (section 5.16): the start screen with the level selector and the level
@@ -25,10 +26,10 @@ Status of the content:
   - The Free Input mode (section 5.9) and the keyer for the three key types (section 6.7).
   - Long presses (section 6.6) and the other button input.
   - The Reset Statistics dialog. It sets the training level of every mode and speed back to level 1.
-  - The live effect of contrast and backlight, and the Tone preview (section 6.5).
+  - The live effect of contrast and backlight, and the Tone and Ramp previews (section 6.5).
   - The startup screen at power-on (section 5.17) and the `About` screen of the main menu (section 5.18), both with
     the firmware version.
-- Out of scope in this version: statistics other than the training levels, any sound other than the Tone preview,
+- Out of scope in this version: statistics other than the training levels, any sound other than the two previews,
   the keyer sidetone (Free Input and Sending) and the CW playback in Receiving. A level above the earned level
   cannot be selected (section 5.16).
 - Users: amateur radio operators who learn or practise Morse code. They know the terms WPM, RX, TX, Iambic A/B and
@@ -38,7 +39,7 @@ Status of the content:
 - Frequent tasks:
   - Most frequent, long practice: a Receiving or Sending session of 10 to 100 items, many sessions in a row.
   - Frequent: key text in Free Input and read the decoded result. Start a mode from the main menu.
-  - Sometimes: change a speed, the key type or the tone.
+  - Sometimes: change a speed, the key type, the tone or the ramp.
   - Rare: change contrast or backlight. Reset statistics.
 
 ## 2. Sources
@@ -50,13 +51,14 @@ Status of the content:
 | `firmware/drivers/u8g2_font_render/u8g2_font_render.c` in git commit `01c8e94` (not in the repository) | How the driver places a glyph relative to the `y` argument. |
 | `firmware/inc/lcd/lcd_fb.h`, `firmware/inc/board/lcd_config.h` | 128 x 64 framebuffer, 8 pages of 8 rows, contrast range 0-63, default 0x20. |
 | `references/context/STC8H_datasheet.md` | EEPROM sector erase about 4-6 ms, byte program about 30-40 us. Avoid EEPROM writes at low voltage. |
-| `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, 8 ms rise and fall, retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
+| `references/internal/sidetone_spec.md` (owner `architector`) | Sidetone API, rise and fall time from the `Ramp` setting (4-12 ms, `sidetone_set_ramp_ms()`), retune through silence, automatic route, menu hooks H1-H6 (section 10.3). |
 | `references/internal/keyer_spec.md` (owner `architector`) | Keyer contract: filter, entry mask, state machine, events, timing formulas, Morse table, long-press events, P3.2 ownership. Section 17: the prosign display setting (decoder codes, `morse_format()`, flags bits 2-3, record layout version 2). It refers to sections 5.9, 5.10, 6.6 and 6.7 of this file. |
 | `references/internal/paddle_keyer_research.md`, `paddle_keyer_howtoimplement_research.md` | Iambic A/B behaviour, squeeze release, entry mask, straight-key mode. |
 | Plan "Koch training modes Receiving and Sending" (approved by the user, 2026-10) | User decisions for the training modes: session sizes, pass rule, level model, Koch order, word length, attempts, Receiving input, progress key, button order on the case. |
 | Plan "Firmware version, startup screen and About item" (approved by the user, 2026-10-08) | User decisions: the startup screen mockup and its time. The plan gave 2 s. A later user decision (2026-10-08) changed it to 5 s. Any button skips it. The `About` item after `Settings` and its text rows. The version `0.1.0` comes from the build macro `FIRMWARE_VERSION` (file `firmware/VERSION`). |
 | Plan "Receiving: wait for `enter` after the third wrong attempt" (approved by the user, 2026-10-15) | User decision UX-64: the answer state of Receiving waits for an `enter` tap, a long `enter` replays the answer, row 7 shows `Next` or `Finish` above `enter`. Sending keeps its timed answer. |
 | Plan "Start screen with a big level description, and a split end screen" (approved by the user, 2026-10-15) | User decisions UX-65 to UX-70. The selector moves to row 1, and a label shows in row 2. The level description uses the 8 x 16 font in the place of the item line, at every level kind. In Sending, row 5 always shows the code of the new character. The end screen shows only the result. `enter` on the end screen opens the start screen at the preselected level. |
+| Plan "Sidetone ramp duration setting" (approved by the user, 2026-10-16) | User decisions: a `Settings > CW` item sets the rise and fall time of the tone, 4 ms to 12 ms, step 1 ms, default 6 ms. The edit plays a preview, as the Tone edit does. The CW list gets an eighth item and scrolls with the rule of section 5.5. Facts: at 50 WPM a dit is 24 ms, so 12 ms is the largest ramp that fits. At 400 Hz the PWM loads a new level only once per carrier period (2.5 ms), so a 4 ms ramp has fewer than 2 level steps. |
 | `references/internal/training_spec.md` (owner `architector`) | Interface contract of the training modes: Koch tables, level model, item generation, player, progress record, session engine. This file gives the visible and audible behaviour. If the two differ, report it to `architector`. |
 | `firmware/inc/buttons/buttons.h` | Button events: press, repeat (`prev`, `next`), long (`menu/back`, `prev`, `next`, and `enter` in tap mode only, `training_spec.md` D-T28). There is no release event. In tap mode, the press event comes at the release. |
 | `firmware/inc/cw/keyer.h`, `firmware/inc/cw/morse.h` | Keyer events (DIT and DAH at the end of a mark, CHAR_GAP, WORD_GAP, OVERFLOW). Prosign codes and `morse_format()` texts. |
@@ -73,7 +75,7 @@ Status of the content:
 | C-4 | `enter` button | P3.2 | Active low. Shared with the tip of the paddle/key socket. | In the menu and in Receiving, a paddle dit contact or a straight key also presses `enter`. In Free Input and in the input states of Sending, the keyer owns the pin. The `enter` button then keys like the tip contact (sections 6.7 and 5.13). Inserting a plug can short the tip for a short time (unverified). Right button of the four, right of `next` (user fact 2026-10-06, below). In Receiving, a tap of `enter` or a short tip closure selects the right run, and a hold of 800 ms replays (section 6.8). |
 | C-5 | Paddle ring | P5.5 | Dah contact (with `Paddle` = `Normal`). Active low, internal pull-up (plan). | The menu ignores it. Only the keyer in Free Input reads it. A mono plug shorts the ring to the sleeve (research Step 3). |
 | C-6 | `on/off` button | none | Not read by the MCU (no pin in the wiring table). | Unverified: the effect of the button on the MCU power is not known. |
-| C-7 | Volume potentiometer | analog | Not read by the MCU. Sets the sidetone loudness in the analog path (`components_and_wiring.md`). | The firmware has no volume control. At the lowest setting the Tone preview can be silent. |
+| C-7 | Volume potentiometer | analog | Not read by the MCU. Sets the sidetone loudness in the analog path (`components_and_wiring.md`). | The firmware has no volume control. At the lowest setting the previews can be silent. |
 
 Button order (user facts 2026-10 and 2026-10-06, closes D-8): from left to right on the case, the buttons are
 `menu/back`, `prev`, `next`, `enter`. So `prev` is left of `next`, and `enter` is right of `next`. The meaning
@@ -86,7 +88,7 @@ the Receiving keyboard follow this order: one label above each button (section 5
 | --- | --- | --- | --- |
 | O-1 | LCD, 128 x 64, monochrome, probably ST7567 | 8 text rows x 25 columns with the 5 x 8 font | Contrast 0-63 (`lcd_set_contrast`), default 0x20 = 32. The full-screen transfer time is not measured yet. |
 | O-2 | LCD backlight, Q6 switch driven from P0.3 (HIGH = on; HX4004A supply, Vout unverified) | Levels 0-10, duty = level x 10 % (plan) | Perceived brightness per level is unverified. |
-| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise 8 ms, fall 8 ms. A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of about 17-19 ms. | Uses: the Tone preview (section 6.5), the keyer sidetone in Free Input and Sending (section 6.7), the CW playback in Receiving (section 5.12). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
+| O-3 | Sidetone, PWM on P1.1 (speaker) or P1.2 (headphones) | One tone at a time, 400-1000 Hz. Rise and fall in the `Ramp` time: 4-12 ms, default 6 ms (UX-71). A tone change while sounding falls to silence, waits for the carrier update (at most 3 ms) and rises again: a dip of 2 x `Ramp` plus 1 to 3 ms, about 13-15 ms at 6 ms. | Uses: the Tone and Ramp previews (section 6.5), the keyer sidetone in Free Input and Sending (section 6.7), the CW playback in Receiving (section 5.12). The route is automatic. With the plug in (P1.0 LOW), the headphones play. Otherwise the speaker plays. A plug change takes effect at the next silence. Loudness comes from C-7. Facts from `sidetone_spec.md` sections 2, 6.3, 10.3. The sound at the ear is unverified (D-10 to D-14). |
 
 ### 3.3 Font facts (decoded from `u8g2_fonts.h`)
 
@@ -156,7 +158,9 @@ A glyph drawn with `gfx_draw_text()` at the cell top `y` uses these cell rows (`
 - Margins: x 0-1 on the left, x 127 on the right (the blank glyph column at x 126 adds to it). Text never uses
   x 0, 1 or 127. Tests use these margin columns as font-independent probes.
 - Row 0 is the title bar. Rows 1-7 are content. Every text row and its highlight stay inside one LCD page, so a
-  cursor move dirties two pages and a value change dirties one page.
+  cursor move changes the pixels of two pages and a value change changes the pixels of one page. In a list that
+  scrolls (section 5.5), a cursor move also changes the pixels of page 0 (the `i/n` mark), and a window move
+  changes the pixels of all pages 0-7.
 - Exception: the item line of the training screens uses the 8 x 16 font in pixel positions, not on this grid. It
   fills pages 3 and 4 (section 5.11.2).
 - Exception: the startup screen has no title bar, and its 8 x 16 line `CW Trainer` is in pixel positions. It fills
@@ -197,23 +201,29 @@ not exist on this display. The band is a shape, not a shade.
   (`Settings`, `Settings > CW`, `Settings > Display`). Title of a placeholder, dialog or message screen: the label
   of the item that opened it.
 - Scroll position (section 5.5): when a list has more than 7 items, the title bar also shows `i/n` right-aligned
-  so that its last character is in column 24 (`i` = 1-based cursor index, `n` = item count). The title is then cut
-  so that at least one blank column stays before `i/n`.
+  so that its last character is in column 24 (`i` = 1-based cursor index, `n` = item count, no leading zeros). The
+  `i/n` mark is inverted, as the title. The title is then cut so that at least one blank column stays before
+  `i/n`: the title keeps at most `24 - len(i/n)` characters. In this version only CW has more than 7 items. Its
+  title `Settings > CW` (13 characters) and `8/8` (3 characters) need 17 columns, so no title is cut. A cut title
+  is a defect (section 4.1). V-32 and V-182 check it.
+- Lists with 7 items or fewer show no `i/n` mark. Their title bar does not change.
 
 ### 5.2 List rows (browse mode)
 
 ```
     0         1         2
     0123456789012345678901234
-0  |Settings > CW            | title bar, inverted
+0  |Settings > CW         1/8| title bar, inverted; `1/8` in columns 22-24 (section 5.1)
 1  |Tone             600 Hz  | selected: highlight x 0-127, y 9-15
-2  |RX Speed         32 WPM  |
-3  |RX Eff. Speed    32 WPM  |
-4  |TX Speed         20 WPM  |
-5  |TX Eff. Speed    20 WPM  |
-6  |Key Type       Iambic B  |
-7  |Paddle           Normal  |
+2  |Ramp               6 ms  |
+3  |RX Speed         32 WPM  |
+4  |RX Eff. Speed    32 WPM  |
+5  |TX Speed         20 WPM  |
+6  |TX Eff. Speed    20 WPM  |
+7  |Key Type       Iambic B  |
 ```
+
+This is the first window of the CW list (8 items, section 5.5). `Paddle` is item 8, below the window.
 
 - Label in column 0.
 - Value item: value right-aligned, last character in column 22.
@@ -243,6 +253,7 @@ the value changes.
 | Settings | `Display` | submenu | - | - | - |
 | Settings | `Reset Statistics` | action | - | - | - |
 | CW | `Tone` | value | `400 Hz` .. `1000 Hz`, step 10 | 7 | `600 Hz` |
+| CW | `Ramp` | value | `4 ms` .. `12 ms`, step 1 | 5 | `6 ms` (user, UX-71) |
 | CW | `RX Speed` | value | `5 WPM` .. `50 WPM`, step 1 | 6 | `32 WPM` |
 | CW | `RX Eff. Speed` | value | `5 WPM` .. RX Speed, step 1 | 6 | = RX Speed |
 | CW | `TX Speed` | value | `5 WPM` .. `50 WPM`, step 1 | 6 | `20 WPM` |
@@ -257,7 +268,7 @@ towards the last entry) is the order in the "Values shown" column.
 
 Fit rule: `len(label) <= 20 - fw`. This keeps one blank column between the label and the `<` edit marker. Every
 row above passes. The main menu levels have no edit mode, but they pass too: `Receiving` uses 9 of 14 allowed. The tightest rows are `RX Eff. Speed` and `TX Eff. Speed` (13 of 14 allowed) and `Prosigns`
-(8 of 9 allowed). `Paddle` uses 6 of 12 allowed.
+(8 of 9 allowed). `Paddle` uses 6 of 12 allowed. `Ramp` uses 4 of 15 allowed.
 
 `Punctuation` (11 characters) is the longest value or choice text of the tree. The menu value text buffer holds it
 and the NUL (12 bytes, `keyer_spec.md` decision D-P7). A longer value text in a later change needs a larger buffer
@@ -265,19 +276,23 @@ first.
 
 `RX` = receive, `TX` = send (decision UX-3, decided by the user). The full words do not fit with the edit markers.
 
+`Ramp` (UX-71) is the rise time and the fall time of the tone. One value sets both. The unit `ms` follows the
+number after one space (section 4.3), in lower case, as the SI symbol. The value text has no leading zero:
+`4 ms`, not `04 ms`. So the one-digit values have one blank column on the left inside the field.
+
 ### 5.4 Edit mode (decision UX-4)
 
 ```
     0         1         2
     0123456789012345678901234
-0  |Settings > CW            |
+0  |Settings > CW         4/8|
 1  |Tone             600 Hz  |
-2  |RX Speed         32 WPM  |
-3  |RX Eff. Speed  < 25 WPM >| edit: highlight x 76-127, y 25-31; label normal video
-4  |TX Speed         20 WPM  |
-5  |TX Eff. Speed    20 WPM  |
-6  |Key Type       Iambic B  |
-7  |Paddle           Normal  |
+2  |Ramp               6 ms  |
+3  |RX Speed         32 WPM  |
+4  |RX Eff. Speed  < 25 WPM >| edit: highlight x 76-127, y 33-39; label normal video
+5  |TX Speed         20 WPM  |
+6  |TX Eff. Speed    20 WPM  |
+7  |Key Type       Iambic B  |
 ```
 
 - The highlight moves from the whole row to the value field. The label goes back to normal video. This change of
@@ -285,7 +300,7 @@ first.
 - Field layout: value in columns `23 - fw` to 22 (right-aligned inside the field), `<` in column `21 - fw`,
   column `22 - fw` blank, column 23 blank, `>` in column 24.
 - Highlight band: x from `106 - 5 * fw` to 127 (one pixel left of the `<` cell), y `8r + 1` to `8r + 7`.
-  Examples (fw -> x): 1 -> 101, 2 -> 96, 3 -> 91, 6 -> 76, 7 -> 71, 8 -> 66, 11 -> 51.
+  Examples (fw -> x): 1 -> 101, 2 -> 96, 3 -> 91, 5 -> 81, 6 -> 76, 7 -> 71, 8 -> 66, 11 -> 51.
 - Condition for `<`: prev can change the value (value > its minimum, or not the first choice).
   Condition for `>`: next can change the value (value < its current maximum, or not the last choice).
   At a limit the marker cell is blank but stays inside the highlight.
@@ -296,19 +311,116 @@ Examples at the limits:
 ```
 1  |Tone          < 1000 Hz  |   at the maximum: no '>'
 1  |Backlight           Off >|   at the minimum: no '<'
-3  |RX Eff. Speed  < 32 WPM  |   RX Speed is 32: the effective maximum is reached, no '>'
+4  |RX Eff. Speed  < 32 WPM  |   RX Speed is 32: the effective maximum is reached, no '>'
 ```
 
-### 5.5 Scrolling (decision UX-5)
+`Ramp` in edit mode (fw 5: `<` in column 16, field columns 18-22, band x 81-127, row 2: y 17-23):
 
-No list in this version has more than 7 items (main 5, Settings 6, CW 7, Display 2), so no list scrolls now. CW
-uses all 7 rows. Settings uses 6 rows, and row 7 stays blank. The main menu uses 5 rows, and rows 6 and 7 stay
-blank. An eighth CW item or an eighth Settings item needs this scroll rule.
-The rule applies to later lists:
+```
+    0         1         2
+    0123456789012345678901234
+2  |Ramp            <  6 ms >|   the default; '6 ms' in columns 19-22, column 18 blank
+2  |Ramp               4 ms >|   at the minimum: no '<' (cell 16 blank inside the band)
+2  |Ramp            < 12 ms  |   at the maximum: no '>'; '12 ms' in columns 18-22
+```
 
-- The window shows 7 items. Minimum movement: the window moves only by the rows that keep the cursor inside it.
-- After a wrap (section 6.3) the window shows the first 7 or the last 7 items.
-- The title bar shows `i/n` (section 5.1). There is no scroll bar.
+### 5.5 Scrolling (decision UX-5, UX-72)
+
+Item counts in this version: main 5, Settings 6, CW 8, Display 2. Only CW has more than 7 items, so only CW
+scrolls (UX-72). The other lists show all items at once, with no `i/n` mark: Settings uses 6 rows and row 7 stays
+blank. The main menu uses 5 rows, and rows 6 and 7 stay blank. The rule applies to every list with more than 7
+items, also to a later one.
+
+- The window shows 7 items in rows 1-7. There is no scroll bar. The title bar shows `i/n` (section 5.1).
+- Notation: `n` = item count, `c` = cursor index (1 to `n`), `t` = index of the item in row 1 (the window top).
+  Row `r` shows item `t + r - 1`. The cursor row is `c - t + 1`.
+- Minimum movement: after each cursor change, if `c < t`, then `t = c`. If `c > t + 6`, then `t = c - 6`. Else `t`
+  does not change. So the window moves only by the rows that keep the cursor inside it: one row per step.
+- The same rule gives the wrap result (section 6.3): after a wrap to the last item the window shows the last 7
+  items (`t = n - 6`). After a wrap to the first item it shows the first 7 items (`t = 1`).
+- A list opens with `c = 1` and `t = 1` (section 6.1). Back in the parent list, the cursor and the window of the
+  parent are the same as before the child opened. In this version no parent list scrolls, so its `t` is always 1.
+- `c` and `t` are 1-based in this file. The code keeps the 0-based index `t - 1` for each menu level in
+  `menu_stack_tops[3]` (`menu_subsystem_spec.md` section 18.3).
+- Edit mode, a value change and the effective-speed clamp never move the cursor, so they never move the window.
+- Pages whose pixels change: a cursor step inside the window changes the pixels of page 0 (`i/n`), of the old
+  cursor row and of the new cursor row. A window move changes the pixels of all pages 0-7: every content row shows
+  another item.
+
+CW list, item order (section 5.3): 1 `Tone`, 2 `Ramp`, 3 `RX Speed`, 4 `RX Eff. Speed`, 5 `TX Speed`,
+6 `TX Eff. Speed`, 7 `Key Type`, 8 `Paddle`. With `n` = 8, `t` is 1 (first window) or 2 (last window). Both
+windows show items 3-6, so each base speed and its effective speed are always on the screen together (UX-14).
+
+First window, `t` = 1. Left: the list opens (`c` = 1). Right: after 6 `next` presses (`c` = 7), the window has not
+moved yet:
+
+```
+    0         1         2                0         1         2
+    0123456789012345678901234            0123456789012345678901234
+0  |Settings > CW         1/8|       0  |Settings > CW         7/8|
+1  |Tone             600 Hz  | sel   1  |Tone             600 Hz  |
+2  |Ramp               6 ms  |       2  |Ramp               6 ms  |
+3  |RX Speed         32 WPM  |       3  |RX Speed         32 WPM  |
+4  |RX Eff. Speed    32 WPM  |       4  |RX Eff. Speed    32 WPM  |
+5  |TX Speed         20 WPM  |       5  |TX Speed         20 WPM  |
+6  |TX Eff. Speed    20 WPM  |       6  |TX Eff. Speed    20 WPM  |
+7  |Key Type       Iambic B  |       7  |Key Type       Iambic B  | sel
+```
+
+Last window, `t` = 2. Left: one more `next` (`c` = 8). The window moves up by one row, and the cursor stays in row 7.
+Right: then 6 `prev` presses (`c` = 2). The cursor is in row 1, and the window has not moved:
+
+```
+    0         1         2                0         1         2
+    0123456789012345678901234            0123456789012345678901234
+0  |Settings > CW         8/8|       0  |Settings > CW         2/8|
+1  |Ramp               6 ms  |       1  |Ramp               6 ms  | sel
+2  |RX Speed         32 WPM  |       2  |RX Speed         32 WPM  |
+3  |RX Eff. Speed    32 WPM  |       3  |RX Eff. Speed    32 WPM  |
+4  |TX Speed         20 WPM  |       4  |TX Speed         20 WPM  |
+5  |TX Eff. Speed    20 WPM  |       5  |TX Eff. Speed    20 WPM  |
+6  |Key Type       Iambic B  |       6  |Key Type       Iambic B  |
+7  |Paddle           Normal  | sel   7  |Paddle           Normal  |
+```
+
+One more `prev` (`c` = 1) moves the window down by one row: the first window with `1/8` and `Tone` selected in
+row 1 (the left screen of the first pair).
+
+Wrap (a press event, never a repeat, section 6.3):
+
+```
+    0         1         2                0         1         2
+    0123456789012345678901234            0123456789012345678901234
+0  |Settings > CW         1/8|  prev 0  |Settings > CW         8/8|
+1  |Tone             600 Hz  | sel   1  |Ramp               6 ms  |
+2  |Ramp               6 ms  | ----> 2  |RX Speed         32 WPM  |
+3  |RX Speed         32 WPM  |       3  |RX Eff. Speed    32 WPM  |
+4  |RX Eff. Speed    32 WPM  | <---- 4  |TX Speed         20 WPM  |
+5  |TX Speed         20 WPM  |  next 5  |TX Eff. Speed    20 WPM  |
+6  |TX Eff. Speed    20 WPM  |       6  |Key Type       Iambic B  |
+7  |Key Type       Iambic B  |       7  |Paddle           Normal  | sel
+```
+
+- `prev` on `Tone` (`1/8`, first window): the cursor goes to `Paddle`, the last window shows, `8/8`, `SEL(7)`.
+- `next` on `Paddle` (`8/8`, last window): the cursor goes to `Tone`, the first window shows, `1/8`, `SEL(1)`.
+- A held `next` from `Tone` stops on `Paddle` (`8/8`, last window). A held `prev` from `Paddle` stops on `Tone`
+  (`1/8`, first window). A hold never wraps.
+
+Step table for the CW list (`n` = 8). Every row is a press event unless it says repeat.
+
+| Start `c`, `t` | Event | New `c`, `t` | Cursor row | Title mark | Pages whose pixels change |
+| --- | --- | --- | --- | --- | --- |
+| (list opens) | `enter` on `CW` in Settings | 1, 1 | 1 | `1/8` | 0-7 (new screen) |
+| 1..6, 1 | `next` | `c + 1`, 1 | `c + 1` | `(c+1)/8` | 0, old row, new row |
+| 7, 1 | `next` | 8, 2 | 7 | `8/8` | 0-7 |
+| 2..7, 2 | `next` | `c + 1`, 2 | `c` | `(c+1)/8` | 0, old row, new row |
+| 8, 2 | `next` | 1, 1 (wrap) | 1 | `1/8` | 0-7 |
+| 8, 2 | `next` repeat | 8, 2 (no wrap) | 7 | `8/8` | none |
+| 2..7, 1 | `prev` | `c - 1`, 1 | `c - 1` | `(c-1)/8` | 0, old row, new row |
+| 3..8, 2 | `prev` | `c - 1`, 2 | `c - 2` | `(c-1)/8` | 0, old row, new row |
+| 2, 2 | `prev` | 1, 1 | 1 | `1/8` | 0-7 |
+| 1, 1 | `prev` | 8, 2 (wrap) | 7 | `8/8` | 0-7 |
+| 1, 1 | `prev` repeat | 1, 1 (no wrap) | 1 | `1/8` | none |
 
 ### 5.6 Placeholder screen (decision plan + UX-6, UX-31)
 
@@ -946,7 +1058,7 @@ Rules:
 
 - The check comes at the pick that fills the last slot, at the release of the button. It compares the whole answer
   with the item. One check is one attempt. There are 3 attempts per item (plan).
-- At the check, a running playback stops (the tone falls in 8 ms). The player and the keyer are never on together.
+- At the check, a running playback stops (the tone falls in the `Ramp` time). The player and the keyer are never on together.
 - Retry (attempt 2 or 3): the slots become empty, the block goes to the first slot, the status shows `Try 2 of 3`
   or `Try 3 of 3`, and the item plays again. No start pause, no blank moment.
 - Replay: a long `enter` (a hold of 800 ms) in Item plays the item again from its start. The replay starts at
@@ -956,7 +1068,7 @@ Rules:
   In Answer, waiting, a long `enter` plays the answer again (UX-64).
 - Answer, waiting (UX-64): after the third wrong attempt, the answer stays on the screen with no time limit. The
   user reads it and can play it again. An `enter` tap continues. It acts at the release, as every tap in tap mode.
-  A running playback stops (the tone falls in 8 ms). The other taps, a long `prev` and a long `next` do nothing.
+  A running playback stops (the tone falls in the `Ramp` time). The other taps, a long `prev` and a long `next` do nothing.
   A long `menu/back` exits.
 - An `enter` tap (released before 800 ms) in Item selects the right run (section 5.12.1). It never replays.
 - In Receiving, the paddle tip is `enter` (C-4). A short closure of the dit lever or a straight key (opened before
@@ -1218,7 +1330,7 @@ hears and sees the answer together. Then the answer stays on the screen with no 
 - A long `enter` (or a tip closure of 800 ms) plays the answer again from its start. The screen does not change.
   Replays are free, as in Item.
 - An `enter` tap (or a short tip closure) continues, also while the answer still plays. The playback stops (the
-  tone falls in 8 ms). Not the last item: the blank moment starts at the tap. The last item: the session end screen
+  tone falls in the `Ramp` time). Not the last item: the blank moment starts at the tap. The last item: the session end screen
   shows at the tap.
 - A word at a low speed can play for many seconds. The user can stop it with the tap and need not wait for it.
 
@@ -1960,7 +2072,7 @@ Short presses and repeats:
 
 | State | `prev` press | `next` press | `prev`/`next` repeat | `enter` | `menu/back` |
 | --- | --- | --- | --- | --- | --- |
-| List, browse | Cursor up. Wraps from first to last | Cursor down. Wraps from last to first | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. Info screen: open the `About` screen (section 5.18). | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
+| List, browse | Cursor up. Wraps from first to last. In CW the window follows the cursor (section 5.5). | Cursor down. Wraps from last to first. In CW the window follows the cursor. | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. Info screen: open the `About` screen (section 5.18). | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
 | List, edit | Decrease the value by one step, or the previous choice. Stops at the limit. Applies at once. | Increase, or the next choice. Stops at the limit. Applies at once. | Same as press, stops at the limit | Leave edit mode, keep the value. Cursor stays on the row. | Leave edit mode, keep the value (same as `enter`). Does not leave the list. |
 | Placeholder (no screen uses it in this version) | nothing | nothing | nothing | nothing | nothing |
 | Free Input | nothing | nothing | nothing | No event. The keyer owns P3.2: the `enter` button keys like the tip contact (section 6.7). | nothing |
@@ -1981,7 +2093,7 @@ Long presses:
 | --- | --- | --- | --- | --- |
 | List (browse or edit), dialog, message | nothing | no event (tap mode off) | nothing | nothing |
 | Placeholder (no screen uses it in this version) | Back to the main menu, cursor on the mode item that opened it. | no event | nothing | nothing |
-| Free Input | Stop the keyer (a sounding tone falls in 8 ms). Back to the main menu, cursor on `Free Input`. The text is lost. | no event (the keyer owns P3.2) | Clear the text area (section 5.9). | Draw the delimiter (section 5.9). |
+| Free Input | Stop the keyer (a sounding tone falls in the `Ramp` time). Back to the main menu, cursor on `Free Input`. The text is lost. | no event (the keyer owns P3.2) | Clear the text area (section 5.9). | Draw the delimiter (section 5.9). |
 | Receiving: Item | Stop the player. Drop the session. Main menu, cursor on `Receiving` (section 6.8). | Replay from the start (section 6.8). Also a tip closure of 800 ms. | Undo one step (section 6.8). | nothing |
 | Receiving: start pause, `Correct` or `Wrong` result, blank moment | Same as above. | nothing | nothing | nothing |
 | Receiving: answer state (UX-64) | Same as above. | Play the answer again from its start. The screen does not change. Also a tip closure of 800 ms. | nothing | nothing |
@@ -1997,9 +2109,11 @@ press edge. The long event of the same press must not act again (UX-24).
 Other rules:
 
 - "Applies at once": contrast goes to the LCD and the backlight level goes to the PWM at each step. The other
-  values change only in memory until the save. In the menu, Tone is the only value with an audible effect: the Tone
-  preview (section 6.5). The mode settings take effect at the next mode start:
-  - Free Input: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone`, `Prosigns` (section 6.7).
+  values change only in memory until the save. `Ramp` also goes to the sidetone at each step
+  (`sidetone_set_ramp_ms()`, UX-73), so every later sound uses it. In the menu, Tone and Ramp are the only values
+  with an audible effect: the previews (section 6.5). The mode settings take effect at the next mode start:
+  - Free Input: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone`, `Prosigns` (section 6.7). `Ramp` applies
+    to Free Input, Receiving and Sending too: the sidetone already has it when the mode starts.
   - Receiving: `RX Speed`, `RX Eff. Speed`, `Tone`, `Prosigns`, `Max Word Length` (section 5.12).
   - Sending: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed`, `Tone`, `Prosigns`, `Show CW Code`,
     `Max Word Length` (section 5.13).
@@ -2014,7 +2128,7 @@ Other rules:
 - After the startup screen ends, the events of the same hold act on the next screen. Example: the repeats of a held
   `next` move the main menu cursor (UX-59).
 - There is no inactivity timeout anywhere in this version. Free Input, the training start screen, a training session
-  and the session end screen stay open until the user leaves. The Tone preview timeout (section 6.5) is not a menu timeout: it ends the
+  and the session end screen stay open until the user leaves. The preview timeout (section 6.5) is not a menu timeout: it ends the
   sound and changes no screen. The training delays (section 6.10) are steps of a session, not timeouts.
   The 5 s of the startup screen (section 5.17) are a step of the start-up, not a timeout.
 - Long presses act only in the mode screens (section 6.6). Lists, edit mode, the dialog and the message screen keep
@@ -2044,10 +2158,11 @@ Other rules:
 
 ### 6.3 Wrap and limits (decision UX-13)
 
-- The list cursor wraps on a press event, so the last item is one press away from the first.
+- The list cursor wraps on a press event, so the last item is one press away from the first. In CW the wrap also
+  moves the window: the last 7 or the first 7 items show (section 5.5).
 - The list cursor does not wrap on a repeat event. Holding a button stops at the end of the list and does not spin.
 - Values and choices never wrap. At a limit, a press or repeat changes nothing. The missing `<` or `>` marker
-  shows the limit (section 5.4). No message. A step at a limit does not start or restart the Tone preview
+  shows the limit (section 5.4). No message. A step at a limit does not start or restart the Tone or Ramp preview
   (section 6.5, H3).
 
 ### 6.4 Shared enter and paddle
@@ -2076,80 +2191,135 @@ Other rules:
 - In a Sending session, P3.2 belongs to the keyer. On the start screen and the session end screen, it is `enter`
   (section 5.13.4).
 
-### 6.5 Tone preview (decision UX-20, user Q-3)
+### 6.5 Tone and Ramp preview (decision UX-20, UX-73, user Q-3)
 
-User decision (Q-3): a Tone edit plays the tone. This is the only sound in the menu. The keyer sounds only in Free
-Input (section 6.7). Outside Free Input the keyer is off, and the paddle gives no tone (UX-34).
+User decision (Q-3): a Tone edit plays the tone. User decision (plan 2026-10-16): a Ramp edit plays a preview in the
+same way (UX-73). These two previews are the only sounds in the menu. The keyer sounds only in Free Input and in a
+Sending session (section 6.7). Outside them the keyer is off, and the paddle gives no tone (UX-34).
 
-Facts that the design uses (`sidetone_spec.md` sections 3.9, 6.3, 10.3):
+Facts that the design uses (`sidetone_spec.md` sections 3.9, 6.3, 10.3, and the plan of 2026-10-16):
 
-- A start rises in 8 ms. A stop falls in 8 ms. The envelope prevents clicks (unverified, DC-6).
-- A tone change while the tone sounds goes through silence: fall 8 ms, wait for the carrier update (one carrier
-  period, 1 ms at 1000 Hz to 2.5 ms at 400 Hz, at most 3 ms), rise 8 ms at the new tone. The dip is about
-  17-19 ms.
+- A start rises in the `Ramp` time. A stop falls in the `Ramp` time. `Ramp` is 4-12 ms, default 6 ms. The envelope
+  prevents clicks (unverified, DC-6).
+- A tone change while the tone sounds goes through silence: fall in the `Ramp` time, wait for the carrier update
+  (one carrier period, 1 ms at 1000 Hz to 2.5 ms at 400 Hz, at most 3 ms), rise in the `Ramp` time at the new tone.
+  The dip is 2 x `Ramp` plus 1 to 3 ms: about 13-15 ms at 6 ms, 9-11 ms at 4 ms, 25-27 ms at 12 ms.
 - A request for the tone that the sidetone already has does nothing.
+- `sidetone_set_ramp_ms()` changes only the speed of the envelope. A change while the tone is at full level is not
+  audible. A change during a rise or a fall changes the speed of the rest of that rise or fall, with no click.
+  The next rise and fall use the new value.
+- The PWM loads a new level only once per carrier period. At 400 Hz (2.5 ms) a 4 ms ramp has fewer than 2 level
+  steps, so the user can hear more click there. This is a property of the hardware, not a defect (plan).
 - The buttons give press and repeat events only. There is no release event.
 
 #### Preview state
 
 The preview is `running` or `stopped`. It is `stopped` after power-on and after a display recovery start. Only the
-Tone EDIT screen can start it. While it is `running`, the menu keeps one start time.
+Tone EDIT screen and the Ramp EDIT screen can start it. They are never open together, so one state serves both.
+While it is `running`, the menu keeps one start time.
 
-`MENU_TONE_PREVIEW_MS` = **300** (decision UX-21).
+`MENU_TONE_PREVIEW_MS` = **300** (decision UX-21), for both items. The name stays (`sidetone_spec.md` D-RM10).
 
 #### Hook behaviour
 
-`tone(hz)` = `sidetone_set_tone_hz(hz)`. `on(x)` = `sidetone_set_on(x)`. `now` = `tick_now()`.
+`tone(hz)` = `sidetone_set_tone_hz(hz)`. `ramp(ms)` = `sidetone_set_ramp_ms(ms)`. `on(x)` = `sidetone_set_on(x)`.
+`now` = `tick_now()`. `Tone` = the current value of the Tone setting. A preview item is Tone or Ramp.
 
 | Hook | Event | Sidetone calls, in this order | Preview state after the hook |
 | --- | --- | --- | --- |
-| H1 | `enter` opens the EDIT screen on the Tone item. | `tone(current value)`, `on(true)` | `running`, start = now |
-| H2 | A `prev` or `next` press or repeat in Tone edit changes the value. | `tone(new value)`, `on(true)` | `running`, start = now. This is a restart. A `stopped` preview starts again. |
-| H3 | A `prev` or `next` press or repeat in Tone edit changes nothing (limit). | none | unchanged: a `running` preview keeps its start time, a `stopped` preview stays `stopped` |
+| H1 | `enter` opens the EDIT screen on a preview item. | Tone: `tone(current value)`, `on(true)`. Ramp: `ramp(current value)`, `tone(Tone)`, `on(true)`. | `running`, start = now |
+| H2 | A `prev` or `next` press or repeat in the edit of a preview item changes the value. | Tone: `tone(new value)`, `on(true)`. Ramp: `ramp(new value)`, `tone(Tone)`, `on(true)`. | `running`, start = now. This is a restart. A `stopped` preview starts again. |
+| H3 | A `prev` or `next` press or repeat in the edit of a preview item changes nothing (limit). | none | unchanged: a `running` preview keeps its start time, a `stopped` preview stays `stopped` |
 | H4 | `menu_poll()` while `running`, and `(uint16_t)(now - start) >= MENU_TONE_PREVIEW_MS`. | `on(false)`, once | `stopped` |
-| H5 | The Tone EDIT screen ends by any path: `enter`, `menu/back`, or a message screen shown over it (`menu_show_message`). | `on(false)`, exactly once. A `stopped` preview gets this call too. | `stopped` |
-| H6 | Every other screen, item, edit and event. This includes the Tone row in browse mode. | none | `stopped` |
+| H5 | The EDIT screen of a preview item ends by any path: `enter`, `menu/back`, or a message screen shown over it (`menu_show_message`). | `on(false)`, exactly once. A `stopped` preview gets this call too. | `stopped` |
+| H6 | Every other screen, item, edit and event. This includes the Tone and Ramp rows in browse mode. | none | `stopped` |
 
 Rules:
 
-- A hook that starts the tone always calls `tone()` first and `on(true)` second.
+- A hook that starts the tone always calls `tone()` directly before `on(true)`. On the Ramp item, `ramp()` comes
+  first, so that the rise of this hook already uses the new value.
+- The Ramp hooks call `tone(Tone)` so that the preview always plays at the pitch of the Tone setting. The sidetone
+  already has that tone in normal use, so the call does nothing audible.
+- The Tone hooks do not call `ramp()`. The sidetone already has the `Ramp` value: `sidetone_init()` gets it, and
+  each Ramp edit step sends it (H2).
+- One menu function, `menu_preview_play(id)`, gives both call orders for H1 and H2 (`menu_subsystem_spec.md`
+  section 18.5).
 - `menu_poll()` while `stopped` calls nothing and reads no tick.
 - H4 uses `>=`. At exactly 300 ms after the start, the stop call comes.
 - The timer works across the 16-bit tick wrap.
 - `menu_poll()` runs once per main-loop pass. A slow redraw delays the stop by up to one pass (unverified, D-13).
-- When one main-loop pass handles several events, each event is its own hook. The newest tone wins, and the start
+- When one main-loop pass handles several events, each event is its own hook. The newest value wins, and the start
   time is the time of the last change.
 - No hook depends on the sound. The display shows the value at all times. With the volume at its minimum, the edit
   works the same.
+- A `ramp()` call comes only from H1 and H2 of the Ramp item, and `sidetone_init()` gets the stored value. So the
+  sidetone ramp always equals the Ramp setting. The keyer and the CW player are off in the menu, so the ramp never
+  changes during a keyed or played mark.
 
-#### What the user hears (illustrative, from the sidetone timing)
+#### What the user hears: Tone (illustrative, from the sidetone timing, `Ramp` = 6 ms)
 
 Single press (`enter` to edit, then one `next`):
 
 | Time (ms) | Event | Sound |
 | --- | --- | --- |
 | 0 | `enter` (H1) | Rise to 600 Hz |
-| 8-300 | | 600 Hz at full level |
-| 300-308 | timeout (H4) | Fall, then silence |
+| 6-300 | | 600 Hz at full level |
+| 300-306 | timeout (H4) | Fall, then silence |
 | 1000 | `next` (H2) | Rise to 610 Hz |
-| 1008-1300 | | 610 Hz at full level |
-| 1300-1308 | timeout (H4) | Fall, then silence |
+| 1006-1300 | | 610 Hz at full level |
+| 1300-1306 | timeout (H4) | Fall, then silence |
 
 Held `next` (press at 0, repeats at 400, 480, 560, ...):
 
 ```text
 0-300     610 Hz, one beep of about 300 ms
-300-400   fall, then about 92 ms silence (the repeat delay)
-400-...   one step every 80 ms: a 17-19 ms dip to the next pitch, then about 61-63 ms at full level
+300-400   fall, then about 94 ms silence (the repeat delay)
+400-...   one step every 80 ms: a 13-15 ms dip to the next pitch, then about 65-67 ms at full level
 release   the last pitch plays 300 ms after the last change, then falls
 limit     the last change reaches the limit. 300 ms later the tone ends, while the button is still held
 ```
 
 The silence at the limit and the missing `<` or `>` marker both show that the value cannot move further.
 
+#### What the user hears: Ramp (illustrative, Tone 600 Hz)
+
+The pitch does not change, so a Ramp step never gives a dip. The user hears the new value only at a rise from
+silence and at a fall to silence.
+
+Single presses about 0.5 s or more apart (`enter` on `6 ms`, then `next`, then `next`):
+
+| Time (ms) | Event | Sound |
+| --- | --- | --- |
+| 0 | `enter` (H1), 6 ms | Rise in 6 ms |
+| 6-300 | | 600 Hz at full level |
+| 300-306 | timeout (H4) | Fall in 6 ms, then silence |
+| 1000 | `next` (H2), 7 ms | Rise in 7 ms |
+| 1007-1300 | | full level |
+| 1300-1307 | timeout (H4) | Fall in 7 ms, then silence |
+| 2000 | `next` (H2), 8 ms | Rise in 8 ms, full level, fall in 8 ms at 2300-2308 |
+
+A press while the preview still sounds (less than 300 ms after the last change): the tone stays at full level with no
+new rise. Its fall, 300 ms after this press, uses the new value.
+
+Held `next` from `4 ms` (press at 0, repeats at 400, 480, 560, ...):
+
+```text
+0-300     5 ms: one beep, rise in 5 ms, fall in 5 ms at 300
+300-400   silence (the repeat delay)
+400       6 ms: rise in 6 ms
+400-880   7, 8, 9, 10, 11 and 12 ms at 480 ... 880: the tone stays at full level, no dip, no new rise
+880       12 ms is the maximum. Later repeats change nothing (H3)
+1180      300 ms after the last change: fall in 12 ms, while the button is still held
+```
+
+During a hold the user hears only the first rise and the last fall. To compare two values by ear, the user steps
+with single presses about 0.5 s apart. The display shows each value at all times (UX-16). The user manual says this
+(`technical-writer`).
+
 #### Held repeat and the retune dip (decision UX-22)
 
-A repeat event follows the same rule as a press (H2). The retune dip during a held repeat is accepted. Reasons:
+A repeat event follows the same rule as a press (H2). The retune dip during a held repeat on Tone is accepted.
+Reasons:
 
 - The user hears the pitch move while holding and can release near the wanted pitch by ear. Audio feedback is
   faster than the display during a repeat (UX-16 allows the display to skip a value).
@@ -2160,16 +2330,23 @@ The preview needs no change of the sidetone interface for this. If the device ch
 unpleasant, the options are in section 10 (UX-22, rejected alternatives). Each of them needs an `architector`
 decision first.
 
+On Ramp a held repeat gives one continuous tone (above). This is accepted (UX-73): the Ramp range has only 9 values,
+so single presses reach every value fast, and a separate beep per repeat needs a forced silence between two steps,
+which the sidetone interface does not offer.
+
 #### Interruptions and recovery
+
+The rules apply to the Tone edit and to the Ramp edit.
 
 | Situation | Behaviour |
 | --- | --- |
-| Paddle dit or straight key on the shared `enter` pin in Tone edit | It is an `enter` event: the edit ends, the tone stops (H5). The user presses `enter` again to edit. |
-| Plug insert or remove while the preview sounds | The tone continues on the old route. The next start uses the new route. During a held repeat each step passes through silence, so the route changes at the next step. |
+| Paddle dit or straight key on the shared `enter` pin in the edit | It is an `enter` event: the edit ends, the tone stops (H5). The user presses `enter` again to edit. |
+| Plug insert or remove while the preview sounds | The tone continues on the old route. The next start uses the new route. During a held repeat on Tone each step passes through silence, so the route changes at the next step. During a held repeat on Ramp the tone does not pass through silence, so the route changes at the next beep. |
 | Leaving Settings (save) | No sound. The edit already ended with H5. |
-| Power loss | No preview state survives. The start-up is silent. |
+| Power loss | No preview state survives. The start-up is silent. A Ramp value that was not saved is lost (F-4): the sidetone starts with the stored value. |
 | Display recovery start | Silent. The `Display Defaults` message screen makes no sound. |
 | Volume at its minimum | No sound. The edit works as before. |
+| Failed save (F-7) | The values stay active, so the sidetone keeps the new `Ramp` value until the next power-on. |
 
 ### 6.6 Long press (decision UX-23, UX-24, UX-36, user)
 
@@ -2238,9 +2415,15 @@ The exact state machine is in `keyer_spec.md` (owner `architector`).
 #### Sidetone
 
 - Pitch: the `Tone` setting. Route: automatic (O-3).
-- `Straight`: the tone follows the contact. It rises in 8 ms after the close and falls in 8 ms after the open.
-- `Iambic A` and `Iambic B`: the tone starts with the element. Its 8 ms fall ends at the end of the element, so the
-  element and the gap keep their exact lengths.
+- Rise and fall: the `Ramp` setting, 4-12 ms (UX-71).
+- `Straight`: the tone follows the contact. It rises in the `Ramp` time after the close and falls in the `Ramp`
+  time after the open.
+- `Iambic A` and `Iambic B`: the tone starts with the element. Its fall ends at the end of the element, so the
+  element and the gap keep their exact lengths. At 50 WPM a dit is 24 ms. With `Ramp` = 12 ms, the dit has no time
+  at full level: the rise stops one step below it (duty 499 instead of 500 permille), and the fall ends one call
+  (250 us) before the mark end (`sidetone_spec.md` D-RM5). This is not audible and gives no click. At every other
+  speed and ramp the dit reaches full level, and the fall ends at the mark end. The CW playback in Receiving uses
+  the same rule.
 - The display never delays the tone: the keyer runs in the timer interrupt.
 
 #### Paddle (decision UX-32)
@@ -2323,7 +2506,7 @@ Replay (long `enter`):
 Continue (an `enter` tap in the answer state, UX-64):
 
 - The tap acts at its release, as every tap in tap mode. A hold of 800 ms replays and never continues.
-- A running playback stops (a sounding tone falls in 8 ms). The tap is valid during the first playback and during
+- A running playback stops (a sounding tone falls in the `Ramp` time). The tap is valid during the first playback and during
   a replay.
 - Not the last item: the blank moment starts at once (section 5.14). Its redraw clears rows 1-5, shows the next
   item number in the header and puts the labels of the whole set back in row 7. After 500 ms, the next item shows
@@ -2343,7 +2526,7 @@ two times.
 
 Exit (long `menu/back`):
 
-- The player stops (a sounding tone falls in 8 ms). The session is dropped: the level does not change and the
+- The player stops (a sounding tone falls in the `Ramp` time). The session is dropped: the level does not change and the
   EEPROM is not accessed.
 - The main menu shows with the cursor on `Receiving`. Tap mode goes off.
 
@@ -2352,7 +2535,7 @@ Exit (long `menu/back`):
 - Tap mode stays off in Sending.
 - In all states of a session except the end screen, short presses and repeats do nothing (UX-24). `enter` gives no
   event: the keyer owns P3.2 and the `enter` button keys like the tip (section 5.13.4).
-- Long `menu/back`: the keyer stops (a sounding tone falls in 8 ms), the session is dropped, the main menu shows with
+- Long `menu/back`: the keyer stops (a sounding tone falls in the `Ramp` time), the session is dropped, the main menu shows with
   the cursor on `Sending`. The level does not change and the EEPROM is not accessed.
 - Long `prev` and long `next`: nothing. Sending has no clear and no delimiter.
 - Start screen (section 5.16.4): the keyer is off, and P3.2 is `enter`. `prev` and `next` (press and repeat)
@@ -2410,12 +2593,14 @@ with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one ma
 | Situation | What the user sees | Decision |
 | --- | --- | --- |
 | Cursor moves | The highlight band moves to the new row. | UX-2 |
+| Cursor moves in CW | The highlight band moves, and the `i/n` mark in the title bar changes. When the cursor passes row 1 or row 7, the window moves by one row and the band stays in that row. A wrap shows the first 7 or the last 7 items. | UX-5, UX-72 |
 | Enter edit mode | The highlight shrinks to the value field. `<`/`>` appear. | UX-4 |
 | Value at its min/max | The `<` or `>` marker disappears. Further presses change nothing. | UX-13 |
 | Effective speed at its base speed | `>` disappears on the effective-speed row, the same as a hard maximum. The base value is in the row above on the same screen. | UX-14 |
 | Base speed lowered below the effective speed | The effective-speed row changes in the same redraw as the base row. Both rows are on the CW screen. | UX-14 |
 | Contrast or backlight edit | The LCD contrast or backlight changes at each step. | plan |
-| Tone edit | The user hears the tone for 300 ms at the edit start and after each change. Leaving the edit stops it at once (8 ms fall). At a limit, nothing new sounds. | UX-20, UX-21, UX-22 |
+| Tone edit | The user hears the tone for 300 ms at the edit start and after each change. Leaving the edit stops it at once (a fall in the `Ramp` time). At a limit, nothing new sounds. | UX-20, UX-21, UX-22 |
+| Ramp edit | The user hears the tone of the Tone setting for 300 ms at the edit start and after each change. The rise from silence and the fall to silence use the new value. During a held repeat the tone stays on and ends 300 ms after the last change. Leaving the edit stops it at once. At a limit, nothing new sounds. | UX-73 |
 | Long press in a mode screen | The result of the action at 800 ms, during the hold. Nothing else. | UX-23 |
 | Short press or repeat in a mode screen | Nothing. Exceptions: the Receiving keyboard, the training start screen and the session end screen. | UX-24, UX-43, UX-55 |
 | Key element in Free Input | The sidetone, at once. The screen does not show elements. | plan, UX-26 |
@@ -2463,7 +2648,7 @@ means: the main menu after the startup screen.
 | ID | Condition | What the user sees | Device behaviour | Recovery |
 | --- | --- | --- | --- | --- |
 | F-1 | First power-on, empty EEPROM | The startup screen, then the main menu, no message. Settings show the defaults. | Defaults load. Nothing is written until the user changes a value and leaves Settings. | None needed. |
-| F-2 | Record with a wrong magic, a layout version other than 1 or 2, or a wrong CRC (for example a power loss during a save) | Same as F-1, no message. | Defaults load. | The user sets the values again. |
+| F-2 | Record with a wrong magic, a layout version other than 1, 2 or 3, or a wrong CRC (for example a power loss during a save) | Same as F-1, no message. | Defaults load. | The user sets the values again. |
 | F-3 | Valid record with a value out of range | The clamped value. | Each field is clamped. An effective speed above its base speed becomes the base speed. | None needed. |
 | F-4 | Power loss while inside Settings | After power-on, the values from before the visit. | Unsaved changes are lost (plan). | The user sets the values again. |
 | F-5 | Contrast set to a value that makes the screen unreadable | Blank or black screen. | The value applies at once. If the user leaves Settings, it is saved. | During the edit: press the opposite button. After a save: the display recovery start (section 8.1). |
@@ -2476,7 +2661,7 @@ means: the main menu after the startup screen.
 | F-12 | Power loss while Free Input is open. | After power-on, the main menu. The text is gone. | No mode state survives. The settings stay as stored. | Open Free Input again. |
 | F-13 | No plug, or the key is not connected. | `Free Input` and a blank text area. No sound. | The keyer idles. The `enter` button still keys the tip. | Connect the key. |
 | F-14 | First power-on after the update from the earlier firmware: a valid record of layout version 1. | The main menu, no message. All earlier settings stay. `Prosigns` shows `Both`. Free Input shows AR, BT, KN and AS in the `Both` text. | The record loads. `Prosigns` takes its default. Nothing is written at start-up. The first save after an edit step writes the new layout (version 2) with all current values (`keyer_spec.md` section 17.4.2). | None needed. The user can choose another value in Settings. |
-| F-15 | Return to the earlier firmware after a save with this firmware. | The earlier firmware shows all its defaults, no message. | The earlier firmware does not accept layout version 2. It uses F-2. | The user sets the values again. The release notes say this (`technical-writer`). |
+| F-15 | Return to the earlier firmware after a save with this firmware. | The earlier firmware shows all its defaults, no message. | The earlier firmware does not accept a newer layout version (2 for the firmware before `Prosigns`, 3 for the firmware before `Ramp`). It uses F-2. | The user sets the values again. The release notes say this (`technical-writer`). |
 | F-16 | Progress save fails after a passed session (read-back mismatch, CMD_FAIL or low supply). | The end screen shows `Not saved` in row 1 and `Passed, new level` in row 3. `enter` opens the start screen at the new level, and the main menu shows it. | The new level stays in RAM. The start screen, the next session and the main menu use it (plan, A-L1). | The next passed session tries the save again. If the user switches off first, the next start depends on the failed step. After a failed erase, it uses the earlier stored levels. After a failed write that followed the erase, it uses level 1 everywhere (F-17). |
 | F-17 | Empty, erased or bad progress record (wrong magic, version or CRC). | Level 1 in both modes at every speed. No message. | Each level starts at index 0 (`training_spec.md`). | None needed. Same reason as UX-17. |
 | F-18 | Power loss during a training session. | After power-on, the main menu. The session is gone. | The progress changes only at a passed session end. | Start the mode again. The level is the stored one. |
@@ -2487,12 +2672,13 @@ means: the main menu after the startup screen.
 | F-23 | `Reset Statistics` `Yes`, and the progress save fails. | The message `Not saved` (section 5.8) in place of `Statistics reset`. | If the erase failed, the stored record keeps the old levels. If a write after the erase failed, no valid record remains, and after a power cycle every level is 1 (F-17). | `OK` goes back to Settings. The user can try the reset again. After a power cycle, the stored levels apply, or level 1 everywhere. |
 | F-24 | Every power-on (UX-58, UX-59) | The startup screen for 5 s, then the main menu with the cursor on `Receiving`. On a recovery start, the `Display Defaults` message comes between the two (F-8, UX-60). | Settings and progress load before the first frame. The screen is drawn once. Nothing is written to the EEPROM. The keyer is off, nothing sounds. | Any button press skips the screen. The press does nothing else. |
 | F-25 | `prev`, `next`, `enter` or the paddle tip is held closed at power-on (for example a key that is closed in the socket). | The startup screen for the full 5 s, then the main menu. The held contact does not skip the screen. | The held button gives no event until it is released and pressed again (section 6.2). | Release the button or open the key. The next press acts as usual. |
+| F-26 | First power-on after the update from firmware 0.1.x: a valid record of layout version 1 or 2 (`menu_subsystem_spec.md` section 5.1). | The main menu, no message. All earlier settings stay. `Ramp` shows `6 ms`. The tone edges are a little shorter than the fixed 8 ms of the earlier firmware. | The record loads. `Ramp` takes its default. Nothing is written at start-up. The first save after an edit step writes layout version 3 with all current values. | None needed. The user can set another value in Settings > CW. The release notes say this (`technical-writer`). |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
 `Settings reset to defaults` message (costs a state and a string for a very rare event).
 
-F-14 is silent for the same reasons (UX-17, UX-38). The user keeps every earlier setting. The new item is visible in
+F-14 and F-26 are silent for the same reasons (UX-17, UX-38, UX-71). The user keeps every earlier setting. The new item is visible in
 Settings with its default. A message after the update tells the user nothing that the Settings list does not show. Each start-up loads the version 1 record again with the same result, until the first save. So an update
 alone never erases the EEPROM.
 
@@ -2564,16 +2750,16 @@ button event instead, because the result is the same (UX-59). Section 9.5 tests 
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
 | V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`, `TEXT(1,21,"L1",inv)`. `TEXT(2,0,"Sending")`, `TEXT(2,21,"L1")` (UX-57), `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. `TEXT(5,0,"About")`, and cell (5,24) is blank (UX-61). Rows 6-7 have all pixels off. No EEPROM erase or write. |
-| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `Both`, `5`. Display shows `8`, `32`. |
+| V-02 | Power-on with a record that has a bad CRC. Open Settings > CW and Settings > Display. | No message screen. CW shows `600 Hz`, `6 ms`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `On`, `Both`, `5`. Display shows `8`, `32`. |
 | V-03 | Main menu: press prev, then press next. | After prev: `SEL(5)` on `About`, `PLAIN(1)`. After next: `SEL(1)`. |
 | V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `About` (`SEL(5)`). It does not wrap to `Receiving`. |
 | V-05 | Enter Settings. Enter CW. Press menu/back. | Title `Settings`, `SEL(1)` on `CW`. Then title `Settings > CW`, `SEL(1)` on `Tone`. Then title `Settings`, `SEL(1)` on `CW`. No EEPROM access. |
 | V-06 | CW: enter on Tone. Next. Prev. Prev. Enter. | `EDIT(1,7)`, `TEXT(1,14,"<",inv)`, `TEXT(1,24,">",inv)`, `TEXT(1,0,"Tone")` normal video. Values 610, 600, 590 Hz in turn. After enter: `SEL(1)`, `TEXT(1,17,"590 Hz",inv)`. |
 | V-07 | Tone at 1000 Hz in edit mode. Press next. Tone at 400 Hz. Press prev. | At 1000: cell (1,24) is blank inside the band, `<` shown. Next changes nothing. At 400: cell (1,14) blank inside the band, `>` shown. Prev changes nothing. |
 | V-08 | Tone 600 Hz in edit mode. Hold next. Release at 1000 ms after the press event. | 1 press + 8 repeats (at 400, 480, ..., 960 ms): Tone = 690 Hz (+/- one step for the tick tolerance at the edges). |
-| V-09 | RX Speed 32, RX Eff. Speed 32. Edit RX Eff. Speed. Press next. | `EDIT(3,6)`, `<` shown, cell (3,24) blank. Value stays `32 WPM`. |
-| V-10 | RX Eff. Speed 25. Edit RX Speed from 32 down to 24 (8 presses). Then up to 30. | After the 8th press, the same frame shows `24 WPM` in rows 2 and 3. After raising, row 2 shows `30 WPM`, row 3 still `24 WPM`. |
-| V-11 | Edit Key Type (`Iambic B`). Prev. Prev. Prev. | `EDIT(6,8)`. `Iambic B`: only `<`. `Iambic A`: both markers. `Straight`: only `>`. The third prev changes nothing. |
+| V-09 | RX Speed 32, RX Eff. Speed 32. Edit RX Eff. Speed. Press next. | `EDIT(4,6)`, `<` shown, cell (4,24) blank. Value stays `32 WPM`. |
+| V-10 | RX Eff. Speed 25. Edit RX Speed from 32 down to 24 (8 presses). Then up to 30. | After the 8th press, the same frame shows `24 WPM` in rows 3 and 4. After raising, row 3 shows `30 WPM`, row 4 still `24 WPM`. |
+| V-11 | Edit Key Type (`Iambic B`). Prev. Prev. Prev. | `EDIT(7,8)`, title mark `7/8`. `Iambic B`: only `<`. `Iambic A`: both markers. `Straight`: only `>`. The third prev changes nothing. |
 | V-12 | Edit Show CW Code (`On`). Prev. Prev. | `On`: only `<`. `Off`: only `>`. The second prev changes nothing. |
 | V-13 | Edit Backlight from 8 down to 0, then up to 10. | Shown values `7` .. `1`, `Off`, then `1` .. `10`. The fake backlight receives each level at once. `Off`: only `>`. `10`: only `<`. |
 | V-14 | Edit Contrast to 0, then to 63. | The fake LCD receives each contrast value at once. Limits 0 and 63 hold. |
@@ -2601,7 +2787,7 @@ button event instead, because the result is the same (UX-59). Section 9.5 tests 
 | V-37 | Recovery start as V-33. Change Tone 600 -> 610, leave Settings. Re-init without P0.2 low. | One save. After re-init: Tone 610 Hz, contrast 32, backlight 8. |
 | V-38 | Recovery start as V-33. In Display, change Contrast 32 -> 33 -> 32, leave Settings. | One save (an edit step happened and the values differ from the stored record). After re-init: contrast 32, backlight 8. |
 | V-39 | P3.2 (enter) low at start-up for 60 ms, P0.2 high. | Normal start, stored contrast and backlight, no message screen. |
-| V-32 | Render every screen in this file. | No string reaches past column 24. Every value-row label satisfies `len(label) <= 20 - fw`. Only ASCII 0x20-0x7E is used. |
+| V-32 | Render every screen in this file. | No string reaches past column 24. Every value-row label satisfies `len(label) <= 20 - fw`. Every list with more than 7 items has `len(title) <= 24 - len("n/n")`, so no title is cut (section 5.1). Only ASCII 0x20-0x7E is used. |
 
 ### 9.1 Tone preview tests (section 6.5)
 
@@ -2618,7 +2804,10 @@ Probes and steps:
 - `POLL t..u`: for each `t` to `u` in steps of 1 ms, set the fake tick and call `menu_poll()` once.
 - `CWTONE(hz)`: power-on with Tone = `hz` (empty EEPROM for 600, else a valid record), open Settings > CW with the
   cursor on `Tone` in browse mode, then reset the fake sidetone log.
-- Global rule for V-40 to V-53: each `on(true)` in `SLOG` comes directly after a `tone()` entry from the same event.
+- `SLOG` also logs `sidetone_set_ramp_ms` as `ramp(ms)` (fake call `FAKE_SIDETONE_CALL_RAMP`, UX-73).
+- Global rule for V-40 to V-53 and V-185 to V-191: each `on(true)` in `SLOG` comes directly after a `tone()` entry
+  from the same event. On the Ramp item, a `ramp()` entry comes directly before that `tone()` entry. The Tone item
+  gives no `ramp()` entry.
 
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
@@ -2634,7 +2823,7 @@ Probes and steps:
 | V-49 | `CWTONE(600)`. `AT 10000: enter`. `AT 10100: next`. `AT 10200: enter`. `AT 11000: enter`. | `ADD[tone(610), on(true)]` at 10100. `ADD[on(false)]` at 10200. `ADD[tone(610), on(true)]` at 11000: a new edit plays the stored current value. |
 | V-50 | `CWTONE(600)`. `AT 65400: enter`. `POLL 65401..65535`, then `POLL 0..163`. `AT 164: poll`. | `ADD[tone(600), on(true)]` at 65400. `ADD[]` up to 163. `ADD[on(false)]` at 164. |
 | V-51 | `CWTONE(600)`. `AT 10000: enter`. At 10100: `menu_handle(next)`, `menu_handle(REPEAT(next))`, then one `menu_poll()`. `POLL 10101..10399`. `AT 10400: poll`. | `ADD[tone(610), on(true), tone(620), on(true)]` at 10100. `ADD[]` up to 10399. `ADD[on(false)]` at 10400. |
-| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 3. Edit each value and choice item except Tone up to both limits, with presses and repeats. 4. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 5. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. The training modes have their own sound tests (section 9.4). |
+| V-52 | Power-on, empty EEPROM, reset the fake sidetone log. Call `menu_poll()` after each event. Do a `POLL` of 500 ms after each step. Steps: 1. Move in the main menu with presses and repeats. 2. Open Settings. Move the cursor onto `Tone` and past it in browse mode. 3. Edit each value and choice item except Tone and Ramp up to both limits, with presses and repeats. 4. Open the Reset Statistics dialog and answer `No`. Open it again and answer `Yes`. Close the message. 5. Change a value and leave Settings with a save. | `SLOG` is empty at the end. `fake_tick_read_count()` does not change during the `POLL` steps. The training modes have their own sound tests (section 9.4). |
 | V-53 | Recovery start as V-33, then reset the fake sidetone log. Release P0.2, close the message with `menu/back`. `POLL` for 1000 ms. | `SLOG` is empty. |
 
 ### 9.2 Free Input and long-press tests (sections 5.9, 6.6, 6.7)
@@ -2675,8 +2864,8 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | V-73 | `FI`. Hold menu/back with its debounced state pressed for 790 ms after its press event (the pin opens 770 ms after the press event), release. Then a debounced hold of 810 ms (the pin opens 790 ms after the press event). Then `FI` and hold it for 5 s. | 790 ms: still Free Input. 810 ms: the main menu shows at 800 ms (+/- 2 ms). 5 s: one exit only. The menu gets no event during the rest of the hold and after the release. |
 | V-74 | Lists with long holds: main menu, hold menu/back 2 s. Settings > CW, hold menu/back 2 s. Main menu, hold next 1000 ms. Tone edit at 600 Hz, hold next 1000 ms. Dialog, hold next 1000 ms. | Main menu: no change (as V-18). CW: Settings with `SEL(1)` on `CW`, no second step. Main menu: as V-04. Tone: 690 Hz, as V-08. Dialog: focus `Yes`, nothing else. |
 | V-75 | `buttons` only: hold prev. At 800 ms after the press event, the long event and a repeat are due in the same poll. | The first poll gives the long event of prev. The next poll gives the repeat. |
-| V-76 | Settings > CW. | 7 rows. `TEXT(7,0,"Paddle")`, `TEXT(7,17,"Normal")`. |
-| V-77 | CW: enter on Paddle. Next. Next. Enter. Leave Settings. Re-init from the fake EEPROM. | `EDIT(7,8)`. `Normal`: only `>`. `Reversed` (`TEXT(7,15,"Reversed",inv)`): only `<`. The second next changes nothing. One save. After re-init: `Reversed`. |
+| V-76 | Settings > CW. Press prev. | First window: 7 rows, `TEXT(7,0,"Key Type")`, no `Paddle` text. After prev (wrap, section 5.5): `TEXT(0,22,"8/8",inv)`, `SEL(7)`, `TEXT(7,0,"Paddle",inv)`, `TEXT(7,17,"Normal",inv)`. |
+| V-77 | CW: prev (wrap to Paddle), enter on Paddle. Next. Next. Enter. Leave Settings. Re-init from the fake EEPROM. | `EDIT(7,8)` in the last window, title mark `8/8`. `Normal`: only `>`. `Reversed` (`TEXT(7,15,"Reversed",inv)`): only `<`. The second next changes nothing. One save. After re-init: `Reversed`. |
 | V-78 | Valid record from the earlier firmware (layout version 1, flags bit 1 = 0). | `Paddle` shows `Normal`. `Prosigns` shows `Both` (V-83). |
 | V-79 | Settings: `Key Type` = `Straight`, `Paddle` = `Reversed`, TX Speed 25, TX Eff. Speed 15. Leave Settings. `FI`-style entry from the main menu. | The keyer starts once with `Straight`, swapped, 25 WPM, 15 WPM. |
 
@@ -2692,7 +2881,7 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | V-80 | Power-on, empty EEPROM. Open Settings. Then prev. Then next. Then next, next. | Title `Settings`. `SEL(1)` with `TEXT(1,0,"CW",inv)` and `TEXT(1,24,">",inv)`. `TEXT(2,0,"Show CW Code")`, `TEXT(2,21,"On")`. `TEXT(3,0,"Prosigns")`, `TEXT(3,19,"Both")`. `TEXT(4,0,"Max Word Length")`, `TEXT(4,22,"5")`. `TEXT(5,0,"Display")`, `TEXT(5,24,">")`. `TEXT(6,0,"Reset Statistics")`. `BLANK(7)`. After prev: `SEL(6)` (wrap from the first to the last item). After next: `SEL(1)`. After next, next: `SEL(3)` with `TEXT(3,0,"Prosigns",inv)` and `TEXT(3,19,"Both",inv)`. (AC-P14) |
 | V-81 | Settings, cursor on `Prosigns`. Enter. Prev. Prev. Prev. Next. Next. Next. Enter. | After enter: `EDIT(3,11)`, `TEXT(3,0,"Prosigns")` in normal video, `TEXT(3,19,"Both",inv)`, `TEXT(3,10,"<",inv)`, cell (3,24) blank inside the band. First prev: `TEXT(3,16,"Prosign",inv)`, `<` in (3,10), `>` in (3,24). Second prev: `TEXT(3,12,"Punctuation",inv)` (all 11 characters), cell (3,10) blank inside the band, `>` in (3,24). Third prev changes nothing. Next, next: `Prosign`, then `Both` with the markers above. The third next changes nothing. After enter: `SEL(3)`, `TEXT(3,19,"Both",inv)`. (AC-P15) |
 | V-82 | Settings: edit `Prosigns` to `Punctuation` (enter, prev, prev, enter). Menu/back. Re-init from the fake EEPROM. Open Settings. Repeat with `Prosign` (enter, next, enter) and with `Both` (enter, next, enter). Then change `Both` -> `Prosign` -> `Both` and leave Settings. | Each of the first three exits: exactly one erase and one record write, at the menu/back from Settings. Main menu, `SEL(4)`. After each re-init: `TEXT(3,12,"Punctuation")`, then `TEXT(3,16,"Prosign")`, then `TEXT(3,19,"Both")`. The stored record has layout version 2 and flags bits 2-3 = 0, 1, then 2. The last exit: no EEPROM erase or write (UX-15). (AC-P15) |
-| V-83 | The fake EEPROM holds the version 1 record `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` (`Paddle` = `Reversed`). Power-on. Open Settings, then CW. Go back to the main menu without an edit step. Then open Settings > CW, change Tone 600 -> 610 and leave Settings. Re-init from the fake EEPROM. | No message screen (F-14). Settings shows `On`, `Both`, `5`. CW shows `Reversed` and the other default values. First exit: no EEPROM erase or write. Second exit: one save. The stored record has layout version 2, flags byte `0x0B` and Tone 610 Hz. After re-init: `Reversed`, `Both`, `610 Hz`. (AC-P9, AC-P10 from the user's view) |
+| V-83 | The fake EEPROM holds the version 1 record `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` (`Paddle` = `Reversed`). Power-on. Open Settings, then CW. Go back to the main menu without an edit step. Then open Settings > CW, change Tone 600 -> 610 and leave Settings. Re-init from the fake EEPROM. | No message screen (F-14). Settings shows `On`, `Both`, `5`. CW shows `Reversed` and the other default values. First exit: no EEPROM erase or write. Second exit: one save. The stored record has layout version 3, flags byte `0x6B` (Ramp 6 ms in bits 4-7, the plan layout of `menu_subsystem_spec.md` section 5.1) and Tone 610 Hz. After re-init: `Reversed`, `Both`, `610 Hz`, `6 ms`. (AC-P9, AC-P10 from the user's view) |
 | V-84 | For each value: a record with `Prosigns` = that value (empty EEPROM for `Both`). `FI`. AR, BT, KN, AS, SK with no word gap. | `Punctuation`: `TEXT(1,0,"+=(&<SK>")`. `Prosign`: `TEXT(1,0,"<AR><BT><KN><AS><SK>")`. `Both`: `TEXT(1,0,"<AR/+><BT/=><KN/(><AS/&><")` and `TEXT(2,0,"SK>")`. Every other cell of rows 1-7 is blank. (AC-P18) |
 | V-85 | For each value as V-84. `FI`. AR, one WORD_GAP, BT, one WORD_GAP, KN, one WORD_GAP, AS, one WORD_GAP, SK. Then a new `FI` with `Both`: `KEY("A")`, AR, one WORD_GAP, `KEY("K")`. | `Punctuation`: `TEXT(1,0,"+ = ( & <SK>")`. `Prosign`: `TEXT(1,0,"<AR> <BT> <KN> <AS> <SK>")`, cell (1,24) blank. `Both`: `TEXT(1,0,"<AR/+> <BT/=> <KN/(> <AS/")` and `TEXT(2,0,"&> <SK>")`. Last case: `TEXT(1,0,"A<AR/+> K")`: a word gap after a prosign text adds one blank cell. (AC-P20) |
 | V-86 | `Both`, a new `FI` for each case. `KEY(E19)`, AR, `KEY("T")`. `KEY(E22)`, AR. `KEY(E23)`, AR. `KEY(E25)`, AR. `KEY(E23)`, KN. Then `Prosign`: `KEY(E23)`, BT. | E19: `<AR/+>` in cells (1,19) to (1,24), then `TEXT(2,0,"T")` (the column was 25). E22: `<AR` in (1,22) to (1,24), `TEXT(2,0,"/+>")`. E23: `<A` in (1,23) and (1,24), `TEXT(2,0,"R/+>")`. E25: row 1 is `L25(E)`, `TEXT(2,0,"<AR/+>")`. KN: `<K` in (1,23) and (1,24), `TEXT(2,0,"N/(>")`. `Prosign` BT: `<B` in (1,23) and (1,24), `TEXT(2,0,"T>")`. (AC-P19) |
@@ -2877,6 +3066,41 @@ Probes:
 | V-168 | Build with an 18-character version, for example `123456.12345.12345`. | The build stops (UX-63). |
 | V-169 | Render the startup screen and the `About` screen. | No 5 x 8 text reaches past column 24. The 8 x 16 line is inside x 7-86 and y 16-31. Only ASCII 0x20-0x7E. |
 
+### 9.6 CW scroll and Ramp tests (sections 5.3, 5.5, 6.5)
+
+These tests use the probes of section 9. The Ramp preview tests V-185 to V-191 use the notation and the global
+`SLOG` rule of section 9.1.
+
+- `CW`: power-on with an empty fake EEPROM, open Settings, then CW.
+- `WIN(t)`: rows 1-7 show the items `t` to `t + 6` of the CW order (section 5.5) with their labels in column 0 and
+  their values right-aligned to column 22. `WIN(1)`: `Tone` to `Key Type`. `WIN(2)`: `Ramp` to `Paddle`.
+- `MARK(s)`: `TEXT(0,0,"Settings > CW",inv)`, the cells (0,13) to (0,24 - len(s)) are blank inside the title bar,
+  and `TEXT(0,25 - len(s),s,inv)`.
+- `CWRAMP(ms)`: power-on with Ramp = `ms` (empty EEPROM for 6, else a valid layout version 3 record), Tone 600 Hz,
+  open Settings > CW, press `next` once (cursor on `Ramp`, browse mode), then reset the fake sidetone log.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-173 | `CW`. | `TITLE`, `MARK("1/8")`, `WIN(1)`, `SEL(1)`. `TEXT(2,0,"Ramp")`, `TEXT(2,19,"6 ms")`. `TEXT(7,0,"Key Type")`. No `Paddle` text on the screen. |
+| V-174 | `CW`. Press next 6 times. | After press k (k = 1..6): `MARK("<k+1>/8")`, `WIN(1)`, `SEL(k+1)`, `PLAIN(k)`. Each press changes the pixels of exactly pages 0, k and k+1. |
+| V-175 | Continue V-174. Press next. | `MARK("8/8")`, `WIN(2)`, `SEL(7)` with `TEXT(7,0,"Paddle",inv)`, `TEXT(1,0,"Ramp")`. The pixels of pages 0-7 change. |
+| V-176 | Continue V-175. Press prev 6 times. Then press prev once more. | After the 6 presses: `MARK("2/8")`, `WIN(2)`, `SEL(1)` with `TEXT(1,0,"Ramp",inv)`. The window did not move: no press changed the pixels of more than 3 pages. After the 7th press: `MARK("1/8")`, `WIN(1)`, `SEL(1)` with `TEXT(1,0,"Tone",inv)`. The pixels of pages 0-7 change. |
+| V-177 | `CW`. Press prev. Then press next. | After prev: `MARK("8/8")`, `WIN(2)`, `SEL(7)` on `Paddle`. After next: `MARK("1/8")`, `WIN(1)`, `SEL(1)` on `Tone`. |
+| V-178 | `CW`. Hold next for 1500 ms. Then hold prev for 1500 ms. | During the next hold the cursor reaches `Paddle` (`MARK("8/8")`, `WIN(2)`, `SEL(7)`) and stays there: no wrap. During the prev hold it reaches `Tone` (`MARK("1/8")`, `WIN(1)`, `SEL(1)`) and stays there. |
+| V-179 | `CW`. Next (cursor on `Ramp`). Enter. Next 6 times. Next. Prev 8 times. Prev. Enter. | After enter: `EDIT(2,5)`, `TEXT(2,0,"Ramp")` in normal video, `TEXT(2,16,"<",inv)`, `TEXT(2,19,"6 ms",inv)`, `TEXT(2,24,">",inv)`, `MARK("2/8")`. Values `7 ms` .. `12 ms` in turn. At `12 ms`: `TEXT(2,18,"12 ms",inv)`, cell (2,24) blank inside the band. The 7th next changes nothing. Values `11 ms` .. `4 ms` in turn. At `4 ms`: `TEXT(2,19,"4 ms",inv)`, cell (2,16) blank inside the band. The 9th prev changes nothing. After enter: `SEL(2)`, `TEXT(2,19,"4 ms",inv)`, `WIN(1)`. |
+| V-180 | `CW`. Change Ramp 6 -> 9. Menu/back x3. Re-init from the fake EEPROM. Then change Ramp 9 -> 10 and re-init without leaving Settings. | One erase and one record write, at the last menu/back only. After re-init: `9 ms`, and `sidetone_init()` gets 9 ms (`main.c`). After the second re-init: `9 ms` (F-4). |
+| V-181 | `CW`. Press prev (last window). Prev 5 times (cursor on `RX Speed`, row 2). RX Eff. Speed 25. Edit RX Speed from 32 down to 24 (8 presses). | `MARK("3/8")`, `WIN(2)`, `EDIT(2,6)`. After the 8th press, the same frame shows `24 WPM` in rows 2 and 3 (UX-14 in the last window). The window does not move. |
+| V-182 | Power-on. Look at the main menu, Settings and Settings > Display. | No `i/n` mark: in each title bar, the cells after the title up to column 24 are blank. A cursor step changes the pixels of only the two row pages. |
+| V-183 | `CW`. Press prev (cursor on `Paddle`, `WIN(2)`). Menu/back. Enter on `CW`. | Settings with `SEL(1)` on `CW`. Then CW opens with `MARK("1/8")`, `WIN(1)`, `SEL(1)` on `Tone`. |
+| V-184 | Valid layout version 2 record (`Prosigns` = `Prosign`). Power-on. Open Settings > CW. Repeat with a version 1 record. | No message screen (F-26). `TEXT(2,19,"6 ms")`. The other values are those of the record. No EEPROM erase or write. |
+| V-185 | `CWRAMP(6)`. `AT 10000: enter`. `POLL 10001..10299`. `AT 10300: poll`. | `ADD[ramp(6), tone(600), on(true)]` at 10000. `ADD[]` up to 10299. `ADD[on(false)]` at 10300. |
+| V-186 | `CWRAMP(6)`. `AT 10000: enter`. `AT 10100: next`. `POLL 10101..10399`. `AT 10400: poll`. `AT 11000: prev`. `AT 11300: poll`. | `ADD[ramp(7), tone(600), on(true)]` at 10100. No stop at 10300. `ADD[on(false)]` at 10400. `ADD[ramp(6), tone(600), on(true)]` at 11000. `ADD[on(false)]` at 11300. |
+| V-187 | `CWRAMP(12)`. `AT 10000: enter`. `AT 10100: next`. `POLL 10101..10299`. `AT 10300: poll`. `AT 10500: next`. `POLL 10501..11000`. Repeat with `CWRAMP(4)` and `prev`. | `ADD[ramp(12), tone(600), on(true)]` at 10000. `ADD[]` at 10100 and up to 10299. `ADD[on(false)]` at 10300. `ADD[]` from 10500 to 11000. Same with 4 ms and `prev`. |
+| V-188 | `CWRAMP(4)`. `AT 10000: enter`. `AT 10300: poll`. `AT 11000: next`. `POLL 11001..11399`. Repeat events `REPEAT(next)` at 11400 + 80k, k = 0..7, with `POLL` on every ms between them. `POLL 11961..12179`. `AT 12180: poll`. | `ADD[on(false)]` at 10300. `ADD[ramp(5), tone(600), on(true)]` at 11000. `ADD[on(false)]` at 11300. Repeat k = 0..6: `ADD[ramp(6 + k), tone(600), on(true)]`. Repeat k = 7 (11960, at 12 ms): `ADD[]`. No `on(false)` from 11400 to 12179. `ADD[on(false)]` at 12180 (300 ms after the last change at 11880). |
+| V-189 | `CWRAMP(6)`. Run the leave paths of V-46, V-47 and V-48 on the Ramp item (enter, menu/back, `menu_show_message`). | Each leave: `ADD[on(false)]` exactly once, also after a timeout. Then `ADD[]` for 500 ms. |
+| V-190 | Power-on, reset the fake sidetone log. Open CW. Move the cursor over `Ramp` and past it with presses and repeats, and wrap twice. | `SLOG` is empty. |
+| V-191 | `CWRAMP(6)`. Change Ramp 6 -> 10, enter. `POLL` 500 ms. Prev (cursor on `Tone`). `AT t: enter`. | The last `ramp()` entry is `ramp(10)`. At the Tone edit: `ADD[tone(600), on(true)]`, no `ramp()` entry. |
+
 ## 10. Durable decisions
 
 | ID | Decision | Reason | Rejected alternatives |
@@ -2885,7 +3109,7 @@ Probes:
 | UX-2 | Inverted title bar 8 rows. Highlight band 7 rows (`8r+1`..`8r+7`) with an off gap line at `8r` across the width of the band. | Keeps the title bar and a selected row 1 apart while keeping 7 visible items and page-aligned rows. | Full 8-row highlight: merges with the title bar. 10-row title with 6 items: breaks page alignment, loses a row. Title in normal video: weak separation. Clipping cell row 0: cuts `l`, `t`, `h`. |
 | UX-3 | Labels and value formats in section 5.3, fixed field width per item. `RX`/`TX` labels decided by the user. | Fits 25 columns with edit markers. Value does not jump while it changes. | Full words `Receive`/`Send` (do not fit with markers). `Recv`/`Send` short forms. |
 | UX-4 | Edit mode = highlight shrinks to the value field, `<`/`>` markers show the possible directions. | Two cues (shape and markers) for the mode. Markers also show the limits. | Blinking value (needs a timer, weak on slow LCD). `*` marker only (too small). |
-| UX-5 | Scroll window of 7, minimum movement, `i/n` in the title bar. | No extra pixels. Testable as text. | Scroll bar (needs a column). |
+| UX-5 | UX-72 applies this rule to the CW list and gives the exact window rule. Scroll window of 7, minimum movement, `i/n` in the title bar. | No extra pixels. Testable as text. | Scroll bar (needs a column). |
 | UX-6 | Placeholder: title + `Not ready`. Only a long menu/back works (UX-31). No menu item opens it in this version: Free Input, Receiving and Sending are real modes. | Plan, user. | - |
 | UX-7 | Dialog `No`/`Yes`, focus `No` at every open, menu/back = `No`. | Plan. Also protects against a spurious `enter` from the paddle socket. | - |
 | UX-8 | `Statistics reset` / `OK` message after `Yes` (accepted by the user). | Gives a completion signal for an action that cannot be undone. | Silent return (the user cannot tell `Yes` from `No`). |
@@ -2900,9 +3124,9 @@ Probes:
 | UX-17 | Silent defaults on an empty or corrupted record. | See section 8. | One-time message. |
 | UX-18 | No driver change for the font y offset. `gfx` draws at the row top minus the font y offset. ASCII only. | User decision. Keeps `firmware/drivers/` unchanged. | Driver arithmetic fix. |
 | UX-19 | Display recovery start: `menu/back` held for 50 ms from the first sample at start-up gives default contrast and backlight for the session, with a message screen. | User decision (Q-1). Without it, a bad contrast or backlight save locks the user out. | No recovery. Limiting the contrast range (the plan fixes 0-63). Recovery without a message (the user cannot tell the gesture worked). |
-| UX-20 | Tone preview (section 6.5): the tone plays at the start of a Tone edit and after each change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. No other sound in the menu. | User decision (Q-3). The user hears the value that the display shows. The stop on leave ties the sound to the edit: `enter` means "done". Silence at a limit keeps UX-13. | A sound for the Tone row in browse mode (noise during a cursor move). Tone continues after leaving until the timeout (sound without a visible owner). A beep at a limit (a second limit signal next to the marker, and noise during a held repeat). A beep on save or on other items (no user request). |
-| UX-21 | `MENU_TONE_PREVIEW_MS` = 300 ms, counted from the hook that starts or restarts the tone. | 300 ms is one dah at 12 WPM, a familiar length for the user. It is long enough to judge the pitch after the 8 ms rise. Single presses about 0.5 s apart give one separate beep each. It is shorter than the 400 ms repeat delay, so a hold gives one beep, a short silence and then the chain. | 150 ms (short for a low tone, and the rise and fall take 16 ms of it). 1000 ms or continuous while in edit (tiring in long sessions, and the user cannot stop it without leaving the edit). |
-| UX-22 | A repeat event uses the same rule as a press. The retune dip (about 17-19 ms each 80 ms) during a held repeat is accepted. | The user hears the pitch move and can release by ear. The dip is shaped, not a click. No interface change. | Silence during repeats and one tone after the release. There is no release event. It needs a buttons change, or a new hook where `menu_poll()` starts the tone after a pause in the repeats. Sound on press events only (the user cannot hear the final value of a hold without one more step). Sound on every n-th repeat only (the sound lags the display). Glide without silence (needs an ARR change during a ramp, a sidetone interface change). Each alternative needs an `architector` decision. |
+| UX-20 | UX-73 adds the Ramp preview with the same hooks: the previews of Tone and Ramp are the two sounds of the menu. Tone preview (section 6.5): the tone plays at the start of a Tone edit and after each change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. No other sound in the menu. | User decision (Q-3). The user hears the value that the display shows. The stop on leave ties the sound to the edit: `enter` means "done". Silence at a limit keeps UX-13. | A sound for the Tone row in browse mode (noise during a cursor move). Tone continues after leaving until the timeout (sound without a visible owner). A beep at a limit (a second limit signal next to the marker, and noise during a held repeat). A beep on save or on other items (no user request). |
+| UX-21 | UX-73 uses the same time for the Ramp preview. UX-71 replaces the fixed 8 ms rise of the reason with the `Ramp` time (4-12 ms), and the reason still holds. `MENU_TONE_PREVIEW_MS` = 300 ms, counted from the hook that starts or restarts the tone. | 300 ms is one dah at 12 WPM, a familiar length for the user. It is long enough to judge the pitch after the 8 ms rise. Single presses about 0.5 s apart give one separate beep each. It is shorter than the 400 ms repeat delay, so a hold gives one beep, a short silence and then the chain. | 150 ms (short for a low tone, and the rise and fall take 16 ms of it). 1000 ms or continuous while in edit (tiring in long sessions, and the user cannot stop it without leaving the edit). |
+| UX-22 | UX-71 makes the dip 2 x `Ramp` plus 1 to 3 ms (13-15 ms at the default 6 ms). UX-73: on Ramp, a held repeat gives one continuous tone. A repeat event uses the same rule as a press. The retune dip (about 17-19 ms each 80 ms) during a held repeat is accepted. | The user hears the pitch move and can release by ear. The dip is shaped, not a click. No interface change. | Silence during repeats and one tone after the release. There is no release event. It needs a buttons change, or a new hook where `menu_poll()` starts the tone after a pause in the repeats. Sound on press events only (the user cannot hear the final value of a hold without one more step). Sound on every n-th repeat only (the sound lags the display). Glide without silence (needs an ARR change during a ramp, a sidetone interface change). Each alternative needs an `architector` decision. |
 | UX-23 | UX-51 adds a long `enter` in tap mode (Receiving only). Long press: 800 ms after the press event, on `menu/back`, `prev` and `next`. One action per press, at the threshold while the button is held. No feedback other than the result of the action. | The user decided on long presses. 800 ms is twice the repeat delay, so a normal press or a short hold never triggers it. Exit and clear destroy the text, so the hold must be deliberate. The screen changes during the hold. This is the signal to release. | 500 ms (close to a slow press, risk of lost text). 1500 ms or more (slow for a frequent clear). Action at the release (the user cannot see that the hold is long enough). A beep (mixes with the sidetone during practice). A progress bar (pixels and code for a 0.8 s wait). A separate value per button (more to learn, no gain). |
 | UX-24 | UX-43, UX-47 and UX-55 refine this decision: the Receiving keyboard and the session end screen act on short presses. In mode screens, short presses, repeats and `enter` do nothing. In lists, dialogs and message screens, long events do nothing. | The other hand rests near the buttons during keying: an accidental short press must not lose the text. Each screen family uses one gesture set, so one press never acts twice. | Short menu/back exits Free Input (the user asked for long). Short prev/next scroll the text (needs a text buffer). |
 | UX-25 | Free Input screen: `FONTS_ID_5X8`, the grid of section 4.1, title bar `Free Input` in row 0, text in rows 1-7 (7 x 25 cells). No status, no cursor mark, no hint. | Same font, grid and title rule as every other screen. 175 visible characters keep about 30 words of context. One text row is one LCD page, so a scroll is a page copy. The settings are one menu level away, and the sound shows the speed and the key type at once. | `FONTS_ID_8X16` (16 x 3 with a title: 48 characters, a scroll every 16 characters, a second grid, a scroll moves 2 pages per line). No title (one more line, but the screen does not say which mode is open). Key type or speed in the title (code and strings for a value the user just set). A blinking or static cursor (code and a timer, small gain). |
@@ -2912,7 +3136,7 @@ Probes:
 | UX-29 | Delimiter: a 1 px line at `y = 8r + 3`, x 2-126, in its own text row. The next character starts a new row. | Clear separation of practice blocks for about 30 bytes of code. A continuous line cannot look like keyed text. | A blank row (looks like unused space). A row of `-` glyphs (looks like keyed `-` characters). A dashed line (more code, no gain). |
 | UX-30 | Clear: rows 1-7 off, cursor home, the character in progress dropped. Title not redrawn. No question to the user. | Practice text has a low value, and the 800 ms hold protects it. Dropping the partial character gives a clean restart. | A Yes/No dialog (slow for a frequent action). Keep the partial character (its first elements are from before the clear). |
 | UX-31 | Receiving and Sending placeholders: `Not ready`, only a long menu/back exits. The training modes replace them and keep the long menu/back exit (UX-43, UX-45, UX-49). | User decision: long menu/back exits any mode. The placeholders follow the same rule as the real modes. The real modes later keep the same gesture. | Short menu/back in placeholders only (two exit rules for the same screen family). |
-| UX-32 | `Paddle` setting in CW, 7th item: choice `Normal`, `Reversed`, fw 8, default `Normal`. `Normal`: tip = dit, ring = dah. It applies at the next Free Input start. | User decision: a setting. `Normal`/`Reversed` say what changes better than `Off`/`On`. Fit rule: 6 <= 12. The CW list fills all 7 rows without a scroll. Old records read as `Normal`. | `Paddle Swap` with `Off`/`On` (less clear which side is the dit). `Swap Paddle` (a verb as a label). A swap gesture at the mode start (hidden function). |
+| UX-32 | UX-71 moves `Paddle` to the 8th CW item, and the CW list scrolls (UX-72). `Paddle` setting in CW, 7th item: choice `Normal`, `Reversed`, fw 8, default `Normal`. `Normal`: tip = dit, ring = dah. It applies at the next Free Input start. | User decision: a setting. `Normal`/`Reversed` say what changes better than `Off`/`On`. Fit rule: 6 <= 12. The CW list fills all 7 rows without a scroll. Old records read as `Normal`. | `Paddle Swap` with `Off`/`On` (less clear which side is the dit). `Swap Paddle` (a verb as a label). A swap gesture at the mode start (hidden function). |
 | UX-33 | UX-45 extends this decision to Sending (section 5.13.4). P3.2 belongs to the keyer while Free Input is open, and to the menu at all other times. A contact closed at the mode start is ignored until it opens. A contact held at the mode end gives no `enter` until it opens and closes again. | The `enter` press that opens Free Input must not key a dit. A held lever at the exit must not open a menu item. A mono plug then works as a straight key. | Ignore the paddle for a fixed time after the start (a held contact still keys after the delay). Use a different button to open Free Input (the hardware has none free). |
 | UX-34 | UX-45 refines this decision. The keyer and its sidetone run only in Free Input and in a Sending session (UX-45). In the menu the paddle gives no tone. | The tip acts as `enter` in the menu: a tone on each menu `enter` is noise. One clear place for practice. | A practice tone in the menu (noise, and conflicts with the Tone preview). |
 | UX-35 | Key Type semantics of section 6.7. The thresholds come from `TX Speed` and `TX Eff. Speed`. A straight-key mark of 2 dits or longer is a dah. | User decision: no adaptive decoding. The student practises at the speed of the settings. | Adaptive speed tracking (more code, and the student gets no feedback on the speed). |
@@ -2944,7 +3168,10 @@ Probes:
 | UX-61 | `About` is the fifth main menu item, after `Settings`, in row 5. No marker, no value. Kind: info screen. | `>` means "opens a list". Items that open a screen have no marker. Five items fit with no scroll. | `>` on `About` (promises a list). A `...` suffix (not used anywhere else). |
 | UX-62 | `About` screen (section 5.18). Title `About`. Rows 1-3: the name, the mod and `Version ` + version. Row 4 blank. Rows 5-7: the link in three parts. All text is left-aligned in column 0, in normal video. No band and no `OK`. `enter` or `menu/back` goes to the main menu with the cursor on `About`. `prev`, `next`, repeats and long events do nothing. | User layout. The link needs three rows, and one left edge keeps it readable as one text. Closing with `enter` or `menu/back` matches the message screen. | Centered text (the link parts lose their common edge). An `OK` button (no free row). A hyphen at the link breaks (changes the link). |
 | UX-63 | Version text (section 5.17.4): `FIRMWARE_VERSION` is digits and dots, at most 17 characters. The startup screen shows `v` + version right-aligned to column 23. `About` shows `Version ` + version from column 0. A longer version stops the build. | 17 characters keep `Version ` + version inside 25 columns. A cut text is a defect. A build check finds it before the device does. | No limit (a cut on the glass). A run-time cut or a short form (hides the real version). |
-| UX-64 | User decision 2026-10-15 (sections 5.12.2, 5.14, 6.8). Receiving answer state: after the third wrong attempt, the screen shows `Wrong. The answer is:` and the answer, and the answer plays once. Then the state waits with no time limit. An `enter` tap (or a short tip closure) continues: a running playback stops (8 ms fall), then the blank moment and the next item, or the end screen after the last item. The tap also acts while the answer plays. A long `enter` (or a tip closure of 800 ms) plays the answer again from its start, with no screen change. The other taps, long `prev` and long `next` do nothing. Long `menu/back` exits. Row 7: only the `enter` field shows text, `Next` (x 107), or `Finish` (x 97) on the last item, right-aligned as every `enter` label. The other three fields are blank. The key bars stay. The blank moment puts the labels of the whole set back. Sending keeps the 2500 ms answer delay (`TRAINING_FAILED_MS`). Refines UX-44, UX-46 and UX-51. Engine side: `training_spec.md` D-T44. | A fixed delay after the playback gave the user too little time to read the answer and to compare it with what they picked. On every other screen (menu, start screen, end screen), `enter` accepts and goes on. It is also the paddle tip, so a user who answers with the paddle continues without moving the hand. A long `enter` already replays in Item, so tap = go on and hold = listen again is one pair on one button. `next` is a keyboard run in Receiving and a cursor key in the menu, and never accepts. The blank fields follow the empty-run rule: no text, and a tap does nothing. The text above `enter` names the result of the tap. Sending has no button input in a session (the tip is the keyer), so it keeps the timed answer. | `next` continues (it never accepts on other screens). Keep the 2500 ms delay (too short to study the answer). Keep the keyboard labels in the answer state (they promise picks that do nothing). Wait for a key in Sending too (the tip keys elements, so it cannot accept). |
+| UX-64 | UX-71 replaces the 8 ms fall of this decision with the `Ramp` time. User decision 2026-10-15 (sections 5.12.2, 5.14, 6.8). Receiving answer state: after the third wrong attempt, the screen shows `Wrong. The answer is:` and the answer, and the answer plays once. Then the state waits with no time limit. An `enter` tap (or a short tip closure) continues: a running playback stops (8 ms fall), then the blank moment and the next item, or the end screen after the last item. The tap also acts while the answer plays. A long `enter` (or a tip closure of 800 ms) plays the answer again from its start, with no screen change. The other taps, long `prev` and long `next` do nothing. Long `menu/back` exits. Row 7: only the `enter` field shows text, `Next` (x 107), or `Finish` (x 97) on the last item, right-aligned as every `enter` label. The other three fields are blank. The key bars stay. The blank moment puts the labels of the whole set back. Sending keeps the 2500 ms answer delay (`TRAINING_FAILED_MS`). Refines UX-44, UX-46 and UX-51. Engine side: `training_spec.md` D-T44. | A fixed delay after the playback gave the user too little time to read the answer and to compare it with what they picked. On every other screen (menu, start screen, end screen), `enter` accepts and goes on. It is also the paddle tip, so a user who answers with the paddle continues without moving the hand. A long `enter` already replays in Item, so tap = go on and hold = listen again is one pair on one button. `next` is a keyboard run in Receiving and a cursor key in the menu, and never accepts. The blank fields follow the empty-run rule: no text, and a tap does nothing. The text above `enter` names the result of the tap. Sending has no button input in a session (the tip is the keyer), so it keeps the timed answer. | `next` continues (it never accepts on other screens). Keep the 2500 ms delay (too short to study the answer). Keep the keyboard labels in the answer state (they promise picks that do nothing). Wait for a key in Sending too (the tip keys elements, so it cannot accept). |
+| UX-71 | User decision (plan 2026-10-16): the `Ramp` setting (section 5.3). Label `Ramp`, value item, `4 ms` .. `12 ms`, step 1, fw 5, default `6 ms`, CW item 2 directly after `Tone`. One value sets the rise time and the fall time of every tone: the previews, Free Input, Receiving and Sending. It goes to the sidetone at each edit step and at `sidetone_init()`. A record of layout version 1 or 2 gives `6 ms` (F-26). The fixed 8 ms of earlier decisions (UX-21, UX-22, UX-64) becomes the `Ramp` time. | `Ramp` is short and is the term of the plan. Fit rule: 4 <= 15. Next to `Tone`, the two sound items form one group, and both play a preview. Item 2 keeps `Ramp` in the first window, so the user finds the new item without a scroll. The item that leaves the first window is `Paddle`, which the user sets once. Both windows keep each base speed next to its effective speed (UX-14). | `Tone Ramp` (9 characters, repeats the item above it). `Rise Time` (names only the rise, but the value also sets the fall). `Ramp Time` (longer, no gain). `Envelope` (less known to the user). `Ramp` as item 8 after `Paddle` (the existing rows stay, but the new item is hidden below the first window and far from `Tone`). Leading zero `04 ms` (section 4.3). Separate rise and fall settings (no user request, two items and one more scroll row). |
+| UX-72 | The CW list scrolls with UX-5 (section 5.5, user decision 2026-10-16). Window of 7 items in rows 1-7. Rule after each cursor change: `c < t` gives `t = c`, `c > t + 6` gives `t = c - 6`. A wrap shows the first 7 or the last 7 items. A list opens with `c = t = 1`. Back in the parent, its cursor and window come back. `i/n` (for example `1/8`) right-aligned to column 24, inverted, with no leading zeros. The title keeps at most `24 - len(i/n)` characters, and no title is cut in this version. Lists with 7 items or fewer show no mark. | Minimum movement keeps 6 of the 7 rows in view at each window move, so the user does not lose the place. The rule needs one byte of state per list level and no table. `1/8` tells the user that more items exist, without a column for a scroll bar. Only on the scrolling list do the pixels of page 0 change at each cursor step. | Move by a page of 7 (the cursor jumps, and the context is lost). Keep the cursor in the middle row (the window moves at each step, so the pixels of all pages change at each step during a repeat). `i/n` on every list (the pixels of page 0 change at each step, and noise on lists that show everything). Scroll marks `^` or `v` in column 23 or 24 (column 24 holds the `>` markers, and the mark looks like an edit marker). Keep the window on a wrap and move it step by step (the wrapped cursor is off the screen). |
+| UX-73 | User decision (plan 2026-10-16): the Ramp edit plays a preview (section 6.5). Hooks H1-H6 apply to Tone and Ramp. A Ramp hook that starts the tone calls `ramp(value)`, `tone(Tone)`, `on(true)` in this order. The preview plays the pitch of the Tone setting for `MENU_TONE_PREVIEW_MS` (300 ms) from the last change. A step at a limit plays nothing new. Leaving the edit by any path stops it at once. During a held repeat the tone stays on (no dip, the pitch does not change) and ends 300 ms after the last change. | The user hears the value that the display shows, as in the Tone edit: one rule for both sound items. `ramp()` first, so the rise already uses the new value. `tone(Tone)` keeps the pitch of the setting and costs no sound when the sidetone already has it. One timer and one constant for both items. 9 values are fast to step with single presses, and each single press gives a full beep with the new rise and fall. | A short CW pattern (dits at `TX Speed`) as the preview (needs the player or the keyer in the menu). A beep of one dit length at `TX Speed` (a second time rule and more code). A forced silence between two repeat steps, so each step rises again (needs a new sidetone function or a menu wait state; an `architector` decision first). No preview (user decision). A continuous tone during the whole edit (rejected in UX-21). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -2962,7 +3189,7 @@ Probes:
 | D-10 | Tone preview at the edit start. Speaker and headphones. Tone 400, 600 and 1000 Hz. Volume at its middle. | The tone starts with no audible delay after `enter`. It lasts about 0.3 s. No click at the start or at the end. The user can judge the pitch. |
 | D-11 | Single presses about 0.5 s apart from 600 Hz up and down. | Each press gives one clear beep at the new pitch. |
 | D-12 | Hold `next` from 400 Hz to 1000 Hz, then hold `prev` back. | The chain sounds as a series of pitch steps, not as clicks or a buzz. The user can release near a target pitch. The tone ends about 0.3 s after the release, and at the limit also while the button is held. If the chain is unpleasant, record it for `architector` (UX-22 alternatives). |
-| D-13 | Stop timing on a logic analyzer (P1.1 or P1.2) while the screen redraws. Leave with `enter` and with `menu/back`. Let a preview time out. | After a leave, the output is quiet within about 10 ms of the event. A timeout ends 300 ms after the hook, plus at most one main-loop pass, plus the 8 ms fall. |
+| D-13 | Stop timing on a logic analyzer (P1.1 or P1.2) while the screen redraws. Leave with `enter` and with `menu/back`. Let a preview time out. | After a leave, the output is quiet within the `Ramp` time plus about 2 ms of the event (8 ms at the default 6 ms). A timeout ends 300 ms after the hook, plus at most one main-loop pass, plus the fall in the `Ramp` time. Repeat at `Ramp` 4 and 12 ms. |
 | D-14 | Insert and remove the headphone plug during a single preview and during a held repeat. | The route changes at the next silence. No click on either output. A spurious `enter` from the socket (D-5) ends the edit and stops the tone. |
 | D-15 | Long press feel: hold `menu/back`, `prev` and `next` in Free Input. Also use the menu with normal presses and holds of `prev`/`next` for a few minutes. | The action comes while the button is held, about 0.8 s after the press. It never comes by accident during normal menu use. The user finds 800 ms neither slow nor too easy. |
 | D-16 | Open Free Input with the `enter` button, and with the dit lever as `enter` (keep it closed for 2 s). Repeat with a straight key on the tip. | No tone and no character until the contact opens and closes again. Then it keys as normal. |
@@ -2994,6 +3221,9 @@ Probes:
 | D-42 | Start screen on the glass (UX-65 to UX-67), Receiving and Sending. Levels: L1 (`New chars`, `K M`, the L1 code group), L20 (`J`), L25 (`0`) and L28 (`,`). L62 in all three `Prosigns` styles (`<AR/+>`, `<AR>`, `+`). A word level (`Words of 4`) and the final word phase. Contrast 32, backlight 8 and 0, 30-60 cm, straight and at an angle. | The user reads the label, the large text and the code at a glance. The label in row 2 and the large text (2 or 3 off pixel rows between them) read as two lines. `Words of 4` reads as a description, not as a word to key. The user tells the dots from the dashes and finds the 9 px gap between the codes of K and M. The `f` of `of` in row 1 stays readable next to the inverted header. |
 | D-43 | Redraw time of a start screen step (UX-70). Hold `next` from L1 to L20 and back, in Receiving and in Sending. Measure the transfer of the dirty pages of each step on a logic analyzer (the LCD pins P2.0-P2.4) during the 80 ms repeat. The longest step sends 6 pages in Sending and 5 in Receiving (UX-70). Also measure the full redraw of the move from the end screen to the start screen. | Record the time of one step and of the full redraw. If a step takes longer than 80 ms, the screen skips levels, but the last level shows within 100 ms after the release (UX-16). The keyer, the sidetone and the button timing stay correct during the transfer. Report the times to `architector`. |
 | D-44 | End screen flow (UX-68, UX-69), Receiving and Sending: pass, fail, replay and `Not saved`. Press `enter` on the end screen, read the start screen, press `enter` again. Use the dit lever as `enter` in both steps. Also press `prev` and `next` on the end screen. | The user understands that `OK` leads to the start screen and that a second press starts the session. `prev` and `next` do nothing, and the user does not expect a level change there. Record whether a user presses `enter` twice by habit and starts a session without reading the start screen. |
+| D-45 | CW list scroll on the glass (UX-72). Contrast 32, backlight 8 and 0, 30-60 cm. Single presses through all 8 items and both wraps. Hold `next` from `Tone` to `Paddle` and `prev` back. Measure the transfer time of the window move (pages 0-7) on a logic analyzer (P2.0-P2.4). | The user reads `1/8` to `8/8` and knows that an item is below or above the window. The window move is visible within 100 ms (UX-16). During a hold no step is lost. If the full-screen transfer takes longer than 80 ms, record it for `architector` (AGENTS.md: split the transfer). |
+| D-46 | Ramp preview by ear (UX-73), speaker and headphones, volume at its middle. Tone 400, 600 and 1000 Hz. Single presses about 0.5 s apart from `4 ms` to `12 ms` and back. Also a hold of `next` from `4 ms`. | Each single press gives one beep. The user hears the edges get softer as the value goes up. Record whether `4 ms` at 400 Hz clicks (expected, plan fact) and the lowest value with no click at each tone. During the hold the tone stays on and ends about 0.3 s after the last change. If the user cannot compare values, record it for `architector` (UX-73 alternatives). |
+| D-47 | Ramp in use: Free Input with `Iambic B` and Receiving playback at 50 WPM with `Ramp` 12 ms and 4 ms. Also 20 WPM with 6 ms. Capture P1.1 or P1.2. | Dits stay audible and separate at 50 WPM with 12 ms. Each dit rises to index 31 of 32, one step below full level (duty 499 instead of 500 permille), and falls with no click. The fall ends at or one call before the mark end, and the element and gap times hold (`sidetone_spec.md` D-RM5, DC-5, DC-14). Record whether the dits sound weaker than the dahs at 12 ms. |
 
 ## 12. Open questions
 
@@ -3081,6 +3311,14 @@ of the decisions of 2026-10-07 above:
 - `ui-ux-embedded-designer` chose the texts: the labels `New chars` and `New char`, no label at a word level, the
   large texts `K M`, the character text and `Words of <len>`, the end screen button `OK`, and the L1 code gap of
   9 px.
+
+Resolved by the user on 2026-10-16 (plan "Sidetone ramp duration setting", UX-71 to UX-73):
+
+- A `Settings > CW` item sets the rise and fall time of the tone: 4 ms to 12 ms, step 1 ms, default 6 ms.
+- The CW list gets the eighth item and scrolls with the rule of section 5.5 (UX-5).
+- The Ramp edit plays a preview, as the Tone edit does.
+- `ui-ux-embedded-designer` chose the label `Ramp`, the value text `4 ms` .. `12 ms`, fw 5, the place after `Tone`,
+  the window rule and the preview hooks.
 
 Resolved by the user after the training specification:
 

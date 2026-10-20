@@ -14,6 +14,7 @@
 
 #include "fake_sidetone_pwm.h"
 #include "sidetone/sidetone.h"
+#include "sidetone/sidetone_shared.h"
 #include "test_assert.h"
 
 static void record_sidetone_on(void);
@@ -24,7 +25,6 @@ static void record_sidetone_off(void);
 #include "cw/player_service.h"
 
 #define MAX_MARKS 64U
-#define EARLY_RELEASE 32U
 
 static size_t call_count;
 static bool is_envelope_run;
@@ -186,8 +186,8 @@ static bool start_text(const char* text, uint8_t wpm, uint8_t eff_wpm) {
   return player_start(buffer, (uint8_t)length, wpm, eff_wpm);
 }
 
-/* AC-T12: every mark and gap has the exact length of section 9.2. */
-static void timing_case(const char* text, uint8_t wpm, uint8_t eff_wpm) {
+/* AC-T12: every mark and gap has the exact length of section 9.2, with the early release of @p ramp_ms. */
+static void timing_case(const char* text, uint8_t wpm, uint8_t eff_wpm, uint8_t ramp_ms) {
   const uint16_t dit = dit_of(wpm);
   const uint16_t char_gap = char_gap_of(wpm, eff_wpm);
   size_t expected_start = 1U;
@@ -195,6 +195,8 @@ static void timing_case(const char* text, uint8_t wpm, uint8_t eff_wpm) {
   size_t position;
   size_t element;
 
+  sidetone_set_ramp_ms(ramp_ms);
+  TEST_ASSERT_EQUAL(4U * ramp_ms, sidetone_ramp_calls);
   reset_record();
   TEST_ASSERT(char_gap != 0U);
   TEST_ASSERT(start_text(text, wpm, eff_wpm));
@@ -219,8 +221,8 @@ static void timing_case(const char* text, uint8_t wpm, uint8_t eff_wpm) {
       TEST_ASSERT_EQUAL(expected_start, mark_first_calls[mark]);
       TEST_ASSERT_EQUAL(expected_start + length - 1U, mark_last_calls[mark]);
       TEST_ASSERT_EQUAL(expected_start, on_calls[mark]);
-      /* The request goes off on the call where 32 mark calls remain. */
-      TEST_ASSERT_EQUAL(expected_start + length - EARLY_RELEASE, first_off_calls[mark]);
+      /* The request goes off on the call where sidetone_ramp_calls mark calls remain. */
+      TEST_ASSERT_EQUAL(expected_start + length - sidetone_ramp_calls, first_off_calls[mark]);
       expected_start += length;
       expected_start += (code[element + 1U] != '\0') ? dit : char_gap;
       ++mark;
@@ -240,12 +242,16 @@ static void timing_case(const char* text, uint8_t wpm, uint8_t eff_wpm) {
 static void test_exact_timing(void) {
   static const char* const texts[] = {"E", "T", "K", "5", "0", "PARIS", "\x01", "\x02", "MORSEKEY", "?/"};
   static const uint8_t speeds[][2] = {{5U, 5U}, {20U, 20U}, {50U, 50U}, {20U, 10U}, {50U, 5U}};
+  static const uint8_t ramps[] = {8U, 4U, 6U, 12U};
   size_t text;
   size_t speed;
+  size_t ramp;
 
-  for (speed = 0U; speed < sizeof(speeds) / sizeof(speeds[0]); ++speed) {
-    for (text = 0U; text < sizeof(texts) / sizeof(texts[0]); ++text) {
-      timing_case(texts[text], speeds[speed][0], speeds[speed][1]);
+  for (ramp = 0U; ramp < sizeof(ramps); ++ramp) {
+    for (speed = 0U; speed < sizeof(speeds) / sizeof(speeds[0]); ++speed) {
+      for (text = 0U; text < sizeof(texts) / sizeof(texts[0]); ++text) {
+        timing_case(texts[text], speeds[speed][0], speeds[speed][1], ramps[ramp]);
+      }
     }
   }
 }
@@ -279,13 +285,16 @@ static void test_play_form(void) {
   player_stop();
 }
 
-/* AC-T13: with the real sidetone, compare 0 is written on the last mark call of every element. */
-static void envelope_case(uint8_t wpm, uint8_t eff_wpm, bool is_headphones) {
+/*
+ * AC-T12, AC-T13: with the real sidetone, the fall enters ZERO_WAIT on the last mark call of every element. A mark of
+ * exactly two ramps (50 WPM dit, 12 ms) enters it one call earlier (sidetone_spec.md D-RM5).
+ */
+static void envelope_case(uint8_t wpm, uint8_t eff_wpm, bool is_headphones, uint8_t ramp_ms) {
   size_t index;
 
   fake_sidetone_pwm_reset();
   fake_sidetone_pwm_set_headphones(is_headphones);
-  sidetone_init(600U);
+  sidetone_init(600U, ramp_ms);
   is_envelope_run = true;
   reset_record();
   TEST_ASSERT(start_text("PARIS", wpm, eff_wpm));
@@ -296,7 +305,10 @@ static void envelope_case(uint8_t wpm, uint8_t eff_wpm, bool is_headphones) {
   TEST_ASSERT_EQUAL(14U, mark_count);
   TEST_ASSERT_EQUAL(mark_count, fall_zero_count);
   for (index = 0U; (index < mark_count) && (index < fall_zero_count); ++index) {
-    TEST_ASSERT_EQUAL(mark_last_calls[index], fall_zero_calls[index]);
+    const size_t length = mark_last_calls[index] - mark_first_calls[index] + 1U;
+    const size_t early = (length == 2U * sidetone_ramp_calls) ? 1U : 0U;
+    TEST_ASSERT(length >= 2U * sidetone_ramp_calls);
+    TEST_ASSERT_EQUAL(mark_last_calls[index] - early, fall_zero_calls[index]);
   }
   TEST_ASSERT_EQUAL(SIDETONE_STATE_OFF, sidetone_state());
   TEST_ASSERT(!sidetone_is_busy());
@@ -304,14 +316,19 @@ static void envelope_case(uint8_t wpm, uint8_t eff_wpm, bool is_headphones) {
 }
 
 static void test_envelope(void) {
-  envelope_case(5U, 5U, false);
-  envelope_case(5U, 5U, true);
-  envelope_case(20U, 20U, false);
-  envelope_case(20U, 20U, true);
-  envelope_case(50U, 50U, false);
-  envelope_case(50U, 50U, true);
-  envelope_case(20U, 10U, false);
-  envelope_case(50U, 5U, true);
+  static const uint8_t ramps[] = {8U, 4U, 6U, 12U};
+  size_t ramp;
+
+  for (ramp = 0U; ramp < sizeof(ramps); ++ramp) {
+    envelope_case(5U, 5U, false, ramps[ramp]);
+    envelope_case(5U, 5U, true, ramps[ramp]);
+    envelope_case(20U, 20U, false, ramps[ramp]);
+    envelope_case(20U, 20U, true, ramps[ramp]);
+    envelope_case(50U, 50U, false, ramps[ramp]);
+    envelope_case(50U, 50U, true, ramps[ramp]);
+    envelope_case(20U, 10U, false, ramps[ramp]);
+    envelope_case(50U, 5U, true, ramps[ramp]);
+  }
 }
 
 /* AC-T14: a rejected start plays nothing. */
@@ -385,7 +402,7 @@ static void test_stop(void) {
   bool is_mark;
 
   fake_sidetone_pwm_reset();
-  sidetone_init(600U);
+  sidetone_init(600U, 8U);
   is_envelope_run = true;
   reset_record();
   TEST_ASSERT(start_text("0", 20U, 20U));

@@ -116,6 +116,107 @@ implemented. The only trigger is the Tone preview in the menu. The call order
 with the interrupt file rule. `architector` decides that layout in the keyer
 change (`sidetone_spec.md` section 21).
 
+## Implemented design: variable ramp (2026-10-16)
+
+The firmware adds a user setting for the rise and fall time. The contract is
+[sidetone_spec.md](sidetone_spec.md) section 24, with
+[menu_subsystem_spec.md](menu_subsystem_spec.md) section 18 for the setting and
+the menu. Host tests, QA and `architector` approved it on 2026-10-16
+(`sidetone_spec.md` section 24.12). Nobody tested it on the device yet. The
+open device checks are DC-5 (revised), DC-13 and DC-14 in
+[sidetone_validation.md](sidetone_validation.md). Where this section differs
+from [Implemented design](#implemented-design-2026-10-05), this section wins.
+
+Setting:
+
+- `Settings > CW > Ramp`: 4 to 12 ms, step 1 ms, default 6 ms. It is CW item 2,
+  after `Tone`. One value sets the rise and the fall of every tone: the Tone
+  and Ramp previews, Free Input, Receiving and Sending.
+- The settings record has layout version 3. `Ramp` uses bits 4-7 of the flags
+  byte. A record of layout version 1 or 2 loads with `Ramp` = 6 ms. Older
+  firmware reads a version 3 record as an unknown version and uses its
+  defaults.
+- The 4 kHz service rate, the 32-step duty table, the timer setup and the PWM
+  setup do not change.
+
+Envelope:
+
+- The 8-bit index becomes a 16-bit position in 1/64 of a table step, 0 to
+  2048. The table index is `position >> 6`. The firmware builds it from the
+  two bytes of the position, which gives the same value (D-RM13).
+- Each call adds or subtracts one increment, `ceil(512 / N)` for a ramp of
+  `N` ms. A 9-entry code table holds the increments, so neither the main loop
+  nor the interrupt divides or multiplies:
+
+| Ramp (ms) | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Increment | 128 | 103 | 86 | 74 | 64 | 57 | 52 | 47 | 43 |
+| Calls of a full rise or fall | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 44 | 48 |
+
+- A full rise and a full fall each take exactly `4 * N` calls. At 8 ms the
+  increment is 64, and the envelope writes the same compare sequence as the
+  first design (AC-25).
+- At 4 to 7 ms, two writes in a row can differ by 2 table steps. At 9 to
+  12 ms, the same index can come on two calls in a row.
+- ZERO_WAIT counts its calls in the position variable. A reversal moves one
+  increment in the new direction. The position never jumps.
+
+API and update rule:
+
+- `sidetone_init(tone_hz, ramp_ms)` and `sidetone_set_ramp_ms(ramp_ms)`. The
+  sidetone clamps the value to `SIDETONE_RAMP_MIN_MS` and
+  `SIDETONE_RAMP_MAX_MS` (4 and 12) in `sidetone_config.h`.
+- `sidetone_set_ramp_ms()` runs in the main loop only. Only `sidetone_init()`
+  and the Ramp edit hooks of the menu call it. The keyer and the CW player are
+  off at both times (D-RM6). It writes two single bytes: the increment and the
+  call count. Each store is atomic. The pair is not, and the rule above makes
+  that safe.
+- A ramp change changes only the speed of the envelope. It does not stop or
+  restart a tone (D-RM4).
+- The Ramp preview calls `sidetone_set_ramp_ms(value)`,
+  `sidetone_set_tone_hz(Tone)` and `sidetone_set_on(true)` in this order
+  (D-RM8, `ui-ux.md` UX-73).
+
+CW timing (this replaces the fixed lead time of 32 calls in
+[Step 4](#step-4-integrate-with-cw-timing)):
+
+- `volatile MEM_DATA uint8_t sidetone_ramp_calls` holds `4 * N` (16 to 48). It
+  is defined in `sidetone.c` and declared in
+  `firmware/inc/sidetone/sidetone_shared.h`. The keyer and the player use it
+  as `KEYER_EARLY_RELEASE_TICKS` and `PLAYER_EARLY_RELEASE_TICKS`. The
+  interrupt reads it as memory, not through a call.
+- `timing.h` stops the build when the dit at the maximum speed is shorter than
+  `2 * SIDETONE_RAMP_MAX_CALLS` (96 calls).
+- At 50 WPM with 12 ms, a dit has 96 calls. The rise gets 47 calls and stops at
+  index 31 of 32 (duty 499 instead of 500 permille). The fall ends one call
+  before the mark end. `architector` accepted this (D-RM5). At every other
+  speed and ramp, the rise reaches index 32, and the fall ends on the last mark
+  call.
+
+Carrier update limit:
+
+- The PWM loads a new compare value only at an update event, once per carrier
+  period (datasheet 20.5.6 and 20.7.11). A carrier period is 2.5 ms at 400 Hz
+  and 1 ms at 1000 Hz. So a 4 ms ramp at 400 Hz reaches the pin as only 1 or 2
+  compare values, and it can click more. This is a property of the hardware,
+  not a defect. DC-13 records the shortest ramp with no click at each tone.
+- The setting lets the user compare ramps on the device, as
+  [Target validation](#target-validation) asks. No measurement chose the
+  default yet. The default of 6 ms is a user decision.
+
+Memory and timing (host build, `sidetone_spec.md` section 24.12):
+
+- Flash 28 561 -> 29 105 B (+544 B). xdata 1818 -> 1823 B (+5 B). Internal
+  RAM +3 B. Stack start 0x44 with 188 B free.
+- RISING path 72 -> 94 clocks, FALLING path 69 -> 98 clocks. The worst
+  interrupt path grows by about 26 clocks.
+
+Files: `firmware/inc/board/sidetone_config.h`,
+`firmware/inc/sidetone/sidetone.h`, `firmware/inc/sidetone/sidetone_shared.h`
+(new), `firmware/src/sidetone/sidetone.c`, `firmware/inc/cw/keyer_shared.h`,
+`firmware/inc/cw/player_shared.h`, `firmware/inc/cw/timing.h`,
+`firmware/src/main.c`, the settings and menu modules, and the host tests.
+
 ## Hardware facts and required checks
 
 The following connections are recorded for board revision `CW_MINI_V2.0D`:

@@ -5,12 +5,14 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "board/sidetone_config.h"
 #include "fake_sidetone_pwm.h"
 #include "fake_tick.h"
 #include "settings/settings.h"
 #include "sidetone/sidetone.h"
+#include "sidetone/sidetone_shared.h"
 #include "support/test_assert.h"
 
 /* Independent copy of the duty table of references/internal/sidetone_spec.md section 6.1. */
@@ -43,7 +45,7 @@ static void setup(uint16_t hz, bool is_headphones) {
   fake_sidetone_pwm_reset();
   fake_tick_reset(START_TICK_MS);
   fake_sidetone_pwm_set_headphones(is_headphones);
-  sidetone_init(hz);
+  sidetone_init(hz, 8U);
   fake_sidetone_pwm_clear_log();
 }
 
@@ -131,7 +133,7 @@ static void test_init_is_silent_and_ordered(void) {
 
   fake_sidetone_pwm_reset();
   fake_tick_reset(START_TICK_MS);
-  sidetone_init(600U);
+  sidetone_init(600U, 8U);
 
   TEST_ASSERT_EQUAL(1U, fake_sidetone_pwm_configure_count());
   TEST_ASSERT_EQUAL(19999U, fake_sidetone_pwm_configured_arr());
@@ -889,6 +891,320 @@ static void test_mailbox_preempted_at_every_point(void) {
   end_test();
 }
 
+/* ---------- Ramp setting (sidetone_spec.md section 24) ---------- */
+
+#define RAMP_POSITION_FULL 2048U
+
+/* ceil(512 / N), computed here so the test does not share the increment table of sidetone.c. */
+static uint16_t increment_of(uint8_t ramp_ms) { return (uint16_t)((512U + ramp_ms - 1U) / ramp_ms); }
+
+/* One envelope move of the model of section 6.3; returns the new position. */
+static uint16_t model_move(uint16_t position, uint16_t increment, bool is_up) {
+  if (is_up) {
+    return ((uint16_t)(position + increment) >= RAMP_POSITION_FULL) ? RAMP_POSITION_FULL
+                                                                    : (uint16_t)(position + increment);
+  }
+  return (position > increment) ? (uint16_t)(position - increment) : 0U;
+}
+
+/* At 1000 Hz compare[k] = 12 * duty_permille[k]. */
+static uint16_t compare_at(uint16_t position) { return (uint16_t)(12U * duty_permille[position >> 6]); }
+
+static void setup_ramp(uint8_t ramp_ms) {
+  fake_sidetone_pwm_reset();
+  fake_tick_reset(START_TICK_MS);
+  fake_sidetone_pwm_set_headphones(false);
+  sidetone_init(1000U, ramp_ms);
+  fake_sidetone_pwm_clear_log();
+}
+
+/* Events of the last call other than preemption points and flag reads. */
+static size_t register_event_count(void) {
+  size_t count = 0U;
+  size_t i;
+  for (i = 0U; i < fake_sidetone_pwm_event_count(); ++i) {
+    const uint8_t kind = event_at(i).kind;
+    if ((kind != FAKE_SIDETONE_PWM_EVENT_PREEMPTION_POINT) && (kind != FAKE_SIDETONE_PWM_EVENT_READ_UPDATE_FLAG)) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+/* Runs one service call and checks that it wrote exactly the compare of @p position, and the flag clear at 0. */
+static bool service_writes(uint16_t position, bool has_flag_clear) {
+  bool is_ok;
+  fake_sidetone_pwm_clear_log();
+  sidetone_service();
+  is_ok =
+      (event_at(0U).kind == FAKE_SIDETONE_PWM_EVENT_COMPARE_SPEAKER) && (event_at(0U).value == compare_at(position));
+  if (has_flag_clear) {
+    is_ok = is_ok && (register_event_count() == 2U) && (event_at(1U).kind == FAKE_SIDETONE_PWM_EVENT_CLEAR_UPDATE_FLAG);
+  } else {
+    is_ok = is_ok && (register_event_count() == 1U);
+  }
+  return is_ok;
+}
+
+/* Start call: compare 0, UG, then the speaker ENO bit. */
+static void start_tone(void) {
+  sidetone_set_on(true);
+  fake_sidetone_pwm_clear_log();
+  sidetone_service();
+  TEST_ASSERT_EQUAL(3U, register_event_count());
+  TEST_ASSERT_EQUAL(FAKE_SIDETONE_PWM_EVENT_COMPARE_SPEAKER, event_at(0U).kind);
+  TEST_ASSERT_EQUAL(0U, event_at(0U).value);
+  TEST_ASSERT_EQUAL(FAKE_SIDETONE_PWM_EVENT_GENERATE_UPDATE, event_at(1U).kind);
+  TEST_ASSERT_EQUAL(FAKE_SIDETONE_PWM_EVENT_SET_ENO, event_at(2U).kind);
+  TEST_ASSERT_EQUAL(0x02U, event_at(2U).value);
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_RISING, sidetone_state());
+}
+
+/* AC-3, AC-25 (rise at 8 ms is one table step per call) */
+static void test_ramp_rise_timing(void) {
+  uint8_t ramp_ms;
+  for (ramp_ms = SIDETONE_RAMP_MIN_MS; ramp_ms <= SIDETONE_RAMP_MAX_MS; ++ramp_ms) {
+    const uint16_t increment = increment_of(ramp_ms);
+    const uint16_t calls = (uint16_t)(4U * ramp_ms);
+    uint16_t j;
+    setup_ramp(ramp_ms);
+    TEST_ASSERT_EQUAL(calls, sidetone_ramp_calls);
+    start_tone();
+    for (j = 1U; j <= calls; ++j) {
+      const uint16_t position = (j * increment >= RAMP_POSITION_FULL) ? RAMP_POSITION_FULL : (uint16_t)(j * increment);
+      if (!TEST_ASSERT(service_writes(position, false))) {
+        fprintf(stderr, "ramp %u ms, rise call %u\n", ramp_ms, j);
+      }
+      if (ramp_ms == 8U) {
+        TEST_ASSERT_EQUAL(compare_at((uint16_t)(j << 6)), fake_sidetone_pwm_compare_speaker());
+      }
+      TEST_ASSERT_EQUAL((j == calls) ? SIDETONE_STATE_STEADY : SIDETONE_STATE_RISING, sidetone_state());
+    }
+    TEST_ASSERT_EQUAL(6000U, fake_sidetone_pwm_compare_speaker());
+    fake_sidetone_pwm_clear_log();
+    service(10U);
+    TEST_ASSERT_EQUAL(0U, register_event_count());
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+    end_test();
+  }
+}
+
+/* AC-4, AC-25 (fall at 8 ms is one table step per call) */
+static void test_ramp_fall_timing(void) {
+  uint8_t ramp_ms;
+  for (ramp_ms = SIDETONE_RAMP_MIN_MS; ramp_ms <= SIDETONE_RAMP_MAX_MS; ++ramp_ms) {
+    const uint16_t increment = increment_of(ramp_ms);
+    const uint16_t calls = (uint16_t)(4U * ramp_ms);
+    uint16_t position = RAMP_POSITION_FULL;
+    uint16_t k;
+    setup_ramp(ramp_ms);
+    start_tone();
+    service(calls);
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+    sidetone_set_on(false);
+    for (k = 1U; k <= calls; ++k) {
+      position = model_move(position, increment, false);
+      TEST_ASSERT_EQUAL((k == calls) ? 0U : 1U, (position != 0U) ? 1U : 0U);
+      if (!TEST_ASSERT(service_writes(position, k == calls))) {
+        fprintf(stderr, "ramp %u ms, fall call %u\n", ramp_ms, k);
+      }
+      if (ramp_ms == 8U) {
+        TEST_ASSERT_EQUAL(compare_at((uint16_t)((32U - k) << 6)), fake_sidetone_pwm_compare_speaker());
+      }
+      TEST_ASSERT_EQUAL((k == calls) ? SIDETONE_STATE_ZERO_WAIT : SIDETONE_STATE_FALLING, sidetone_state());
+    }
+    TEST_ASSERT_EQUAL(0x02U, fake_sidetone_pwm_eno());
+    fake_sidetone_pwm_update_event();
+    sidetone_service();
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_OFF, sidetone_state());
+    TEST_ASSERT_EQUAL(0U, fake_sidetone_pwm_eno());
+    end_test();
+  }
+}
+
+/* Runs the model and the sidetone to the end of the current ramp; every write must match the model. */
+static void follow_to_end(uint16_t position, uint16_t increment, bool is_up) {
+  size_t calls;
+  for (calls = 0U; calls < MAX_SERVICE_CALLS; ++calls) {
+    const uint16_t next = model_move(position, increment, is_up);
+    if (is_up && (position == RAMP_POSITION_FULL)) {
+      break;
+    }
+    if (!TEST_ASSERT(service_writes(next, !is_up && (next == 0U)))) {
+      return;
+    }
+    position = next;
+    if (!is_up && (position == 0U)) {
+      break;
+    }
+  }
+  TEST_ASSERT_EQUAL(is_up ? SIDETONE_STATE_STEADY : SIDETONE_STATE_ZERO_WAIT, sidetone_state());
+}
+
+/* AC-7 for ramps 4, 6, 8 and 12 ms: reversal after each rise call and each fall call. */
+static void test_ramp_reversal_at_every_position(void) {
+  static const uint8_t ramps[4] = {4U, 6U, 8U, 12U};
+  size_t r;
+  for (r = 0U; r < 4U; ++r) {
+    const uint16_t increment = increment_of(ramps[r]);
+    const uint16_t calls = (uint16_t)(4U * ramps[r]);
+    uint16_t point;
+    for (point = 1U; point < calls; ++point) {
+      const uint16_t up_position = (uint16_t)(point * increment);
+      uint16_t down_position;
+      uint16_t k;
+      /* Rise for point calls, then off: the next write is one increment down. */
+      setup_ramp(ramps[r]);
+      start_tone();
+      service(point);
+      sidetone_set_on(false);
+      follow_to_end(up_position, increment, false);
+      /* From STEADY, fall for point calls, then on: the next write is one increment up. */
+      setup_ramp(ramps[r]);
+      start_tone();
+      service(calls);
+      sidetone_set_on(false);
+      down_position = RAMP_POSITION_FULL;
+      for (k = 0U; k < point; ++k) {
+        down_position = model_move(down_position, increment, false);
+      }
+      service(point);
+      sidetone_set_on(true);
+      follow_to_end(down_position, increment, true);
+      end_test();
+    }
+  }
+}
+
+/* AC-7: two writes in a row differ by at most ceil(I / 64) table indexes. */
+static void test_ramp_step_limit(void) {
+  uint8_t ramp_ms;
+  for (ramp_ms = SIDETONE_RAMP_MIN_MS; ramp_ms <= SIDETONE_RAMP_MAX_MS; ++ramp_ms) {
+    const unsigned limit = (increment_of(ramp_ms) + 63U) / 64U;
+    int previous = 0;
+    size_t i;
+    setup_ramp(ramp_ms);
+    rise_to_steady();
+    sidetone_set_on(false);
+    service(MAX_SERVICE_CALLS);
+    for (i = 0U; i < fake_sidetone_pwm_event_count(); ++i) {
+      const fake_sidetone_pwm_event_t event = event_at(i);
+      if (event.kind == FAKE_SIDETONE_PWM_EVENT_COMPARE_SPEAKER) {
+        int index = 0;
+        while ((index < 32) && (compare_at((uint16_t)(index << 6)) != event.value)) {
+          ++index;
+        }
+        TEST_ASSERT((unsigned)abs(index - previous) <= limit);
+        previous = index;
+      }
+    }
+    TEST_ASSERT_EQUAL((ramp_ms <= 7U) ? 2U : 1U, limit);
+    end_test();
+  }
+}
+
+/* AC-26 */
+static void test_ramp_clamp(void) {
+  static const uint8_t low[3] = {0U, 1U, 3U};
+  static const uint8_t high[3] = {13U, 100U, 255U};
+  unsigned value;
+  size_t i;
+  for (value = 0U; value <= 255U; ++value) {
+    const unsigned clamped = (value < 4U) ? 4U : ((value > 12U) ? 12U : value);
+    sidetone_set_ramp_ms((uint8_t)value);
+    TEST_ASSERT_EQUAL(4U * clamped, sidetone_ramp_calls);
+    setup_ramp((uint8_t)value);
+    TEST_ASSERT_EQUAL(4U * clamped, sidetone_ramp_calls);
+  }
+  for (i = 0U; i < 3U; ++i) {
+    setup_ramp(low[i]);
+    start_tone();
+    service(15U);
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_RISING, sidetone_state());
+    sidetone_service();
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+    setup_ramp(4U);
+    sidetone_set_ramp_ms(high[i]);
+    start_tone();
+    service(47U);
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_RISING, sidetone_state());
+    sidetone_service();
+    TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+    end_test();
+  }
+}
+
+/* AC-27: a ramp change at each call of a rise and of a fall only changes the speed. */
+static void ramp_change_case(uint8_t from_ms, uint8_t to_ms) {
+  const uint16_t from_increment = increment_of(from_ms);
+  const uint16_t calls = (uint16_t)(4U * from_ms);
+  uint16_t point;
+  for (point = 1U; point < calls; ++point) {
+    uint16_t position = (uint16_t)(point * from_increment);
+    uint16_t k;
+    setup_ramp(from_ms);
+    start_tone();
+    service(point);
+    sidetone_set_ramp_ms(to_ms);
+    follow_to_end(position, increment_of(to_ms), true);
+    TEST_ASSERT_EQUAL(6000U, fake_sidetone_pwm_compare_speaker());
+
+    setup_ramp(from_ms);
+    start_tone();
+    service(calls);
+    sidetone_set_on(false);
+    position = RAMP_POSITION_FULL;
+    for (k = 0U; k < point; ++k) {
+      position = model_move(position, from_increment, false);
+    }
+    service(point);
+    sidetone_set_ramp_ms(to_ms);
+    follow_to_end(position, increment_of(to_ms), false);
+    end_test();
+  }
+}
+
+static void test_ramp_change_during_ramp(void) {
+  ramp_change_case(4U, 12U);
+  ramp_change_case(12U, 4U);
+  ramp_change_case(6U, 7U);
+}
+
+/* AC-27: a change in OFF, STEADY or ZERO_WAIT writes no register and changes no state. */
+static void test_ramp_change_outside_ramp(void) {
+  setup_ramp(6U);
+  sidetone_set_ramp_ms(12U);
+  TEST_ASSERT_EQUAL(0U, register_event_count());
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_OFF, sidetone_state());
+  TEST_ASSERT(!sidetone_is_busy());
+  start_tone();
+  service(48U);
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+  fake_sidetone_pwm_clear_log();
+  sidetone_set_ramp_ms(4U);
+  sidetone_service();
+  TEST_ASSERT_EQUAL(0U, register_event_count());
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_STEADY, sidetone_state());
+  sidetone_set_on(false);
+  service(16U);
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_ZERO_WAIT, sidetone_state());
+  fake_sidetone_pwm_clear_log();
+  sidetone_set_ramp_ms(9U);
+  TEST_ASSERT_EQUAL(0U, register_event_count());
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_ZERO_WAIT, sidetone_state());
+  fake_sidetone_pwm_update_event();
+  sidetone_service();
+  TEST_ASSERT_EQUAL(SIDETONE_STATE_OFF, sidetone_state());
+  end_test();
+}
+
+/* AC-28 */
+static void test_ramp_range_matches_settings(void) {
+  TEST_ASSERT_EQUAL(settings_min(SETTINGS_ID_RAMP_MS), SIDETONE_RAMP_MIN_MS);
+  TEST_ASSERT_EQUAL(settings_max(SETTINGS_ID_RAMP_MS), SIDETONE_RAMP_MAX_MS);
+  TEST_ASSERT_EQUAL(48U, SIDETONE_RAMP_MAX_CALLS);
+}
+
 int main(void) {
   TEST_RUN(test_init_is_silent_and_ordered);
   TEST_RUN(test_full_rise_at_1000hz_writes_duty_table);
@@ -913,5 +1229,13 @@ int main(void) {
   TEST_RUN(test_busy);
   TEST_RUN(test_update_only_at_start);
   TEST_RUN(test_mailbox_preempted_at_every_point);
+  TEST_RUN(test_ramp_rise_timing);
+  TEST_RUN(test_ramp_fall_timing);
+  TEST_RUN(test_ramp_reversal_at_every_position);
+  TEST_RUN(test_ramp_step_limit);
+  TEST_RUN(test_ramp_clamp);
+  TEST_RUN(test_ramp_change_during_ramp);
+  TEST_RUN(test_ramp_change_outside_ramp);
+  TEST_RUN(test_ramp_range_matches_settings);
   return TEST_FINISH();
 }

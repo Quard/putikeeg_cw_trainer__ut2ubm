@@ -11,6 +11,7 @@ static fake_sidetone_call_t fake_log[FAKE_SIDETONE_LOG_SIZE];
 static size_t fake_log_count;
 static bool fake_is_log_overflowed;
 static uint16_t fake_last_tone;
+static uint8_t fake_last_ramp;
 static bool fake_is_last_on;
 static bool fake_is_busy;
 static size_t fake_polls;
@@ -30,6 +31,7 @@ void fake_sidetone_reset(void) {
   fake_log_count = 0U;
   fake_is_log_overflowed = false;
   fake_last_tone = 0U;
+  fake_last_ramp = 0U;
   fake_is_last_on = false;
   fake_is_busy = false;
   fake_polls = 0U;
@@ -45,16 +47,25 @@ fake_sidetone_call_t fake_sidetone_call_at(size_t index) {
 }
 
 uint16_t fake_sidetone_last_tone(void) { return fake_last_tone; }
+uint8_t fake_sidetone_last_ramp(void) { return fake_last_ramp; }
 bool fake_sidetone_last_on(void) { return fake_is_last_on; }
 size_t fake_sidetone_poll_count(void) { return fake_polls; }
 size_t fake_sidetone_service_count(void) { return fake_services; }
 bool fake_sidetone_is_log_overflowed(void) { return fake_is_log_overflowed; }
 
-void sidetone_init(uint16_t tone_hz) { fake_record(FAKE_SIDETONE_CALL_INIT, tone_hz); }
+void sidetone_init(uint16_t tone_hz, uint8_t ramp_ms) {
+  fake_last_ramp = ramp_ms;
+  fake_record(FAKE_SIDETONE_CALL_INIT, tone_hz);
+}
 
 void sidetone_set_tone_hz(uint16_t tone_hz) {
   fake_last_tone = tone_hz;
   fake_record(FAKE_SIDETONE_CALL_TONE, tone_hz);
+}
+
+void sidetone_set_ramp_ms(uint8_t ramp_ms) {
+  fake_last_ramp = ramp_ms;
+  fake_record(FAKE_SIDETONE_CALL_RAMP, ramp_ms);
 }
 
 void sidetone_set_on(bool is_on) {

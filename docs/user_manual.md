@@ -15,11 +15,10 @@ This version has the menu, the settings, the display controls, the [Free Input](
 - In `Receiving`, the device plays Morse code and you pick the characters with the buttons. In `Sending`, the
   device shows characters and words and you key them. Both modes teach the characters in Koch order, one level at
   a time. Before each session, you choose the level. You can repeat each level up to the level that you reached.
-- The device makes three sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
-  Tone preview. When you edit `Tone` in
-  `Settings > CW`, the device plays the edited tone for about 0.3 s. Each change of the value plays the new tone
-  again. At a limit, a press plays nothing new. When you leave the edit, the tone stops at once. The volume knob
-  sets the loudness. With headphones plugged in, the headphones play instead of the speaker.
+- The device makes these sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
+  preview of the `Tone` and `Ramp` settings (see [Tone and Ramp preview](#tone-and-ramp-preview)). `Ramp` sets how
+  fast each tone starts and stops (see [Ramp setting](#ramp-setting)). The volume knob sets the loudness. With
+  headphones plugged in, the headphones play instead of the speaker.
 - The device stores your training level for each mode and each speed. It stores no other statistics.
 - `Backlight` and `Contrast` change the display. The other settings set Free Input and the training modes (see
   [Settings for training](#settings-for-training)).
@@ -72,6 +71,35 @@ Notes:
 - A value item shows its value at the right side of the row.
 - In the main menu, `Receiving` and `Sending` show your level at the right side of the row, for example `L12` (see
   [Level in the main menu](#level-in-the-main-menu)).
+- The screen has room for 7 items. A list with more items scrolls (see [Scroll in a long list](#scroll-in-a-long-list)).
+
+### Scroll in a long list
+
+In this version, only `Settings > CW` has more than 7 items. It has 8 items, and the screen shows 7 of them at a
+time. The other lists show all their items.
+
+In `Settings > CW`, the title bar also shows the position of the cursor at its right end, for example `1/8`. The
+first number is the item of the cursor. The second number is the number of items. The mark has the same
+inverted colors as the title.
+
+```text
+Settings > CW         1/8
+Tone             600 Hz
+Ramp               6 ms
+RX Speed         32 WPM
+RX Eff. Speed    32 WPM
+TX Speed         20 WPM
+TX Eff. Speed    20 WPM
+Key Type       Iambic B
+```
+
+- When the cursor moves down past the last row, the list moves up by one row. `Paddle` then shows in the last row,
+  and `Tone` goes out of view. The cursor stays in the last row.
+- When the cursor moves up past the first row, the list moves down by one row.
+- When the cursor wraps from `Paddle` to `Tone`, the first 7 items show. When it wraps from `Tone` to `Paddle`, the
+  last 7 items show.
+- A speed and its effective speed always show together.
+- When you open `Settings > CW`, the cursor is on `Tone`, and the first 7 items show.
 
 ## Startup screen
 
@@ -117,6 +145,7 @@ CW Trainer
 ├── Settings
 │   ├── CW
 │   │   ├── Tone
+│   │   ├── Ramp
 │   │   ├── RX Speed
 │   │   ├── RX Eff. Speed
 │   │   ├── TX Speed
@@ -371,7 +400,7 @@ Examples (values are rounded):
   play instead of the speaker. A headphone plug change takes effect at the next silence.
 - With `Straight`, the tone follows the contact.
 - With `Iambic A` and `Iambic B`, the tone starts with the element and ends with it.
-- The tone rises in 8 ms and falls in 8 ms, to prevent clicks.
+- The tone rises and falls in the `Ramp` time, to prevent clicks (see [Ramp setting](#ramp-setting)).
 - The keyer runs in a timer interrupt, so the display never delays the tone.
 - In the menu, the paddle gives no tone.
 
@@ -613,6 +642,7 @@ setting, and leave `Settings` to save it. Then open the mode again.
 | Setting | In `Receiving` | In `Sending` |
 | --- | --- | --- |
 | `Tone` | The pitch of the playback. | The pitch of the sidetone. |
+| `Ramp` | The rise time and the fall time of the playback tone. | The rise time and the fall time of the sidetone. |
 | `RX Speed` | The character speed of the playback. It also selects the stored level (see [Progress](#progress)). | No effect. |
 | `RX Eff. Speed` | The effective speed of the playback. | No effect. |
 | `TX Speed` | No effect. | The speed of the keyer and the decoder. It also selects the stored level. |
@@ -1122,6 +1152,7 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 | Menu | Setting | Values | Step | Unit | Default |
 | --- | --- | --- | --- | --- | --- |
 | Settings > CW | `Tone` | 400 to 1000 | 10 | Hz | 600 Hz |
+| Settings > CW | `Ramp` | 4 to 12 | 1 | ms | 6 ms |
 | Settings > CW | `RX Speed` | 5 to 50 | 1 | WPM | 32 WPM |
 | Settings > CW | `RX Eff. Speed` | 5 to the current `RX Speed` | 1 | WPM | Same as `RX Speed` (32 WPM) |
 | Settings > CW | `TX Speed` | 5 to 50 | 1 | WPM | 20 WPM |
@@ -1137,9 +1168,45 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 `RX Speed` and `TX Speed` are the character speeds. `RX Eff. Speed` and `TX Eff. Speed` are the effective
 (Farnsworth) speeds.
 
-`Backlight` and `Contrast` change the display at each step while you edit them. The other settings take effect the
-next time you open Free Input, `Receiving` or `Sending`. [Settings for training](#settings-for-training) tells which
+`Backlight` and `Contrast` change the display at each step while you edit them. `Tone` and `Ramp` play a preview
+while you edit them (see [Tone and Ramp preview](#tone-and-ramp-preview)). The other settings take effect the next
+time you open Free Input, `Receiving` or `Sending`. [Settings for training](#settings-for-training) tells which
 setting affects which training mode.
+
+### Ramp setting
+
+`Settings > CW > Ramp` sets the rise time and the fall time of the tone. The rise time is the time from silence to
+full level. The fall time is the time from full level to silence. One value sets both. It applies to every sound:
+the sidetone in Free Input and Sending, the playback in Receiving, and the previews.
+
+- The values are 4 ms to 12 ms, in steps of 1 ms. The default is 6 ms.
+- A short ramp gives hard edges. A long ramp gives soft edges. If the ramp is too short, you can hear a click at
+  the start and at the end of each tone.
+- Earlier firmware versions had no `Ramp` setting. They used a fixed ramp of 8 ms. The default of 6 ms gives a
+  little shorter edges. To get the sound of the earlier versions, set `Ramp` to 8 ms.
+- At 50 WPM with `Ramp` = 12 ms, a dit is too short for a full rise and a full fall. The dit rises to one step
+  below full level (0.2 % less) and then falls. The length of the dit and of the gaps does not change.
+
+> **Note:** A short ramp at a low tone can click more. The device changes the level of the tone only once in each
+> period of the tone. One period is 2.5 ms at 400 Hz and 1 ms at 1000 Hz. So at 400 Hz, a 4 ms ramp has only one or
+> two level steps. If you hear a click, set a longer `Ramp` or a higher `Tone`.
+
+### Tone and Ramp preview
+
+When you edit `Tone` or `Ramp` in `Settings > CW`, the device plays a preview:
+
+- When you press `enter` to start the edit, the tone plays for about 0.3 s.
+- Each change of the value plays the tone again for about 0.3 s. In the `Tone` edit, you hear the new pitch. In the
+  `Ramp` edit, you hear the pitch of the `Tone` setting with the new rise and fall.
+- At a limit, a press plays nothing new.
+- When you leave the edit, the tone stops at once.
+
+To compare two `Ramp` values by ear, press `prev` or `next` one time, wait about 0.5 s, and press again. Each single
+press then gives one full beep with the new rise and fall. If you press again while the tone still plays, the tone
+does not start again. Only its fall uses the new value.
+
+If you hold `prev` or `next` in the `Ramp` edit, the tone stays on while the value changes. You hear only the first
+rise and the last fall. The tone stops about 0.3 s after the last change.
 
 ### Effective-speed rule
 
@@ -1190,9 +1257,9 @@ The device uses the default values in these cases. It shows no message.
 - No settings are saved yet, for example at the first start.
 - The saved settings are damaged, for example after a power failure during a save.
 
-A firmware download can keep or delete the saved settings. If the device
-keeps the settings of an earlier firmware version, `Prosigns` is `Both`, and the other settings stay as they were.
-The device shows no message. If the earlier version had no `Paddle` setting, `Paddle` is `Normal`.
+A firmware download can keep or delete the saved settings. If the device keeps the settings of an earlier firmware
+version, the settings stay as they were. A setting that the earlier version did not have gets its default value:
+`Prosigns` is `Both`, `Paddle` is `Normal`, and `Ramp` is 6 ms. The device shows no message.
 
 This version saves the settings in a new format. It writes the new format at the first save, after you change a
 setting. An earlier firmware version cannot read the new format. If you download an earlier firmware version after

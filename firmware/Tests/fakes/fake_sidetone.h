@@ -8,7 +8,8 @@
 
 /*
  * Host fake of sidetone/sidetone.h for the menu tests (references/internal/sidetone_spec.md section 12.2). It logs
- * the calls of sidetone_init(), sidetone_set_tone_hz() and sidetone_set_on() in order and counts the other calls.
+ * the calls of sidetone_init(), sidetone_set_tone_hz(), sidetone_set_ramp_ms() and sidetone_set_on() in order and
+ * counts the other calls.
  */
 
 #include <stdbool.h>
@@ -20,6 +21,7 @@
 #define FAKE_SIDETONE_CALL_INIT 1U /* value: tone */
 #define FAKE_SIDETONE_CALL_TONE 2U /* value: tone */
 #define FAKE_SIDETONE_CALL_ON 3U   /* value: 1 for on, 0 for off */
+#define FAKE_SIDETONE_CALL_RAMP 4U /* value: ramp in ms, as passed */
 
 typedef struct {
   uint8_t kind; /* FAKE_SIDETONE_CALL_* */
@@ -35,6 +37,8 @@ size_t fake_sidetone_call_count(void);
 fake_sidetone_call_t fake_sidetone_call_at(size_t index);
 /** Returns the last sidetone_set_tone_hz() value, or 0 without a call. */
 uint16_t fake_sidetone_last_tone(void);
+/** Returns the last ramp of sidetone_set_ramp_ms() or sidetone_init(), as passed, or 0 without a call. */
+uint8_t fake_sidetone_last_ramp(void);
 /** Returns the last sidetone_set_on() value, false without a call. */
 bool fake_sidetone_last_on(void);
 size_t fake_sidetone_poll_count(void);

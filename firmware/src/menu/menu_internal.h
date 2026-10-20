@@ -80,6 +80,8 @@ extern const menu_text_t MEM_CODE menu_about_link_rows[MENU_ABOUT_LINK_ROWS];
 /* State. menu_depth is 1..MENU_STACK_DEPTH; level menu_depth - 1 is the top. */
 extern MEM_XDATA uint8_t menu_stack_nodes[MENU_STACK_DEPTH];
 extern MEM_XDATA uint8_t menu_stack_cursors[MENU_STACK_DEPTH];
+/* Index of the item in row 1 of each level. */
+extern MEM_XDATA uint8_t menu_stack_tops[MENU_STACK_DEPTH];
 extern MEM_XDATA uint8_t menu_depth;
 extern MEM_XDATA uint8_t menu_current_screen;
 extern MEM_XDATA uint8_t menu_current_choice;

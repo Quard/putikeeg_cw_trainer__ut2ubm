@@ -31,7 +31,8 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_CONTRAST 9U
 #define SETTINGS_ID_PADDLE_SWAP 10U   /* 0 Normal, 1 Reversed */
 #define SETTINGS_ID_PROSIGN_STYLE 11U /* SETTINGS_PROSIGN_*: 0 Punctuation, 1 Prosign, 2 Both */
-#define SETTINGS_ID_COUNT 12U
+#define SETTINGS_ID_RAMP_MS 12U       /* sidetone rise and fall time, 4..12 ms */
+#define SETTINGS_ID_COUNT 13U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
@@ -56,13 +57,13 @@ typedef uint8_t settings_save_status_t;
 #define SETTINGS_RECORD_SIZE 15U
 #define SETTINGS_MAGIC_0 0x43U /* 'C' */
 #define SETTINGS_MAGIC_1 0x57U /* 'W' */
-#define SETTINGS_LAYOUT_VERSION 2U
+#define SETTINGS_LAYOUT_VERSION 3U
 
 /**
- * Reads the record and checks read status, magic, version and CRC in this order. Layout versions 1 and 2 pass; a
- * version 1 record gets the default prosign style. On a failure all values take their defaults. On success every
- * field is clamped. Never writes the EEPROM. Sets the change baseline to the resulting values and clears the edited
- * flag. Call once at start-up, before any other settings call.
+ * Reads the record and checks read status, magic, version and CRC in this order. Layout versions 1, 2 and 3 pass; a
+ * version 1 record gets the default prosign style, and a version 1 or 2 record gets the default ramp. On a failure
+ * all values take their defaults. On success every field is clamped. Never writes the EEPROM. Sets the change baseline
+ * to the resulting values and clears the edited flag. Call once at start-up, before any other settings call.
  */
 settings_load_status_t settings_load(void);
 

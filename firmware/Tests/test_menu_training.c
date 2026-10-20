@@ -266,6 +266,7 @@ static void test_v149_level_per_speed(void) {
   harness_event(BUTTON_EVENT_ENTER);
   harness_event(BUTTON_EVENT_ENTER);
   harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_ENTER);
   for (index = 0U; index < 12U; ++index) {
     harness_event(BUTTON_EVENT_PREV);

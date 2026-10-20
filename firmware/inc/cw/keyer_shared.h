@@ -16,6 +16,7 @@
 
 #include "board/sidetone_config.h"
 #include "mcu/compiler.h"
+#include "sidetone/sidetone_shared.h"
 
 typedef uint8_t keyer_phase_t;
 #define KEYER_PHASE_IDLE 0U
@@ -28,7 +29,7 @@ typedef uint8_t keyer_phase_t;
 #define KEYER_FILTER_OPEN_MAX 3U             /* closed samples of 8 at or below which it votes open */
 #define KEYER_QUEUE_SIZE 8U                  /* power of 2, divides 256 */
 #define KEYER_QUEUE_MASK (KEYER_QUEUE_SIZE - 1U)
-#define KEYER_EARLY_RELEASE_TICKS SIDETONE_RAMP_STEPS /* 32: the fall ends at the mark end */
+#define KEYER_EARLY_RELEASE_TICKS sidetone_ramp_calls /* 4 x Ramp ms: the fall ends at the mark end */
 #define KEYER_CHAR_GAP_DITS 2U
 #define KEYER_WORD_GAP_UNITS 5U
 

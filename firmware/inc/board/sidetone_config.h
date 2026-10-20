@@ -20,6 +20,10 @@
 #define SIDETONE_TONE_MIN_HZ 400U  /* equal to settings_min(SETTINGS_ID_TONE_HZ), host test AC-11 */
 #define SIDETONE_TONE_MAX_HZ 1000U /* equal to settings_max(SETTINGS_ID_TONE_HZ), host test AC-11 */
 #define SIDETONE_RAMP_STEPS 32U    /* the duty table has SIDETONE_RAMP_STEPS + 1 values */
+#define SIDETONE_RAMP_MIN_MS 4U    /* equal to settings_min(SETTINGS_ID_RAMP_MS), host test AC-28 */
+#define SIDETONE_RAMP_MAX_MS 12U   /* equal to settings_max(SETTINGS_ID_RAMP_MS), host test AC-28 */
+#define SIDETONE_RAMP_CALLS_PER_MS (SIDETONE_SERVICE_HZ / 1000U)                    /* 4 */
+#define SIDETONE_RAMP_MAX_CALLS (SIDETONE_RAMP_CALLS_PER_MS * SIDETONE_RAMP_MAX_MS) /* 48 */
 #ifndef SIDETONE_PLUG_DEBOUNCE_MS
 #define SIDETONE_PLUG_DEBOUNCE_MS 50U /* -D; not checked on the device */
 #endif
@@ -53,6 +57,13 @@
 #endif
 #if SIDETONE_ZERO_WAIT_CALLS > 255U
 #error "SIDETONE_ZERO_WAIT_LIMIT must fit the 8-bit envelope index"
+#endif
+/* The ramp increment table of sidetone.c holds values for 4 calls per ms. */
+#if SIDETONE_SERVICE_HZ != 4000U
+#error "The sidetone ramp increments assume 4000 service calls per second"
+#endif
+#if (SIDETONE_RAMP_MIN_MS < 1U) || (SIDETONE_RAMP_MIN_MS > SIDETONE_RAMP_MAX_MS) || (SIDETONE_RAMP_MAX_CALLS > 255U)
+#error "The ramp range must be 1 <= SIDETONE_RAMP_MIN_MS <= SIDETONE_RAMP_MAX_MS, with at most 255 calls"
 #endif
 
 #endif /* BOARD_SIDETONE_CONFIG_H */

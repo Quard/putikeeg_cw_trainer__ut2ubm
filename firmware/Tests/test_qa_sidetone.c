@@ -585,7 +585,7 @@ static void qa_setup(uint16_t hz, bool is_headphones) {
   fake_sidetone_pwm_reset();
   fake_tick_reset(1000U);
   fake_sidetone_pwm_set_headphones(is_headphones);
-  sidetone_init(hz);
+  sidetone_init(hz, 8U);
   model_init(hz, is_headphones);
 
   for (i = 0U; i < fake_sidetone_pwm_event_count(); ++i) {

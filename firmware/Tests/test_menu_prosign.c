@@ -178,6 +178,12 @@ static bool title_is(const char* title) {
   return row_matches(0, 0, 127, &text, 1U);
 }
 
+/* The CW title bar with the "1/8" mark right-aligned to column 24 (ui-ux.md section 5.1). */
+static bool cw_title_is_first(void) {
+  const row_text_t texts[2] = {{0, "Settings > CW", true}, {22, "1/8", true}};
+  return row_matches(0, 0, 127, texts, 2U);
+}
+
 /* A list row: label in column 0, an optional value right-aligned to column 22, an optional '>' in column 24. */
 static bool list_row_is(int r, const char* label, const char* value, bool has_submenu, bool is_selected) {
   row_text_t texts[3];
@@ -351,9 +357,9 @@ static void test_v82_save(void) {
 
 /* V-83 (AC-P9, AC-P10): a layout version 1 record gives Both and keeps its values. */
 static void test_v83_version_1_record(void) {
-  static const char* const cw_values[7] = {"600 Hz", "32 WPM", "32 WPM", "20 WPM", "20 WPM", "Iambic B", "Reversed"};
-  static const char* const cw_labels[7] = {"Tone",          "RX Speed", "RX Eff. Speed", "TX Speed",
-                                           "TX Eff. Speed", "Key Type", "Paddle"};
+  static const char* const cw_values[7] = {"600 Hz", "6 ms", "32 WPM", "32 WPM", "20 WPM", "20 WPM", "Iambic B"};
+  static const char* const cw_labels[7] = {"Tone",     "Ramp",          "RX Speed", "RX Eff. Speed",
+                                           "TX Speed", "TX Eff. Speed", "Key Type"};
   int i;
 
   fake_iap_reset();
@@ -363,7 +369,7 @@ static void test_v83_version_1_record(void) {
   open_settings();
   TEST_ASSERT(settings_list_is("Both", 0));
   send(ENTER);
-  TEST_ASSERT(title_is("Settings > CW"));
+  TEST_ASSERT(cw_title_is_first());
   for (i = 0; i < 7; ++i) {
     TEST_ASSERT(list_row_is(i + 1, cw_labels[i], cw_values[i], false, i == 0));
   }
@@ -383,8 +389,8 @@ static void test_v83_version_1_record(void) {
   send(MENU);
   TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
   TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
-  TEST_ASSERT_EQUAL(0x02U, fake_iap_memory()[RECORD_VERSION]);
-  TEST_ASSERT_EQUAL(0x0BU, fake_iap_memory()[RECORD_FLAGS]);
+  TEST_ASSERT_EQUAL(0x03U, fake_iap_memory()[RECORD_VERSION]);
+  TEST_ASSERT_EQUAL(0x6BU, fake_iap_memory()[RECORD_FLAGS]);
   TEST_ASSERT_EQUAL(0x62U, fake_iap_memory()[3]);
   TEST_ASSERT_EQUAL(0x02U, fake_iap_memory()[4]);
 
@@ -396,7 +402,8 @@ static void test_v83_version_1_record(void) {
   TEST_ASSERT(settings_list_is("Both", 0));
   send(ENTER);
   TEST_ASSERT(list_row_is(1, "Tone", "610 Hz", false, true));
-  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", false, false));
+  send(PREV);
+  TEST_ASSERT(list_row_is(7, "Paddle", "Reversed", false, true));
 }
 
 int main(void) {
