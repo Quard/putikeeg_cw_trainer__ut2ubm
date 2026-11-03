@@ -367,10 +367,17 @@ static void open_cw(void) {
   send(ENTER); /* CW */
 }
 
+static void open_training(void) {
+  select_settings();
+  send(ENTER);
+  send(NEXT);
+  send(ENTER);
+}
+
 static void open_display(void) {
   select_settings();
   send(ENTER);
-  send_times(NEXT, 4U);
+  send_times(NEXT, 3U);
   send(ENTER);
 }
 
@@ -403,13 +410,21 @@ static void test_v02_bad_crc_record(void) {
   send(MENU);
   TEST_ASSERT(title_is("Settings"));
   TEST_ASSERT(submenu_row_is(1, "CW", true));
-  TEST_ASSERT(list_row_is(2, "Show CW Code", "On", false));
+  TEST_ASSERT(submenu_row_is(2, "Training", false));
   TEST_ASSERT(list_row_is(3, "Prosigns", "Both", false));
-  TEST_ASSERT(list_row_is(4, "Max Word Length", "5", false));
-  TEST_ASSERT(submenu_row_is(5, "Display", false));
-  TEST_ASSERT(list_row_is(6, "Reset Statistics", NULL, false));
+  TEST_ASSERT(submenu_row_is(4, "Display", false));
+  TEST_ASSERT(list_row_is(5, "Reset Statistics", NULL, false));
+  TEST_ASSERT(row_is_blank(6));
   TEST_ASSERT(row_is_blank(7));
-  send_times(NEXT, 4U);
+  send(NEXT);
+  send(ENTER);
+  TEST_ASSERT(title_is("Settings > Training"));
+  TEST_ASSERT(list_row_is(1, "RX Attempts", "3", true));
+  TEST_ASSERT(list_row_is(2, "TX Attempts", "3", false));
+  TEST_ASSERT(list_row_is(3, "Max Word Length", "5", false));
+  TEST_ASSERT(list_row_is(4, "Show CW Code", "On", false));
+  send(MENU);
+  send_times(NEXT, 2U);
   send(ENTER);
   TEST_ASSERT(title_is("Settings > Display"));
   TEST_ASSERT(list_row_is(1, "Backlight", "8", true));
@@ -560,14 +575,13 @@ static void test_v11_key_type_choices(void) {
 
 static void test_v12_show_cw_code(void) {
   start_empty();
-  select_settings();
+  open_training();
+  send_times(NEXT, 3U);
   send(ENTER);
-  send(NEXT);
-  send(ENTER);
-  TEST_ASSERT(probe_edit(2, 3));
-  TEST_ASSERT(edit_row_is(2, "Show CW Code", "On", 3, true, false));
+  TEST_ASSERT(probe_edit(4, 3));
+  TEST_ASSERT(edit_row_is(4, "Show CW Code", "On", 3, true, false));
   send(PREV);
-  TEST_ASSERT(edit_row_is(2, "Show CW Code", "Off", 3, false, true));
+  TEST_ASSERT(edit_row_is(4, "Show CW Code", "Off", 3, false, true));
   menu_handle(PREV);
   TEST_ASSERT(!menu_needs_redraw());
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
@@ -771,8 +785,8 @@ static void test_v20_dialog_no(void) {
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT(title_is("Settings"));
-  TEST_ASSERT(probe_sel(6));
-  TEST_ASSERT(list_row_is(6, "Reset Statistics", NULL, true));
+  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT(list_row_is(5, "Reset Statistics", NULL, true));
   TEST_ASSERT_EQUAL(0U, fake_stats_reset_count());
 }
 
@@ -804,7 +818,7 @@ static void test_v21_dialog_yes(void) {
   TEST_ASSERT(!menu_needs_redraw());
   send(ENTER);
   TEST_ASSERT(title_is("Settings"));
-  TEST_ASSERT(probe_sel(6));
+  TEST_ASSERT(probe_sel(5));
   TEST_ASSERT_EQUAL(1U, fake_stats_reset_count());
 }
 
@@ -814,7 +828,7 @@ static void test_v22_v23_dialog_menu_is_no(void) {
   send(NEXT);
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
-  TEST_ASSERT(probe_sel(6));
+  TEST_ASSERT(probe_sel(5));
   TEST_ASSERT_EQUAL(0U, fake_stats_reset_count());
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_DIALOG_NO, menu_dialog_choice());
@@ -908,8 +922,8 @@ static void test_edit_every_item_to_limits(void) {
   uint8_t node;
   uint8_t index;
   int row;
-  static const uint8_t nodes[3] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY};
-  for (node = 0U; node < 3U; ++node) {
+  static const uint8_t nodes[4] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY, MENU_NODE_TRAINING};
+  for (node = 0U; node < 4U; ++node) {
     const menu_node_t MEM_CODE* list = &menu_nodes[nodes[node]];
     for (index = 0U; index < list->item_count; ++index) {
       const menu_item_t MEM_CODE* item = &list->items[index];
@@ -922,7 +936,10 @@ static void test_edit_every_item_to_limits(void) {
       if (nodes[node] == MENU_NODE_CW) {
         send(ENTER);
       } else if (nodes[node] == MENU_NODE_DISPLAY) {
-        send_times(NEXT, 4U);
+        send_times(NEXT, 3U);
+        send(ENTER);
+      } else if (nodes[node] == MENU_NODE_TRAINING) {
+        send(NEXT);
         send(ENTER);
       }
       send_times(NEXT, index);
@@ -949,10 +966,10 @@ static void test_full_navigation(void) {
   select_settings();
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
-  send_times(NEXT, 6U);
+  send_times(NEXT, 5U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send_times(REPEAT(NEXT), 9U);
-  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   send(PREV);
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_DISPLAY, menu_node());
@@ -961,7 +978,7 @@ static void test_full_navigation(void) {
   TEST_ASSERT_EQUAL(1U, menu_cursor());
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT_EQUAL(3U, menu_cursor());
   send_times(REPEAT(PREV), 9U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send(ENTER);

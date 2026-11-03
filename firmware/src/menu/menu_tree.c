@@ -19,6 +19,7 @@ static const menu_text_t MEM_CODE menu_backlight_texts[1] = {"Off"};
 static const menu_text_t MEM_CODE menu_paddle_texts[2] = {"Normal", "Reversed"};
 /* Indexed by SETTINGS_PROSIGN_*. */
 static const menu_text_t MEM_CODE menu_prosign_texts[3] = {"Punctuation", "Prosign", "Both"};
+static const menu_text_t MEM_CODE menu_attempt_texts[2] = {"3", "Unlimited"};
 
 static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Receiving", NULL, NULL, MENU_KIND_MODE, MENU_MODE_RECEIVING, 0U},
@@ -30,9 +31,8 @@ static const menu_item_t MEM_CODE menu_main_items[] = {
 
 static const menu_item_t MEM_CODE menu_settings_items[] = {
     {"CW", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_CW, 0U},
-    {"Show CW Code", NULL, menu_show_code_texts, MENU_KIND_CHOICE, SETTINGS_ID_SHOW_CW_CODE, 3U},
+    {"Training", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_TRAINING, 0U},
     {"Prosigns", NULL, menu_prosign_texts, MENU_KIND_CHOICE, SETTINGS_ID_PROSIGN_STYLE, 11U},
-    {"Max Word Length", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_MAX_WORD_LEN, 1U},
     {"Display", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_DISPLAY, 0U},
     {"Reset Statistics", NULL, NULL, MENU_KIND_ACTION, MENU_ACTION_RESET_STATS, 0U},
 };
@@ -48,6 +48,13 @@ static const menu_item_t MEM_CODE menu_cw_items[] = {
     {"Paddle", NULL, menu_paddle_texts, MENU_KIND_CHOICE, SETTINGS_ID_PADDLE_SWAP, 8U},
 };
 
+static const menu_item_t MEM_CODE menu_training_items[] = {
+    {"RX Attempts", NULL, menu_attempt_texts, MENU_KIND_CHOICE, SETTINGS_ID_RX_UNLIMITED, 9U},
+    {"TX Attempts", NULL, menu_attempt_texts, MENU_KIND_CHOICE, SETTINGS_ID_TX_UNLIMITED, 9U},
+    {"Max Word Length", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_MAX_WORD_LEN, 1U},
+    {"Show CW Code", NULL, menu_show_code_texts, MENU_KIND_CHOICE, SETTINGS_ID_SHOW_CW_CODE, 3U},
+};
+
 static const menu_item_t MEM_CODE menu_display_items[] = {
     {"Backlight", NULL, menu_backlight_texts, MENU_KIND_VALUE, SETTINGS_ID_BACKLIGHT, 3U},
     {"Contrast", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_CONTRAST, 2U},
@@ -59,6 +66,7 @@ const menu_node_t MEM_CODE menu_nodes[MENU_NODE_COUNT] = {
     {"Settings", menu_settings_items, MENU_ITEM_COUNT(menu_settings_items), true},
     {"Settings > CW", menu_cw_items, MENU_ITEM_COUNT(menu_cw_items), false},
     {"Settings > Display", menu_display_items, MENU_ITEM_COUNT(menu_display_items), false},
+    {"Settings > Training", menu_training_items, MENU_ITEM_COUNT(menu_training_items), false},
 };
 
 /* Indexed by MENU_MESSAGE_*. */

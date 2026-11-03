@@ -4,8 +4,9 @@
  */
 
 /*
- * Sending mode scenarios (references/internal/training_spec.md section 12.3, AC-T20; ui-ux.md section 9.4, V-110 to
- * V-119 and V-121). The real menu, buttons, engine and progress run with a fake keyer and fake items.
+ * Sending mode scenarios (references/internal/training_spec.md section 12.3, AC-T20, AC-T52, AC-T53; ui-ux.md
+ * sections 9.4 and 9.7, V-110 to V-119, V-121 and V-197 to V-205). The real menu, buttons, engine and progress run
+ * with a fake keyer and fake items.
  */
 
 #include "cw/morse.h"
@@ -960,8 +961,8 @@ static void test_v119_ignored_events_and_leave(void) {
   harness_event(REPEAT_EVENT(R_TAP));
   harness_event(REPEAT_EVENT(R_TAP));
   harness_event(LONG_EVENT(M_TAP));
-  harness_event(LONG_EVENT(R_TAP));
-  harness_pins_for(BUTTON_BIT_NEXT, 1500U);
+  /* A hold of 700 ms gives the press and the repeats, but no long event: the skip is V-202. */
+  harness_pins_for(BUTTON_BIT_NEXT, 700U);
   harness_pins_for(0U, 30U);
   TEST_ASSERT(is_screen_unchanged());
   TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask());
@@ -1750,6 +1751,376 @@ static void test_item_text_pixels(void) {
   }
 }
 
+/* ---------- Unlimited attempts and the skip (ui-ux.md sections 5.20 and 9.7, D-T57, D-T59) ---------- */
+
+#define SKIP_EVENT LONG_EVENT(R_TAP)
+
+/* TX(...) with the attempt setting @p is_unlimited (UNL(TX) of ui-ux.md section 9.7). */
+static void tx_open_attempts(uint16_t level, bool is_code_shown, const char* const* items, size_t count,
+                             bool is_unlimited) {
+  size_t index;
+
+  fake_iap_reset();
+  if (level != 0U) {
+    progress_fixture_write(PROGRESS_MODE_SENDING, 20U, level);
+  }
+  harness_power_on();
+  (void)settings_set(SETTINGS_ID_SHOW_CW_CODE, is_code_shown ? 1U : 0U);
+  (void)settings_set(SETTINGS_ID_TX_UNLIMITED, is_unlimited ? 1U : 0U);
+  fake_koch_item_reset();
+  for (index = 0U; index < count; ++index) {
+    fake_koch_item_push(items[index]);
+  }
+  harness_open_mode(1U);
+}
+
+/* Sets next low so that its debounced press comes at @p time; the long event comes at @p time + 800. */
+static void next_down_at(uint16_t time) {
+  harness_run_to((uint16_t)(time - BUTTONS_DEBOUNCE_MS - 1U));
+  harness_pins_for(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U));
+}
+
+static void next_up(void) { harness_pins_for(0U, (uint16_t)(BUTTONS_DEBOUNCE_MS + 1U)); }
+
+/* AT time: the event of the keyer at @p time. */
+static void keyer_event_at(uint16_t time, keyer_event_t event) {
+  harness_run_to((uint16_t)(time - 1U));
+  fake_keyer_push_event(event);
+  harness_run_to(time);
+}
+
+/* V-202 run 1, AC-T52 (1), (2): a skip in ITEM after a correct character, with a character in progress. */
+static void check_v202_skip_in_word(bool is_unlimited) {
+  const char* const items[2] = {"KMRS", "UAPT"};
+  uint16_t t;
+
+  tx_open_attempts(LEVEL_WORDS_13, true, items, 2U, is_unlimited);
+  run_to_item();
+  key("K");
+  element(true);
+  t = (uint16_t)(harness_now + 30U);
+  next_down_at(t);
+  expect_no_effect_before();
+  harness_run_to((uint16_t)(t + 799U));
+  TEST_ASSERT(is_no_effect(0U));
+  TEST_ASSERT(status(NULL));
+  expect_word("KMRS", 1);
+  TEST_ASSERT(marks_are(7, 2, "-"));
+  harness_run_to((uint16_t)(t + 800U));
+  TEST_ASSERT(training_is_skipped());
+  TEST_ASSERT(status("Skipped"));
+  TEST_ASSERT(text_at(1, 9, "Skipped"));
+  expect_word("KMRS", 1);
+  TEST_ASSERT(code_is("--"));
+  TEST_ASSERT(marks_are(7, 2, "-"));
+  /* The rest of the character in progress draws nothing and checks nothing. */
+  keyer_event_at((uint16_t)(t + 850U), KEYER_EVENT_DAH);
+  TEST_ASSERT(marks_are(7, 2, "-"));
+  keyer_event_at((uint16_t)(t + 900U), KEYER_EVENT_CHAR_GAP);
+  TEST_ASSERT(status("Skipped"));
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  harness_run_to((uint16_t)(t + 1000U));
+  next_up();
+  snapshot(snapshot_before);
+  harness_run_to((uint16_t)(t + 3299U));
+  TEST_ASSERT(is_screen_unchanged());
+  harness_run_to((uint16_t)(t + 3300U));
+  TEST_ASSERT(body_off(1, 7));
+  TEST_ASSERT(hdr(tx_header(2U, training_item_count())));
+  harness_run_to((uint16_t)(t + 3600U));
+  expect_word("UAPT", 0);
+  TEST_ASSERT(status(NULL));
+  TEST_ASSERT_EQUAL(0U, training_score());
+  /* The first character of the next item counts. */
+  key("U");
+  TEST_ASSERT_EQUAL(1U, training_answer_length());
+  expect_word("UAPT", 1);
+}
+
+/* V-202 runs 2 and 3, AC-T52 (3): a skip of a character item with nothing keyed; the next item counts. */
+static void check_v202_skip_char(bool is_code_shown, bool is_unlimited) {
+  const char* const items[2] = {"K", "M"};
+
+  tx_open_attempts(LEVEL_KM, is_code_shown, items, 2U, is_unlimited);
+  next_down_at(HARNESS_T0 + 1500U);
+  harness_run_to(HARNESS_T0 + 2299U);
+  TEST_ASSERT(status(NULL));
+  harness_run_to(HARNESS_T0 + 2300U);
+  TEST_ASSERT(status("Skipped"));
+  expect_big(60, "K", -1);
+  TEST_ASSERT(code_is("-.-"));
+  TEST_ASSERT(body_off(7, 7));
+  harness_run_to(HARNESS_T0 + 2500U);
+  next_up();
+  harness_run_to(HARNESS_T0 + 4799U);
+  TEST_ASSERT(status("Skipped"));
+  harness_run_to(HARNESS_T0 + 4800U);
+  TEST_ASSERT(body_off(1, 7));
+  TEST_ASSERT(hdr("TX 20/20 L1          2/50"));
+  run_to_item();
+  key("M");
+  TEST_ASSERT(status("Correct"));
+  TEST_ASSERT_EQUAL(1U, training_score());
+}
+
+static void test_v202_skip_in_item(void) {
+  check_v202_skip_in_word(false);
+  check_v202_skip_in_word(true);
+  check_v202_skip_char(true, false);
+  check_v202_skip_char(false, false);
+  check_v202_skip_char(true, true);
+}
+
+/* V-203 runs 1 and 2, AC-T52 (1): a skip in a Wrong result keeps the bar and shows the code of that position. */
+static void check_v203_skip_after_wrong(bool is_unlimited) {
+  const char* const items[1] = {"KMRS"};
+  uint16_t t;
+
+  tx_open_attempts(LEVEL_WORDS_13, true, items, 1U, is_unlimited);
+  run_to_item();
+  key("K");
+  keyp("-.");
+  t = harness_now;
+  TEST_ASSERT(status("Wrong: N"));
+  expect_word("KMRS", 1);
+  next_down_at((uint16_t)(t + 100U));
+  harness_run_to((uint16_t)(t + 899U));
+  TEST_ASSERT(status("Wrong: N"));
+  harness_run_to((uint16_t)(t + 900U));
+  TEST_ASSERT(status("Skipped"));
+  expect_word("KMRS", 1);
+  TEST_ASSERT(code_is("--"));
+  TEST_ASSERT(marks_are(7, 2, "-."));
+  TEST_ASSERT_EQUAL(1U, training_answer_length());
+  harness_run_to((uint16_t)(t + 1000U));
+  next_up();
+  harness_run_to((uint16_t)(t + 1300U));
+  TEST_ASSERT(status("Skipped"));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  harness_run_to((uint16_t)(t + 3399U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  harness_run_to((uint16_t)(t + 3400U));
+  TEST_ASSERT(body_off(1, 7));
+
+  /* A word space after K and M: the bar stays under R, row 5 shows R. */
+  tx_open_attempts(LEVEL_WORDS_13, true, items, 1U, is_unlimited);
+  run_to_item();
+  key("KM");
+  word_gap();
+  t = harness_now;
+  TEST_ASSERT(status("Wrong: pause too long"));
+  harness_set_time((uint16_t)(t + 900U));
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(status("Skipped"));
+  expect_word("KMRS", 2);
+  TEST_ASSERT(code_is(".-."));
+  TEST_ASSERT(marks_are(7, 2, "--"));
+  TEST_ASSERT_EQUAL(2U, training_answer_length());
+  harness_run_to((uint16_t)(t + 3399U));
+  TEST_ASSERT(status("Skipped"));
+  harness_run_to((uint16_t)(t + 3400U));
+  TEST_ASSERT(body_off(1, 7));
+}
+
+/* V-203 run 3: after the third wrong attempt the long next changes nothing. */
+static void check_v203_after_failed(void) {
+  const char* const items[1] = {"KMRS"};
+  uint8_t attempt;
+  uint8_t attempts;
+  uint16_t t;
+
+  tx_open_attempts(LEVEL_WORDS_13, true, items, 1U, false);
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    key("K");
+    keyp("-.");
+  }
+  t = harness_now;
+  TEST_ASSERT(status("Wrong: N"));
+  TEST_ASSERT(code_is("--"));
+  attempts = expect_no_effect_before();
+  harness_set_time((uint16_t)(t + 900U));
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_no_effect(attempts));
+  TEST_ASSERT(!training_is_skipped());
+  harness_run_to((uint16_t)(t + 2499U));
+  TEST_ASSERT(status("Wrong: N"));
+  harness_run_to((uint16_t)(t + 2500U));
+  TEST_ASSERT(body_off(1, 7));
+}
+
+static void test_v203_skip_in_wrong_result(void) {
+  check_v203_skip_after_wrong(false);
+  check_v203_skip_after_wrong(true);
+  check_v203_after_failed();
+}
+
+/* V-204, AC-T52 (4): a long next in the start pause, a Correct result, the blank moment and a skip result. */
+static void test_v204_long_next_outside_skip_states(void) {
+  const char* const items[2] = {"K", "K"};
+  uint8_t attempts;
+  uint16_t t;
+
+  tx_open_attempts(LEVEL_KM, true, items, 2U, false);
+  harness_set_time(HARNESS_T0 + 900U);
+  attempts = expect_no_effect_before();
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_no_effect(attempts));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  run_to_item();
+  key("K");
+  t = harness_now;
+  harness_set_time((uint16_t)(t + 500U));
+  attempts = expect_no_effect_before();
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_no_effect(attempts));
+  harness_run_to((uint16_t)(t + 850U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  attempts = expect_no_effect_before();
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_no_effect(attempts));
+  harness_run_to((uint16_t)(t + 900U));
+  expect_big(60, "K", -1);
+  TEST_ASSERT(status(NULL));
+  TEST_ASSERT_EQUAL(1U, training_score());
+
+  /* Run 4: a second long next in the skip result changes nothing. */
+  tx_open_attempts(LEVEL_KM, true, items, 2U, false);
+  harness_run_to(HARNESS_T0 + 2300U);
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(status("Skipped"));
+  harness_set_time(HARNESS_T0 + 3200U);
+  attempts = expect_no_effect_before();
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_no_effect(attempts));
+  harness_run_to(HARNESS_T0 + 4799U);
+  TEST_ASSERT(status("Skipped"));
+  harness_run_to(HARNESS_T0 + 4800U);
+  TEST_ASSERT(body_off(1, 7));
+}
+
+/* V-205: a skip on the last item gives the end screen with no blank moment; the keyer stops once. */
+static void test_v205_skip_last_item(void) {
+  const char* const items[1] = {"K"};
+  unsigned setting;
+  uint8_t number;
+  uint16_t u;
+
+  for (setting = 0U; setting < 2U; ++setting) {
+    tx_open_attempts(LEVEL_KM, true, items, 1U, setting != 0U);
+    for (number = 1U; number < 50U; ++number) {
+      run_to_item();
+      key("K");
+    }
+    run_to_item();
+    u = harness_now;
+    harness_set_time((uint16_t)(u + 800U));
+    harness_event(SKIP_EVENT);
+    TEST_ASSERT(hdr("TX 20/20 L1         50/50"));
+    TEST_ASSERT(status("Skipped"));
+    TEST_ASSERT(code_is("-.-"));
+    harness_run_to((uint16_t)(u + 3299U));
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+    TEST_ASSERT_EQUAL(0U, fake_keyer_stop_count());
+    harness_run_to((uint16_t)(u + 3300U));
+    TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+    TEST_ASSERT(text_at(2, 7, "Score 49/50"));
+    TEST_ASSERT(end_screen_is(49U, 50U, 45U));
+    TEST_ASSERT_EQUAL(1U, fake_keyer_stop_count());
+  }
+}
+
+/* V-197 (real engine), AC-T53: Try <N> up to 99, then Try 99+; the counter stops at 255; no answer shows. */
+static void test_v197_try_text(void) {
+  const char* const items[1] = {"K"};
+  unsigned attempt;
+  char text[16];
+
+  tx_open_attempts(LEVEL_KM, true, items, 1U, true);
+  run_to_item();
+  for (attempt = 1U; attempt <= 300U; ++attempt) {
+    keyp("-.");
+    if (!TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_last_check())) {
+      break;
+    }
+    TEST_ASSERT(body_off(5, 5));
+    run_to_item();
+    if (attempt < 99U) {
+      (void)snprintf(text, sizeof(text), "Try %u", attempt + 1U);
+    } else {
+      (void)snprintf(text, sizeof(text), "Try 99+");
+    }
+    if (!TEST_ASSERT(status(text))) {
+      fprintf(stderr, "attempt %u\n", attempt + 1U);
+    }
+  }
+  TEST_ASSERT_EQUAL(TRAINING_WRONG_MAX, training_wrong_attempts());
+  TEST_ASSERT(text_at(1, 9, "Try 99+"));
+  key("K");
+  TEST_ASSERT(status("Correct"));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* V-198: unlimited attempts in a word item, with each kind of wrong attempt. */
+static void test_v198_unlimited_word(void) {
+  const char* const items[1] = {"KMRS"};
+
+  tx_open_attempts(LEVEL_WORDS_13, true, items, 1U, true);
+  run_to_item();
+  key("K");
+  key("N");
+  TEST_ASSERT(status("Wrong: N"));
+  expect_word("KMRS", 1);
+  TEST_ASSERT(body_off(5, 5));
+  run_to_item();
+  TEST_ASSERT(text_at(1, 10, "Try 2"));
+  expect_word("KMRS", 0);
+  TEST_ASSERT(body_off(7, 7));
+  key("K");
+  word_gap();
+  TEST_ASSERT(status("Wrong: pause too long"));
+  expect_word("KMRS", 1);
+  run_to_item();
+  TEST_ASSERT(text_at(1, 10, "Try 3"));
+  key("K");
+  key("N");
+  TEST_ASSERT(status("Wrong: N"));
+  TEST_ASSERT(body_off(5, 5));
+  run_to_item();
+  TEST_ASSERT(text_at(1, 10, "Try 4"));
+  key("KMRS");
+  TEST_ASSERT(status("Correct"));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* AC-T53: TX Attempts acts in Sending only, and the mode reads it once at its start. */
+static void test_tx_attempts_read_once(void) {
+  const char* const items[1] = {"K"};
+  uint8_t attempt;
+
+  tx_open_attempts(LEVEL_KM, true, items, 1U, false);
+  (void)settings_set(SETTINGS_ID_RX_UNLIMITED, 1U);
+  (void)settings_set(SETTINGS_ID_TX_UNLIMITED, 1U);
+  for (attempt = 1U; attempt <= TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    if (attempt > 1U) {
+      TEST_ASSERT(status((attempt == 2U) ? "Try 2 of 3" : "Try 3 of 3"));
+    }
+    keyp("-.");
+  }
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(!training_has_unlimited_attempts());
+
+  /* RX Attempts alone does not change Sending. */
+  fake_iap_reset();
+  harness_power_on();
+  (void)settings_set(SETTINGS_ID_RX_UNLIMITED, 1U);
+  fake_koch_item_reset();
+  fake_koch_item_push("K");
+  harness_open_mode(1U);
+  TEST_ASSERT(!training_has_unlimited_attempts());
+}
+
 int main(void) {
   TEST_RUN(test_v110_start);
   TEST_RUN(test_v111_correct);
@@ -1789,5 +2160,12 @@ int main(void) {
   TEST_RUN(test_code_mark);
   TEST_RUN(test_code_group);
   TEST_RUN(test_item_text_pixels);
+  TEST_RUN(test_v202_skip_in_item);
+  TEST_RUN(test_v203_skip_in_wrong_result);
+  TEST_RUN(test_v204_long_next_outside_skip_states);
+  TEST_RUN(test_v205_skip_last_item);
+  TEST_RUN(test_v197_try_text);
+  TEST_RUN(test_v198_unlimited_word);
+  TEST_RUN(test_tx_attempts_read_once);
   return TEST_FINISH();
 }

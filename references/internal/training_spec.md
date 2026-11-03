@@ -13,7 +13,10 @@ review `approved` on 2026-10-15 (U-32). T15 and Q6 done, final review `approved`
 fixes R1 and R2 (section 22.5). W6 manual and quick guide `approved`. The release notes wait for the version decision.
 Change request D-T45 to D-T47 (start screen with a big level description, split end screen, user decisions
 2026-10-15): specification published on 2026-10-15 (section 17.6). D6 done, review `approved` on 2026-10-15
-(D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. Change request D-T51 (the CW player early release follows the `Ramp` setting, plan `noble-bubbling-dahl.md`, 2026-10-16): specification published on 2026-10-16, section 17.7. The user answered Q-T1 and Q-T2 (section 20). Section 21
+(D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. Change request D-T51 (the CW player early release follows the `Ramp` setting, plan `noble-bubbling-dahl.md`, 2026-10-16): specification published on 2026-10-16, section 17.7. Change request D-T52 to D-T60 (unlimited attempts per mode and a
+long `next` skip, plan `harmonic-doodling-dragonfly.md`, user-approved): specification published on 2026-11-02,
+section 17.8. D7 done, review `approved` on 2026-11-02 (D-T61). T17 and Q8 done. Final review `approved` on
+2026-11-02 (section 22.7, D-T62). W8 ready to start. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -26,6 +29,7 @@ Readers: `c-embedded-developer`, `qa-embedded`,
 | Approved plan `~/.claude/plans/silly-knitting-flurry.md` | User decisions (section 2.1) and the module split. |
 | Approved plan `~/.claude/plans/lively-exploring-reef.md` | Level selection: user requirements and user decisions of 2026-10-07 (D-T35), proposed interface. |
 | Approved plan `~/.claude/plans/lucky-seeking-locket.md` | Start screen with a big level description and a split end screen: user decisions of 2026-10-15 (D-T45), proposed layouts. |
+| Approved plan `~/.claude/plans/harmonic-doodling-dragonfly.md` | Unlimited attempts per mode and the long `next` skip: user decisions (D-T52), proposed design. |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | All that the user sees, hears or presses: layouts, texts, delays, control tables. Section 21 lists every value that this document takes from it. |
 | `references/internal/keyer_spec.md` | Keyer contract. Decision D-T1 of this document revises D-K1 (section 3.1). The keyer timing of section 6.7 stays the reference for the timing extraction. |
 | `references/internal/sidetone_spec.md` | Sidetone contract, envelope, ISR frame. |
@@ -53,7 +57,8 @@ Precedence rules:
 | Character set | `K M R S U A P T L O W I . N J E F 0 Y , V G 5 / Q 9 Z H 3 8 B ? 4 2 7 C 1 D 6 X`, then BT, SK, AR: 43 characters. The final word phase starts at L = 63 (Q-T1). |
 | Words and prosigns | Random words contain no prosign. BT, SK and AR appear only in character sessions. Words and the Receiving word keyboard use the first 40 Koch characters. With fewer learned characters, they use the learned ones (Q-T2). |
 | Word length | 2 for word sessions 1-2, 3 for 3-4, and so on (+1 every two word sessions), capped at `Max Word Length` (4..8). |
-| Attempts | 3 per item. The correct answer shows only after the third wrong attempt. |
+| Attempts | 3 per item. The correct answer shows only after the third wrong attempt. Revised by D-T52 (user decision, 2026-11-02): each mode has its own setting, `RX Attempts` and `TX Attempts`, with the choices 3 (default) and unlimited. With unlimited attempts, the item shows again after each wrong attempt until the answer is correct or the user skips it. |
+| Skip | User decision D-T52. A long `next` skips the current item in both modes, with each attempt setting. The skip ends the item as the third wrong attempt does: the answer shows, and the item gives no point. |
 | Receiving word input | Pick characters one by one. Check the whole word after the last one. Long `prev` undoes the last pick or steps out of a group. Long `enter` replays (D-T27). |
 | Progress key | One 16-bit level per mode per character WPM (5..50). The effective speed has no effect. The level stops at 65535 and never wraps. |
 | Manual level | Revised by D-T35 (user decision 2026-10-07). The user selects the level of the next session on a start screen and on the session end screen. The range is level 1 up to the earned level, the stored level of the mode at the current speed. `Reset Statistics` sets all levels back to level 1. |
@@ -170,6 +175,17 @@ fails. Do not try another layout.
 | D-T49 | Decisions on the T16 and Q7 results (2026-10-15). (1) Dirty pages, fix required (revises D-T48 (6), SL-4, SL-10 and P5, P6). On a byte change, `gfx` marks the page dirty. Unchanged bytes leave the page clean. `lcd.c` sends only dirty pages. T16 marks pages 0-5 dirty by hand after each step, and all pages at the switch from END to SELECT. These calls send pages with no pixel change over the software SPI: page 5 of Receiving at each step, and an unchanged label or big line. They follow the D-T48 (6) text, so this is a contract fix, not a developer fault. New rule: no screen code marks a page dirty by hand on a step or at the switch. The dirty pages are the pages whose bytes change. A step changes only pages 0-5. (2) Flash, accepted: +339 B is above the +250 B target and below the +400 B hard limit. The cause is the xdata parameter stores of the contract functions and helpers. Fix (1) makes it smaller. (3) xdata, accepted: +1 B is above the +0 B target and below the +2 B hard limit. (4) Stack, accepted: the deepest chain is 71 B (+5 B, target +6 B), the margin 102 B. `architector` checked the new step: `training_screen_draw_item_text()` saves 6 registers around the `screen_draw_big_text()` call. That fits the +5 B. (5) The band draws the label in normal video, inverts y 57-63 and clears y 56. The pixels equal the old band: accepted. (6) QA notes, accepted, not blocking: M7a is killed by one check, and only the new random walk reaches END. | (1) The user asked for as few redrawn pages as possible (`ui-ux.md` UX-70). The forced pages make each step up to 2 page transfers longer, and R-T14 is the open risk of this change. With the rule of `gfx`, the fallbacks (b) and (c) of R-T14 come at no cost. (2) to (4) Each value is inside its hard limit, and a rework to register parameters changes the contract signatures for a few bytes. |
 | D-T50 | Decisions on the C1 to C3 results (2026-10-15). (1) Header at the saturation step, accepted deviation from D-T49 (1). `training_screen_draw_header()` fills row 0 and draws the inverted text again, so page 0 gets dirty at every step. Indexes 65534 and 65535 both show `L65535` with 100 items (D-T5). So at the step between them, the header bytes stay the same, and the step gives `DIRTY(0,1)`, not `DIRTY(1)`. The header code does not change. (2) Flash after C1: 28 561 B (+352 against the T16 baseline, +13 against the first T16 pass), accepted under the +400 B hard limit. The +13 B buys the byte-stable label and big line: the label is one 9-cell text with no clear, and the big line clears only at a change of its length. So a step between two character levels sends pages 0, 1, 3 and 4 only (`ui-ux.md` V-138). (3) The cache `screen_big_length` is safe: every other writer of rows 3 and 4 runs before a full start screen draw, and that draw clears rows 2-6 first. | (1) The case needs about 65 000 passed sessions and costs one page transfer. A byte-stable header costs flash on every build. (2) Fewer page transfers per step lower the R-T14 risk, and the cost is far below the hard limit. |
 | D-T51 | `Ramp` setting (plan `noble-bubbling-dahl.md`, user-approved 2026-10-16, `sidetone_spec.md` section 24). (1) `PLAYER_EARLY_RELEASE_TICKS` is `sidetone_ramp_calls` (4 x `Ramp` ms, 16 to 48), declared in `sidetone/sidetone_shared.h`. `player_shared.h` includes that header. `player_service.h` keeps its code, and its comment names no number. (2) `timing.h`: the dit at `CW_TIMING_WPM_MAX` is at least `2 * SIDETONE_RAMP_MAX_CALLS` (96 >= 96) and longer than `SIDETONE_ZERO_WAIT_CALLS` (section 5.3). (3) At 50 WPM with `Ramp` 12 ms the rise of a dit ends at index 31 of 32 and the fall ends one call before the mark end. Accepted (D-RM5). (4) The player and the modes never call `sidetone_set_ramp_ms()`. (5) Player tests call `sidetone_init()` or `sidetone_set_ramp_ms()` in their setup and use the call count of the ramp under test. | The fall must end at the mark end for every `Ramp` value, as it did for the fixed 8 ms. The player host group links `sidetone.c` already, so the tests need no new fake. The duty is 499 instead of 500 permille: not audible, and no click. |
+| D-T52 | User decisions (2026-11-02, plan `harmonic-doodling-dragonfly.md`). (1) Each mode has its own attempt setting: `RX Attempts` for Receiving and `TX Attempts` for Sending. The choices are 3 (default) and unlimited. (2) A new list `Settings > Training` holds `RX Attempts`, `TX Attempts`, `Max Word Length` and `Show CW Code`. The last two move from `Settings`. Their ids and their stored values do not change (`menu_subsystem_spec.md` section 19). (3) A long `next` skips the current item in Receiving and in Sending, with each attempt setting. The skip ends the item as the third wrong attempt does: the answer shows, and the item gives no point. (4) The level logic does not change (D-T58). | User decisions. They revise the "Attempts" row of 2.1, and U-18 and U-20 for the long `next` (section 21). |
+| D-T53 | Unlimited attempts in the engine. (1) `training_prepare()` gets a fourth parameter, `MEM_XDATA bool has_unlimited_attempts`. The engine keeps the value for the whole mode visit. `training_start()` and `training_reopen_select()` do not change it. `training_has_unlimited_attempts()` returns it. (2) A wrong answer adds 1 to the wrong counter. The counter stops at `TRAINING_WRONG_MAX` (255) and never wraps. The same add runs with 3 attempts. There the counter never goes above 3. (3) With unlimited attempts, every wrong answer gives `TRAINING_CHECK_WRONG`, also at counter 255. With 3 attempts, the third wrong answer gives `TRAINING_CHECK_FAILED`, as before. (4) `TRAINING_ATTEMPTS` stays 3. | If the counter wraps from 255 to 0, the next correct answer counts as a first-attempt answer and gives a point (11.3). The stop at 255 keeps D-T58 true. One add for both settings costs less flash than two. |
+| D-T54 | `training_skip()` (section 5.10). (1) Phase ITEM: the answer does not change. (2) Phase RESULT with the last check WRONG: the engine removes the last answer character. This is the rejected character or `TRAINING_CHAR_WORD_SPACE`. (3) In both cases, the engine sets the last check to FAILED and sets the skip flag (D-T55). It reads the tick and sets phase RESULT with `TRAINING_FAILED_MS` and the hold off. The function returns FAILED. (4) The score and the wrong counter do not change. (5) In all other cases (IDLE, SELECT, GAP, END, RESULT after CORRECT or FAILED), the function returns `TRAINING_CHECK_IGNORED`. Nothing changes, and it reads no tick. (6) After a skip, `training_answer_length()` is less than `training_item_length()`. The failed position is `training_answer_length()`. In Sending, the item character at this position is the character that the user did not key correctly. (7) When the long event comes, the skip acts on the current item. If a press starts in one item and reaches `BUTTONS_LONG_PRESS_MS` in the next item, the next item is skipped. | (2) Sending gets one failed position rule for each skip: after a wrong character, after a word space and in ITEM. The removed character is the same one that the RETRY clears. In the Receiving answer state, the item line shows the item, not the answer, so the removal changes nothing on the screen. (7) The button module gives the long event 800 ms after the press. The engine does not know where a press started. A hold of 800 ms is a deliberate action. |
+| D-T55 | Skip flag: a getter, not a new check value. If `training_skip()` gave the last FAILED, `bool training_is_skipped(void)` returns true. `training_start()` clears the flag. The GAP to ITEM step (a new item) clears the flag. `training_add_char()` never sets it. The check value of a skip is `TRAINING_CHECK_FAILED`. `TRAINING_CHECK_SKIPPED` is not defined. | Rejected: a new check value `TRAINING_CHECK_SKIPPED`. The engine (the RESULT end of 11.2), `rx_is_answer_shown()`, `rx_build_label()`, `rx_draw_item_line()`, `tx_draw_input()` and `training_screen_draw_status()` all compare with FAILED. Each one then needs a second compare, and a missed compare is a silent bug. With the getter, the Receiving answer state works with no change. Only the code that reads the failed position or shows a skip text reads the flag. Cost: 1 B xdata and one small function. |
+| D-T56 | Receiving skip (section 12.2). Tap mode is on in GAP, ITEM and RESULT, so a hold of `next` gives only the long event (D-T28). (1) A long `next` in ITEM, or in RESULT with the last check WRONG, calls `training_skip()`. On FAILED: `keyboard_top()`, then the FAILED path of `rx_pick()`: `player_stop()`, `player_start()` of the item, `training_hold_result(true)`, `rx_draw_input()`. One static helper holds this path, and both `rx_pick()` and the skip call it. Then `rng_mix(tick_now())`, as for each acted event. (2) A long `next` in GAP, in RESULT after CORRECT and in the answer state: `training_skip()` returns IGNORED. Nothing changes: no redraw, no player call, no `rng_mix()`. (3) After a skip, the answer state of D-T44 applies: an `enter` tap continues, and a long `enter` plays the answer again. | A pick puts the keyboard at the top, but a skip can come while a group is open. The GAP event draws the labels from the keyboard state (12.2). Without `keyboard_top()`, row 7 shows the open group in the blank moment. The long press time (800 ms) is shorter than the WRONG delay (1200 ms), so the user can skip right after a wrong answer. |
+| D-T57 | Sending skip (section 12.3). In a session the keyer owns P3.2 and tap mode is off, so `next` gives a press, repeats and a long event. Only the long event acts. (1) In GAP, ITEM and RESULT, `sending_handle()` calls `training_skip()` for the event `BUTTON_EVENT_NEXT \| BUTTON_EVENT_LONG_FLAG` (0x41). It ignores every other event, as before, and returns false. (2) On FAILED: if the pattern is not empty, set the drop flag (D-T15). Then empty the pattern, clear the armed flag (D-T31) and call `tx_draw_input()`. (3) On IGNORED: nothing. (4) No keyer call. The keyer runs on, and D-T15 drops the events of RESULT and GAP. | This refines the plan, which set the drop flag at each skip. A pattern that is not empty is a half-keyed character. The drop flag then drops the rest of it, up to and including its CHAR_GAP, in each phase. Consider an empty pattern and no keying until the next item. A drop flag then drops the first character of the next item. An element that the keyer did not send yet comes in RESULT, and D-T15 drops that character. |
+| D-T58 | The score and the level logic do not change. (1) An item adds to the score only for CORRECT with a wrong counter of 0 (11.3). A correct answer after a retry has a counter of 1 or more. A skip never gives CORRECT. So with unlimited attempts and with skips, the score is the number of items that are correct on the first attempt, as before. (2) Each item still ends with one CORRECT or one FAILED and one RESULT. The item count, the GAP and END steps, `training_finish()`, the pass threshold, `progress_advance()` and `progress_save()` get the same inputs as before. (3) The stop at 255 of D-T53 prevents a point after a wrap. (4) For the same first-attempt results, a session with unlimited attempts gives the same score and outcome as a session with 3 attempts (AC-T49). | User decision D-T52 (4). No code in `koch`, `progress` or `training_finish()` changes. |
+| D-T59 | Screen contract of the skip and of unlimited attempts. (1) Sending reads the failed position from the engine. After FAILED from `training_add_char()`, it is `training_answer_length() - 1`, as before. When `training_is_skipped()` is true, it is `training_answer_length()` (D-T54 (6)). This applies to row 5 in `tx_draw_input()`, the bar in `tx_draw_item_line()` and the status in `training_screen_draw_status()`. No code reads `training_answer_text()[training_answer_length() - 1]` after a skip, because the answer can be empty. (2) ui-ux.md (new UX decisions for unlimited attempts and skip) gives these UI values. They are the status text of a skip in each mode and Sending row 5 after a skip. They are also the `Try N` text and its cap with unlimited attempts. The screen code selects them with `training_is_skipped()` and `training_has_unlimited_attempts()`. (3) Sending row 7 after a skip: as ui-ux.md says. If ui-ux.md gives no rule, row 7 keeps its marks, as at each FAILED (WS-5). (4) `training_screen_draw_code_group(first, second)` draws at most two codes. If ui-ux.md asks for more in row 5, the developer stops and reports to `architector`. | One failed position rule (D-T54 (6)) covers both skip cases. U-34 (section 21) tracks the UI values. |
+| D-T60 | Settings and menu part (`menu_subsystem_spec.md` section 19). New ids `SETTINGS_ID_RX_UNLIMITED` (13) and `SETTINGS_ID_TX_UNLIMITED` (14): 0 gives 3 attempts (default), 1 gives unlimited attempts. Settings record layout version 4: training flags in byte 14, CRC in byte 15. New node `MENU_NODE_TRAINING` (4). `receiving_enter()` reads `SETTINGS_ID_RX_UNLIMITED` once (UX-49), and `sending_enter()` reads `SETTINGS_ID_TX_UNLIMITED` once. Each mode keeps the value in a `static MEM_XDATA bool` with plain stores, as `tx_is_swapped`, and gives it to `training_prepare()`. | SDCC needs a bit of internal RAM for a `bool` from a compare (comment in `sending_enter()`). Plain stores keep the internal RAM unchanged. |
+| D-T61 | Review of D7 (2026-11-02): `approved`. Accepted UI values of `ui-ux.md`: UX-74 to UX-78 and sections 5.19 and 5.20, with the engine facts E-1 to E-6 of 5.20.5. Also the rows of 5.3, 5.14, 6.1, 6.8 and 6.9, and F-27. Also V-192 to V-206 of 9.7, the changed V-02, V-20, V-21, V-80, V-96, V-119 and V-182, and D-48 to D-52. (1) Status texts: `Skipped. The answer is:` (Receiving, column 1) and `Skipped` (Sending, column 9). (2) Unlimited retry status: `Try <N>` for N 2 to 99, then `Try 99+`. (3) Sending row 5 after a skip: the code of one character, at the failed position of D-T54 (6). Row 7 does not change. The bar does not move. (4) Training list: choices `3` and `Unlimited`, fw 9. `Max Word Length` and `Show CW Code` keep fw 1 and fw 3. (5) The skip acts in Item and in a `Wrong` result only. This equals D-T54 (1), (2) and (5). (6) Editorial note E-1 for `ui-ux-embedded-designer`, not blocking: the result column of V-119 says "The long `next` skips (V-202)", but the setup of V-119 has no long `next`. A later pass makes it a plain reference to V-202. The notes for T17 Part C are in section 17.8. | Every value fits the D-T53 to D-T59 limits. No interface of section 5.10 changes. E-1 to E-6 match the engine contract, and E-3 is the D-T59 (1) bar rule. U-34 is resolved. |
+| D-T62 | Decisions of the T17 final review (2026-11-02). (1) Flash +559 B is above the +450 B target and below the +700 B hard limit: accepted. `training.c` +126 B is above the Part B target of +100 B: accepted inside the whole budget. The image uses 29 664 of 61 440 B. (2) xdata +7 B is above the +6 B target and below the +8 B hard limit: accepted. The extra byte is the `MEM_XDATA bool` parameter of `training_prepare()` (D-T53). The 14.2 estimate left it out. (3) `rx_show_answer()` in `receiving.c` holds `player_stop()`, `player_start()` of the item and `training_hold_result(true)`. Each caller then calls `rx_draw_input()`. This is an accepted detail of D-T56: the call order is the same, and the pick path keeps its stack depth. (4) CRC-8 over the 16-byte record misses one 2-bit error pattern (bits 0 and 127). The magic check catches it, because bit 0 is in magic byte 0. Residual risk, no change. | (1) and (2) are inside the hard limits. No internal RAM changed, and the stack has 188 B free as before. (3) The behavior equals D-T56, and QA verified it. (4) QA finding, no field case. |
 | D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
 
 ## 4. Baseline (measured)
@@ -595,7 +611,8 @@ Changes of D-T28 (`buttons.h` declarations keep their signatures, and only the c
 
 #define TRAINING_MODE_RECEIVING 0U   /* equal to PROGRESS_MODE_RECEIVING */
 #define TRAINING_MODE_SENDING 1U     /* equal to PROGRESS_MODE_SENDING */
-#define TRAINING_ATTEMPTS 3U
+#define TRAINING_ATTEMPTS 3U         /* attempts per item without unlimited attempts */
+#define TRAINING_WRONG_MAX 255U      /* the wrong counter stops here and never wraps (D-T53) */
 #define TRAINING_TEXT_SIZE (KOCH_WORD_LEN_MAX + 1U)
 /* Sending answer character for a word space inside a word (D-T31). No item character and no decoded character is ' '. */
 #define TRAINING_CHAR_WORD_SPACE ' '
@@ -619,9 +636,9 @@ typedef uint8_t training_phase_t;
 typedef uint8_t training_check_t;
 #define TRAINING_CHECK_PARTIAL 0U  /* the answer so far is accepted; more characters needed */
 #define TRAINING_CHECK_CORRECT 1U
-#define TRAINING_CHECK_WRONG 2U    /* an attempt is used; attempts remain */
-#define TRAINING_CHECK_FAILED 3U   /* third wrong attempt; the answer shows */
-#define TRAINING_CHECK_IGNORED 4U  /* not in TRAINING_PHASE_ITEM; the character is dropped */
+#define TRAINING_CHECK_WRONG 2U    /* an attempt is used; the item comes again (always with unlimited attempts) */
+#define TRAINING_CHECK_FAILED 3U   /* the item ends with no point: third wrong attempt or training_skip(); the answer shows */
+#define TRAINING_CHECK_IGNORED 4U  /* no effect: a character outside TRAINING_PHASE_ITEM, or a skip outside its cases */
 
 typedef uint8_t training_event_t;
 #define TRAINING_EVENT_NONE 0U
@@ -638,10 +655,12 @@ typedef uint8_t training_outcome_t;
 #define TRAINING_OUTCOME_PASS_REPLAY 4U     /* passed below the earned level; no change, no save (D-T36) */
 
 /**
- * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. Phase
- * SELECT. No session runs. Reads the progress RAM only (D-T36).
+ * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. With
+ * @p has_unlimited_attempts, a wrong answer never ends the item (D-T53). Phase SELECT. No session runs. Reads the
+ * progress RAM only (D-T36).
  */
-void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len,
+                      MEM_XDATA bool has_unlimited_attempts);
 /**
  * Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS.
  * No phase check: the modes call it in SELECT only (D-T46).
@@ -674,6 +693,16 @@ bool training_undo_char(void);
  * training_poll() ends the RESULT. Other phases: no effect. A phase change clears the hold (D-T14, D-T44).
  */
 void training_hold_result(bool is_held);
+/**
+ * In phase ITEM, or in phase RESULT after TRAINING_CHECK_WRONG: ends the item as TRAINING_CHECK_FAILED with no point
+ * and sets training_is_skipped(). After WRONG, removes the rejected answer character. Phase RESULT with
+ * TRAINING_FAILED_MS. Returns TRAINING_CHECK_FAILED. Other cases: no change, returns TRAINING_CHECK_IGNORED (D-T54).
+ */
+training_check_t training_skip(void);
+/** True when training_skip() gave the last FAILED. training_start() and each new item clear it (D-T55). */
+bool training_is_skipped(void);
+/** The value that training_prepare() got (D-T53). */
+bool training_has_unlimited_attempts(void);
 
 training_phase_t training_phase(void);
 uint8_t training_mode(void);
@@ -689,7 +718,7 @@ uint8_t training_shown_item_number(void);   /* header number: GAP gives item num
 uint8_t training_item_count(void);
 uint8_t training_score(void);               /* items correct on the first attempt */
 uint8_t training_pass_threshold(void);
-uint8_t training_wrong_attempts(void);      /* of the current item, 0..TRAINING_ATTEMPTS */
+uint8_t training_wrong_attempts(void);      /* of the current item: 0..TRAINING_ATTEMPTS, unlimited: 0..TRAINING_WRONG_MAX */
 training_check_t training_last_check(void);
 training_outcome_t training_outcome(void);  /* meaningful in phase END */
 const char MEM_XDATA* training_item_text(void);    /* NUL-terminated, 1..KOCH_WORD_LEN_MAX characters */
@@ -712,6 +741,17 @@ Rules of D-T36 for the level selection:
 - `training_poll()` returns `TRAINING_EVENT_NONE` in SELECT. `training_add_char()` returns IGNORED,
   `training_undo_char()` returns false and `training_hold_result()` does nothing, as in every phase other than ITEM
   and RESULT.
+
+Rules of D-T53 to D-T55 for unlimited attempts and the skip:
+
+- `training_prepare()` stores `has_unlimited_attempts`. Only the next `training_prepare()` changes it.
+- `training_skip()` acts in phase ITEM, and in phase RESULT with `training_last_check()` equal to WRONG. In all other
+  cases it returns IGNORED and changes no state.
+- The skip flag is cleared by `training_start()` and by the GAP to ITEM step. Only `training_skip()` sets it. A
+  RETRY never follows a skip, so the RETRY step does not touch the flag.
+- After a skip: `training_last_check()` is FAILED, `training_is_skipped()` is true, and `training_answer_length()` is
+  less than `training_item_length()`. `training_score()` and `training_wrong_attempts()` keep their values.
+- The flag and the unlimited value are `static MEM_XDATA bool` in `training.c` (2 B xdata). No new internal RAM.
 
 ### 5.11 `modes/training_screen.h`, `modes/receiving.h`, `modes/sending.h` (new)
 
@@ -1109,9 +1149,11 @@ version. Load never writes the EEPROM.
 
 ### 11.1 State (all `static MEM_XDATA` in `training.c`)
 
-- Session: phase, mode, wpm, kind, level, learned count, max word length.
+- Session: phase, mode, wpm, kind, level, learned count, max word length, the unlimited attempts value (`bool`,
+  D-T53).
 - Selection: the selected level (`uint16_t`, D-T36). The earned level has no copy.
-- Counters: item number, item count, score, pass threshold, wrong attempts, last check, outcome.
+- Counters: item number, item count, score, pass threshold, wrong attempts, last check, outcome, the skip flag
+  (`bool`, D-T55).
 - Time: phase start tick (`uint16_t`), phase duration (`uint16_t`), result hold flag (`bool`, D-T14, D-T44).
 - Texts: item text and answer text (`TRAINING_TEXT_SIZE` each), item length, answer length.
 
@@ -1119,15 +1161,18 @@ version. Load never writes the EEPROM.
 
 | From | Trigger | Actions | To | Event |
 | --- | --- | --- | --- | --- |
-| any | `training_prepare(mode, wpm, max)` | Store the mode (unknown gives RECEIVING), wpm and max. Selected level = `progress_level(mode, wpm)` (D-T36). | SELECT | - |
+| any | `training_prepare(mode, wpm, max, unlimited)` | Store the mode (unknown gives RECEIVING), wpm, max and the unlimited value (D-T53). Selected level = `progress_level(mode, wpm)` (D-T36). | SELECT | - |
 | SELECT | `training_select_step(is_up)` | Up with selected < earned: selected + 1. Down with selected > 0: selected - 1. Else no change. A change returns true, no change returns false. END no longer steps (D-T46). | same | - |
 | END | `training_reopen_select()` | Selected level unchanged (the preselection of 11.4). No tick read, no progress access. Returns true (D-T46). | SELECT | - |
-| any | `training_start()` | Level = selected level. Set kind, learned count, item count, threshold (`koch_pass_threshold(koch_kind(level), item count)`, D-T33). Item number 0, score 0. Empty answer. Duration `TRAINING_START_MS`. | GAP | - |
+| any | `training_start()` | Level = selected level. Set kind, learned count, item count, threshold (`koch_pass_threshold(koch_kind(level), item count)`, D-T33). Item number 0, score 0. Empty answer. Skip flag off (D-T55). Duration `TRAINING_START_MS`. | GAP | - |
 | any | `training_stop()` | - | IDLE | - |
-| GAP | duration passed (poll) | Item number + 1. Wrong attempts 0. `koch_make_item()`. Empty answer. | ITEM | ITEM |
+| GAP | duration passed (poll) | Item number + 1. Wrong attempts 0. Skip flag off (D-T55). `koch_make_item()`. Empty answer. | ITEM | ITEM |
 | ITEM | `training_add_char()` gives CORRECT | First attempt (wrong attempts 0): score + 1. Duration `TRAINING_CORRECT_MS`. | RESULT | - |
-| ITEM | gives WRONG | Wrong attempts + 1 (now 1 or 2). Duration `TRAINING_WRONG_MS`. | RESULT | - |
-| ITEM | gives FAILED | Wrong attempts = 3. Duration `TRAINING_FAILED_MS`. Receiving sets the hold at once (12.2), so only Sending uses this delay. | RESULT | - |
+| ITEM | gives WRONG | Wrong attempts + 1, stopped at `TRAINING_WRONG_MAX` (D-T53). Now 1 or 2 with 3 attempts, 1 to 255 with unlimited attempts. Duration `TRAINING_WRONG_MS`. | RESULT | - |
+| ITEM | gives FAILED (3 attempts only) | Wrong attempts = 3. Duration `TRAINING_FAILED_MS`. Receiving sets the hold at once (12.2), so only Sending uses this delay. | RESULT | - |
+| ITEM | `training_skip()` (D-T54) | Answer unchanged. Last check FAILED, skip flag on. Score and wrong attempts unchanged. Duration `TRAINING_FAILED_MS`. Returns FAILED. | RESULT | - |
+| RESULT, last check WRONG | `training_skip()` (D-T54) | Remove the last answer character. Last check FAILED, skip flag on. Score and wrong attempts unchanged. Duration `TRAINING_FAILED_MS`, new phase start, hold off. Returns FAILED. | RESULT | - |
+| IDLE, SELECT, GAP, END, RESULT after CORRECT or FAILED | `training_skip()` | No change, no tick read. Returns IGNORED. | same | - |
 | RESULT | `training_hold_result(true)` | Hold on. The delay does not run. | RESULT | - |
 | RESULT | `training_hold_result(false)` | Hold off. Duration 0. The phase start does not change. So the next poll ends the RESULT by the three rows below (D-T44). | RESULT | - |
 | RESULT | duration passed with the hold off, last check WRONG | Empty answer. | ITEM | RETRY |
@@ -1139,7 +1184,8 @@ version. Load never writes the EEPROM.
 
 Time: `training_poll()` reads `tick_now()` once and compares `(uint16_t)(now - phase start) >= duration`. Each
 phase change sets the phase start to the tick of the call that makes the change. So `training_start()` and a
-`training_add_char()` that gives CORRECT, WRONG or FAILED also read the tick. Each phase change clears the hold.
+`training_add_char()` that gives CORRECT, WRONG or FAILED also read the tick. A `training_skip()` that gives FAILED
+also reads the tick. Each phase change clears the hold.
 
 ### 11.3 `training_add_char(c)`
 
@@ -1150,7 +1196,8 @@ phase change sets the phase start to the tick of the call that makes the change.
    `TRAINING_CHAR_WORD_SPACE` never matches, so it always gives a wrong attempt (D-T31). The answer then ends with it.
 4. Receiving: with the answer shorter than the item, return PARTIAL. At full length, compare the whole answer. Equal
    gives CORRECT, else a wrong attempt.
-5. A wrong attempt gives WRONG for wrong attempts 1 and 2, and FAILED for the third.
+5. A wrong attempt adds 1 to the wrong attempts, stopped at `TRAINING_WRONG_MAX` (D-T53). With 3 attempts, it
+   gives WRONG for wrong attempts 1 and 2, and FAILED for the third. With unlimited attempts, it always gives WRONG.
 6. CORRECT, WRONG and FAILED change the phase as in 11.2 and set the last check.
 
 `training_undo_char()`: in phase ITEM with a non-empty answer, remove the last character and return true. Else false.
@@ -1203,8 +1250,9 @@ tick loses at most the stopped time, as with a settings save.
 ### 12.2 Receiving (`ui-ux.md` sections 5.12, 5.14, 6.8)
 
 Entry (`receiving_enter()`), in this order (revised by D-T39): `rng_seed(tick_now())`. Read `RX Speed`,
-`RX Eff. Speed`, `Tone`, `Max Word Length` and `Prosigns` once into xdata (UX-49). `sidetone_set_tone_hz()`.
-`training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, max_word_len)`. No tap mode call, no session, no player, no
+`RX Eff. Speed`, `Tone`, `Max Word Length`, `Prosigns` and `RX Attempts` (`SETTINGS_ID_RX_UNLIMITED`, D-T60) once
+into xdata (UX-49). `sidetone_set_tone_hz()`.
+`training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, max_word_len, rx_has_unlimited_attempts)`. No tap mode call, no session, no player, no
 keyboard reset. `menu_render()` then calls `receiving_render()`, which draws the start screen.
 
 Session start (`rx_start_session()`, from SELECT or END), in this order: `buttons_set_tap_mode(true)`,
@@ -1234,9 +1282,11 @@ session gives no event at its release, because `buttons_set_tap_mode(true)` drop
 | ITEM | long `prev` | Undo one step: first `keyboard_back()`. If it returns false, `training_undo_char()`. Redraw. |
 | RESULT, answer state (D-T44) | `enter` tap (button or short tip closure) | `player_stop()`, then `training_hold_result(false)`. No redraw: the next poll gives GAP or END. Allowed also during the answer playback. |
 | RESULT, answer state (D-T44) | long `enter` (button or tip closure of 800 ms) | `player_start()` of the item. A running playback starts again. No redraw. |
-| RESULT, answer state (D-T44) | `menu/back`, `prev`, `next` taps, long `prev` | Ignored. No redraw. |
-| GAP, RESULT other than the answer state | any | Ignored. No redraw. |
-| GAP, ITEM, RESULT | long `next`, repeats | Ignored. |
+| RESULT, answer state (D-T44) | `menu/back`, `prev`, `next` taps, long `prev`, long `next` | Ignored. No redraw. A long `next` calls `training_skip()`, which returns IGNORED here (D-T56 (2)). |
+| ITEM, and RESULT with the last check WRONG | long `next` (D-T56) | `training_skip()`. FAILED: `keyboard_top()`, then the shared FAILED helper (`player_stop()`, `player_start()` of the item, `training_hold_result(true)`, `rx_draw_input()`), then `rng_mix(tick_now())`. The answer state of D-T44 follows. |
+| GAP, RESULT after CORRECT | long `next` | `training_skip()` returns IGNORED. No redraw, no player call. |
+| GAP, RESULT other than the answer state | other events | Ignored. No redraw. |
+| GAP, ITEM, RESULT | repeats | Ignored. |
 
 Button to run, left to right: MENU -> 0, PREV -> 1, NEXT -> 2, ENTER -> 3. `BUTTON_EVENT_MENU - code` does not
 give the run for ENTER. `receiving.c` maps the code in any small form (a `MEM_CODE` table, a switch, or
@@ -1264,7 +1314,8 @@ Check results (the return value of `training_add_char()`):
 | --- | --- |
 | PARTIAL | Redraw the item line: the block moves to the next slot. |
 | CORRECT, WRONG | `player_stop()`. Status and item line of `ui-ux.md` 5.14. |
-| FAILED | `player_stop()`. Status `Wrong. The answer is:`, the item text on the item line. Row 7 of the answer state (D-T44 (5)). `player_start()` of the item. `training_hold_result(true)`. The hold stays on until an `enter` tap. |
+| FAILED | `player_stop()`. Status `Wrong. The answer is:`, the item text on the item line. Row 7 of the answer state (D-T44 (5)). `player_start()` of the item. `training_hold_result(true)`. The hold stays on until an `enter` tap. One static helper holds these steps. `rx_pick()` and the skip call it (D-T56). |
+| FAILED after a skip (`training_is_skipped()`) | As FAILED, after `keyboard_top()`. The status text comes from ui-ux.md (new UX decisions for unlimited attempts and skip). |
 
 Answer state (D-T44): phase RESULT with `training_last_check() == TRAINING_CHECK_FAILED`. The helper
 `rx_is_answer_shown()` gives it. `rx_draw_item_line()` and `rx_draw_labels()` use the helper. In the answer state,
@@ -1278,15 +1329,16 @@ Poll (`receiving_poll()`): `training_poll()`, then the reaction to its event. `r
 | Event | Action |
 | --- | --- |
 | ITEM | Empty slots, block on the first slot, labels of the whole set, header number. `player_start()` of the item. |
-| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Empty slots, block on the first slot, labels of the whole set (`keyboard_top()`). `player_start()` of the item. |
+| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. With unlimited attempts, the `Try N` text and its cap of ui-ux.md (D-T59). Empty slots, block on the first slot, labels of the whole set (`keyboard_top()`). `player_start()` of the item. |
 | GAP | Blank moment: rows 1-5 off, header shows `training_shown_item_number()`. `rx_draw_labels()` draws the labels of the whole set in row 7, because row 7 can hold `Next` (D-T44 (6)). A pick already put the keyboard at the top. The key bar segments stay. |
 | END | `buttons_set_tap_mode(false)` (D-T39), then `training_screen_draw_end()` and the header with `i` = `n`. A button held at this call gives no event until it is released and pressed again. |
 
 ### 12.3 Sending (`ui-ux.md` sections 5.13, 5.14, 6.9)
 
 Entry (`sending_enter()`), in this order: `rng_seed(tick_now())`. Read `Key Type`, `Paddle`, `TX Speed`,
-`TX Eff. Speed`, `Tone`, `Max Word Length`, `Show CW Code` and `Prosigns` once into xdata (UX-49).
-`sidetone_set_tone_hz()`. `training_prepare(TRAINING_MODE_SENDING, tx_wpm, max_word_len)`. Tap mode stays off.
+`TX Eff. Speed`, `Tone`, `Max Word Length`, `Show CW Code` and `Prosigns` once into xdata (UX-49). Also read
+`TX Attempts` (`SETTINGS_ID_TX_UNLIMITED`, D-T60) once. `sidetone_set_tone_hz()`.
+`training_prepare(TRAINING_MODE_SENDING, tx_wpm, max_word_len, tx_has_unlimited_attempts)`. Tap mode stays off.
 Revised by D-T40: no `buttons_set_enter_enabled()` call and no `keyer_start()` at the entry. P3.2 stays with the
 menu, so `enter` and the paddle tip act on the start screen.
 
@@ -1310,7 +1362,8 @@ left in the queue is dropped by the phase rules below. `tx_start_session()` clea
 | --- | --- | --- |
 | SELECT, END | any event | `training_screen_select_input(event)`. START: `rng_mix(tick_now())`, `tx_start_session()`, then the redraw of the session start above. LEAVE: return true. NONE: return false. START comes only in SELECT (D-T47). |
 | GAP, ITEM, RESULT | short events, repeats | Ignored. No redraw. |
-| GAP, ITEM, RESULT | long `prev`, long `next` | Ignored. |
+| GAP, ITEM, RESULT | long `prev` | Ignored. |
+| GAP, ITEM, RESULT | long `next` (0x41, D-T57) | `training_skip()`. FAILED: if the pattern is not empty, set the drop flag. Empty the pattern, clear the armed flag, `tx_draw_input()`. IGNORED (GAP, RESULT after CORRECT or FAILED): nothing. No keyer call. Returns false. |
 
 `sending_leave()` (D-T40): in GAP, ITEM and RESULT, `keyer_stop()` and `buttons_set_enter_enabled(true)`. In SELECT
 and END, no keyer call and no buttons call. Then `training_stop()` in all phases.
@@ -1345,13 +1398,14 @@ Check results:
 | CORRECT | Status `Correct`. No bar. |
 | WRONG | Keyed character: status `Wrong: ` and the `morse_format()` text of the keyed character. Word space (the last answer character is `TRAINING_CHAR_WORD_SPACE`): status `Wrong: pause too long` (`ui-ux.md` 5.14, UX-52), a `MEM_CODE` constant. Row 7 keeps its marks (the last correct character). The bar stays under the failed position. |
 | FAILED | As WRONG. Row 5 shows the centered marks of the expected character (`morse_encode()` of the item character at the failed position), for every `Show CW Code` value. The draw is `training_screen_draw_code_group(pattern, MORSE_PATTERN_EMPTY)` (D-T47). For a word space, the failed position is the character that the user had to key next. |
+| FAILED after a skip (`training_is_skipped()`) | The failed position is `training_answer_length()` (D-T54 (6), D-T59). The answer can be empty, so no code reads its last character. The status text, row 5 and row 7 come from ui-ux.md (new UX decisions for unlimited attempts and skip). The bar stays under the failed position (WS-4). |
 
 `training_poll()` event reactions:
 
 | Event | Action |
 | --- | --- |
 | ITEM | Draw the item in the 8 x 16 font. Word item: bar under the first character. |
-| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. Bar back to the first character. Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
+| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. With unlimited attempts, the `Try N` text and its cap of ui-ux.md (D-T59). Bar back to the first character. Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
 | GAP | Blank moment: rows 1-7 off, header shows `training_shown_item_number()`. |
 | END | `keyer_stop()`, `buttons_set_enter_enabled(true)`, `buttons_set_tap_mode(false)` (D-T43: drops a held `prev` or `next` and its repeat), `training_screen_draw_end()`. |
 
@@ -1631,6 +1685,31 @@ Stack candidates for T16, to compare with the bound that T16 measures:
 
 T16 reports the 14.2 table before and after each part, the flash per changed file and the deepest chain by name.
 
+Change D-T52 to D-T60 (task T17): unlimited attempts and the long `next` skip. No new file, no ISR change. The plan
+gives a baseline from `build/putikeeg_cw_trainer.mem` before the work. T17 measures it again before the first change.
+
+| Resource | Baseline (plan) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 29 105 of 61 440 B | Part A: at most +150 B. Part B: at most +100 B. Whole T17: at most +450 B | +700 B |
+| xdata | 1823 of 3072 B | +6 B: settings record +1, baseline +1, engine flags +2, one `bool` per mode +2 | +8 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | 188 B free | deepest main-loop chain at most +2 B | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged: no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+
+Flash estimate: settings tables and the load rule by version about +80 B. Menu node, items and texts about +70 B.
+Engine (`training_skip()`, two getters, the stop at 255) about +80 B. Receiving and Sending skip paths about +100 B.
+Status and failed position branches about +60 B.
+
+Stack candidates for T17:
+
+- `menu_handle` -> `receiving_handle` -> `rx_handle_item` -> `rx_pick` -> (shared FAILED helper) -> `rx_draw_input`
+  -> `rx_draw_labels` -> `gfx_draw_text` -> ... The helper adds one level to the FAILED pick path.
+- `menu_handle` -> `receiving_handle` -> (skip path) -> (shared FAILED helper) -> `rx_draw_input` -> ...
+- `menu_handle` -> `sending_handle` -> `tx_draw_input` -> `tx_draw_item_line` -> `training_screen_draw_item_text`
+  -> `screen_draw_big_text` -> `gfx_draw_text` -> ...
+
+T17 reports the 14.2 table before and after each part, the flash per changed file and the deepest chain by name.
+
 Report table from `build.sh`, `.map` and `.mem`, before and after each task:
 
 | Task | Flash B | DSEG B | Overlay B | Bit bytes | xdata B | Stack start | Stack free B | Deepest main-loop stack B | Largest ISR frame B | Margin B |
@@ -1778,6 +1857,19 @@ Player tests define `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()`, include 
     Receiving labels. `test_qa_golden_capture.c` does not change: it decodes an LCD bus capture, not a training
     screen.
   - Each changed expected value traces to D-T45 to D-T47 or to a V-vector of task D6.
+- D-T52 to D-T60 (task T17):
+  - Every call `training_prepare(mode, wpm, max)` gets the fourth argument `false`. A test of unlimited attempts
+    passes `true`.
+  - Tests that expect a long `next` to do nothing in ITEM, or in RESULT after WRONG, change to the skip of D-T56 and
+    D-T57. This covers `test_long_enter_outside_item_and_long_next` in `test_qa_receiving.c` and every Sending test
+    with a long `next` in a session.
+  - Menu tests that use the `Settings` item indexes change to the new order of `menu_subsystem_spec.md` section 19.
+    `Show CW Code` and `Max Word Length` are in `Settings > Training`. `Display` and `Reset Statistics` move up by
+    one. `Prosigns` keeps its index 2.
+  - Settings tests that expect `SETTINGS_RECORD_SIZE` 15, layout version 3, the CRC at byte 14, 13 ids, or the old
+    "version 4 gives `SETTINGS_LOAD_BAD_VERSION`" vector change to `menu_subsystem_spec.md` section 19.
+  - Each file keeps its owner: `qa-embedded` changes the `test_qa_*` files (D-T43 (4)). Each changed expected value
+    traces to D-T52 to D-T60, to `menu_subsystem_spec.md` section 19, or to a V-vector of task D7.
 - No change removes a check or loosens an expected value.
 
 ## 16. Acceptance criteria
@@ -1834,6 +1926,13 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T45 | Buttons across the switches (section 12.6), both modes. (1) Hold `prev` or `next` from the last RESULT across END and across the `enter` that opens the start screen. No step and no dirty page come until the release. A new press then steps once (B-1). (2) Press and hold `next` in END, then press `enter`. On the start screen, the repeats step the selector (B-3). (3) Receiving: the start press from the reopened start screen gives no pick at its release and no replay at 800 ms (B-4). (4) Sending: the keyer runs only in GAP, ITEM and RESULT. A leave from the reopened start screen stops no keyer (B-5). AC-T21 holds. |
 | AC-T46 | Code helpers (D-T47 (1) and (2)). (1) Every Sending test of rows 5 and 7 (V-110 to V-135, AC-T28) passes with no change of its expected values. (2) `sending.c` has no `tx_draw_mark()`, `tx_draw_answer_code()`, `tx_mark_x`, `tx_shift` and no mark width constant. `training_screen.c` holds the only mark drawing code. (3) For every Koch character, `training_screen_draw_code_group(morse_encode(c), MORSE_PATTERN_EMPTY)` draws the marks that the test computes from `ui-ux.md` 5.13.3. With a second pattern, the group is centered with the D6 gap. `training_screen_draw_code_mark()` returns x + 5 after a dit and x + 9 after a dah. (4) `training_screen_draw_item_text()` gives the same pixels as before for items of 1 to 8 characters, prosigns included. |
 | AC-T47 | Change D-T45 to D-T47: memory within the T16 budget of section 14.2, with the before and after report of each part and the deepest chain by name. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c`, `koch.c`, `koch.h`, `progress.c`, `progress.h` or `firmware/drivers/`. In-session tests of both modes pass with no change of their expected values. |
+| AC-T48 | Unlimited attempts (D-T53), `test_training.c`, both modes. (1) With `true`: 300 wrong answers in a row each give WRONG, and each RESULT ends with RETRY after `TRAINING_WRONG_MS`. `training_wrong_attempts()` reads 1, 2, ..., 255 and then stays 255. No FAILED comes. (2) Then a correct answer gives CORRECT, and the score does not change. (3) With `false`: AC-T17 holds with no change, and the counter never goes above 3. (4) `training_has_unlimited_attempts()` returns the value of `training_prepare()`. `training_start()` and `training_reopen_select()` keep it. |
+| AC-T49 | Level logic (D-T58), `test_training.c`. For one scripted list of first-attempt results, run the same session with `false` and with `true`. Each item that is not correct on the first attempt gets a retry that is correct, or a skip. The score, the outcome, the stored level and the IAP erase and write counts are equal in both runs. Cases: a character level and a word level, at threshold - 1 (FAIL) and at threshold (PASS), and a replay below the earned level (PASS_REPLAY). |
+| AC-T50 | Skip in the engine (D-T54, D-T55), `test_training.c`, both modes. (1) ITEM with an empty answer and with a partial answer: FAILED, phase RESULT, `training_last_check()` FAILED, `training_is_skipped()` true, answer unchanged, score and wrong attempts unchanged. The RESULT ends after `TRAINING_FAILED_MS` with GAP, or with END on the last item. (2) RESULT after WRONG (a wrong character, and in Sending a word space): the answer loses its last character, the rest as (1). The new RESULT starts at the tick of the skip. (3) IDLE, SELECT, GAP, END, RESULT after CORRECT and RESULT after FAILED (also a second skip): IGNORED. No accessor changes, and the fake tick shows no read. (4) The flag is false after the next ITEM, after `training_start()`, and after a FAILED from `training_add_char()`. (5) `training_hold_result(true)` after a skip holds the RESULT, and `false` ends it at the next poll (D-T44). (6) After every skip, `training_answer_length() < training_item_length()`. |
+| AC-T51 | Receiving skip (D-T56), through the menu with the fake player, both attempt settings. (1) Long `next` in ITEM with no pick, with picks and inside an open group: `player_stop()`, then one `player_start()` of the item, the answer state, the status of ui-ux.md, row 7 with only the `enter` field. (2) Long `next` in RESULT after WRONG: the same. (3) An `enter` tap continues. The GAP shows the labels of the whole set. On the last item, row 7 shows `Finish`, and the tap shows the end screen. (4) Long `next` in GAP, in RESULT after CORRECT and in the answer state: no dirty page, no player call, no state change. (5) The V-vectors of task D7 for Receiving pass. |
+| AC-T52 | Sending skip (D-T57), through the menu with the fake keyer, both attempt settings. (1) Cases: long `next` in ITEM with an empty answer and after accepted characters of a word. Also in RESULT after a wrong character and after a word space. Each case gives FAILED, the status and row 5 of ui-ux.md, and the bar under the failed position. (2) A half-keyed character at the skip: its later elements and its CHAR_GAP make no check, and the first character of the next item counts. (3) A skip with an empty pattern and no keying until the next item: the first character of the next item counts (the D-T57 refinement). (4) A `next` press and its repeats do nothing. Long `next` in GAP: nothing. (5) ASan and UBSan report no read outside the answer or item arrays. (6) The V-vectors of task D7 for Sending pass. |
+| AC-T53 | Settings in the modes (D-T60), through the menu. `RX Attempts` set to unlimited changes only Receiving, and `TX Attempts` only Sending. Each mode reads its value once at the entry. The status line in ITEM after a wrong answer shows the `Try N` text of ui-ux.md with unlimited attempts, and `Try 2 of 3` or `Try 3 of 3` with 3 attempts. The cap of N follows ui-ux.md, also at a wrong counter of 255. |
+| AC-T54 | Change D-T52 to D-T60: memory within the T17 budget of section 14.2, with the before and after report of each part and the deepest chain by name. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c`, `koch.c`, `koch.h`, `progress.c`, `progress.h` or `firmware/drivers/`. |
 | AC-T26 | `firmware/test.sh` and `firmware/build.sh` pass. All host tests pass under ASan and UBSan. No regression: existing tests change only as section 15.3 allows. |
 
 ## 17. Tasks
@@ -2045,6 +2144,89 @@ task R3 covers `player_shared.h`, the `player_service.h` comment, the `timing.h`
 revised AC-T12 in `test_player.c`. QA check 4 of `sidetone_spec.md` section 24.6 covers the player. No change in
 `player.c`, `receiving.c`, `sending.c`, `training.c` or the session engine.
 
+### 17.8 Change D-T52 to D-T60: unlimited attempts and the long `next` skip
+
+User decisions 2026-11-02 (D-T52). Plan `harmonic-doodling-dragonfly.md` approved by the user. The settings and menu
+part is in `menu_subsystem_spec.md` section 19. The level logic does not change (D-T58). This is a MINOR change (a
+new function). After the work, the coordinator asks the user about the version (AGENTS.md). Proposal: MINOR.
+
+D7 ran at the same time as this specification. Where this document needs a UI value of D7, it names "ui-ux.md (new
+UX decisions for unlimited attempts and skip)". These values are UX-74 to UX-78 of `ui-ux.md` sections 5.19 and 5.20.
+
+Review of D7 (2026-11-02): `approved` (D-T61). Notes for T17 Part C:
+
+| ID | Note |
+| --- | --- |
+| N1 | Status after a skip (`training_screen_draw_status()`): in RESULT with FAILED and `training_is_skipped()`, Receiving shows `Skipped. The answer is:` and Sending shows `Skipped`. Two `MEM_CODE` texts. The existing centering gives columns 1 and 9. Test the skip flag before any read of `training_answer_text()[training_answer_length() - 1]`. |
+| N2 | Retry status (ITEM, wrong attempts > 0): with `training_has_unlimited_attempts()`, `Try ` and then the number wrong + 1 for wrong attempts up to 98, else `Try 99+`. Use `training_screen_append_u16()` and a `MEM_CODE` text for `99+`. No new buffer. With 3 attempts, `Try N of 3` does not change. |
+| N3 | `tx_draw_item_line()` (E-3): in RESULT, the bar moves back one slot only for WRONG and for a FAILED that is not a skip. After a skip, the bar slot is `training_answer_length()`. A character item has no bar, as before. |
+| N4 | `tx_draw_input()`: after a skip, row 5 is `training_screen_draw_code_group(morse_encode(training_item_text()[training_answer_length()]), MORSE_PATTERN_EMPTY)`, for each `Show CW Code` value. The skip path does not clear row 7. |
+| N5 | Receiving: in V-200 Run 1, the `PLOG` at the skip has `stop()` and then `play("K")`. The player was already stopped at the WRONG check, but the shared FAILED helper calls `player_stop()` first (D-T56). The vector lists only `play("K")`. The extra `stop()` follows the contract and is accepted. |
+| N6 | Menu (`menu_subsystem_spec.md` 19.5): `menu_attempt_texts[2] = {"3", "Unlimited"}`. Items `{"RX Attempts", NULL, menu_attempt_texts, MENU_KIND_CHOICE, SETTINGS_ID_RX_UNLIMITED, 9U}` and the same for `TX Attempts` with `SETTINGS_ID_TX_UNLIMITED`. `Max Word Length` keeps fw 1 and `Show CW Code` keeps fw 3. `Unlimited` fits `VALUE_TEXT_SIZE` (12). |
+| N7 | V-119: the setup has no long `next`. Implement the vector as its setup says. The skip is V-202 (editorial note E-1 of D-T61). |
+| N8 | Developer vectors of Part C: V-192 to V-206 and the changed V-02, V-20, V-21, V-80, V-96, V-119 and V-182. Q8 Part A changes the `test_qa_*` files. |
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D7 | `ui-ux-embedded-designer` | Runs. `ui-ux.md`: new UX decisions for unlimited attempts and skip. (1) The `Training` item in `Settings`, and the labels, choice texts and field widths of the `Settings > Training` list (5.3). (2) The status text of a skip in Receiving and in Sending. (3) Sending row 5 after a skip: the code of the next expected character or of the rest of the word. Also row 7 after a skip. (4) The `Try N` text and the cap of N with unlimited attempts. (5) Control tables 6.8 and 6.9: the long `next` (revises U-18 and U-20). (6) Feedback rows (7), new and revised V-vectors (9.4) for both modes and the menu, and device checks. All within D-T53 to D-T59. A need outside these limits goes to `architector`. | - |
+| T17 | `c-embedded-developer` | Part A: settings (`menu_subsystem_spec.md` 19.2 to 19.4). Part B: the engine and the two `training_prepare()` calls (5.10, 11, D-T53 to D-T55, D-T60). Part C: the menu node, the two mode skips and the screen (`menu_subsystem_spec.md` 19.5, 12.2, 12.3, D-T56, D-T57, D-T59). Scope: 17.8.1. | Part A: -. Part B: Part A. Part C: D7 review, Part B |
+| Q8 | `qa-embedded` | Part A: update the `test_qa_*` files of 15.3 to the contract, after T17 Part B (signature) and after the D7 review (texts and menu indexes). Part B: independent verification of AC-T26, AC-T48 to AC-T54 and `menu_subsystem_spec.md` AC-M13 to AC-M21 after T17 Part C. Fault and mutation cases below. Verdict `approved`, `changes_requested` or `blocked`. | Part A: T17 Part B, D7 review. Part B: T17 Part C |
+| W8 | `technical-writer` | `docs/user_manual.md` and `docs/quick_guide.md`. Describe the `Settings > Training` list with `RX Attempts` and `TX Attempts`. Give the new place of `Max Word Length` and `Show CW Code`. Describe the retries with unlimited attempts, and the long `next` skip in both modes with its result. Say that a retry or a skip gives no point, so a level still needs answers that are correct on the first attempt. `docs/release_notes.md`: one entry, after the user decides the version. | `architector` approval of T17 |
+
+Q8 fault cases:
+
+| ID | Case |
+| --- | --- |
+| F1 | Both modes: a `next` press that starts in RESULT after CORRECT and reaches 800 ms in the next ITEM. The next item is skipped (D-T54 (7)). |
+| F2 | Sending: a skip while the paddle keys a character, with the CHAR_GAP before, at and after the skip in the same poll. |
+| F3 | Both modes: a skip on the last item. The end screen shows the score without that item. |
+| F4 | Both modes: a skip, then a long `menu/back`. The mode leaves with the normal leave calls. No level changes. |
+| F5 | Unlimited attempts: 300 wrong attempts, then a correct answer. No point. The `Try N` text stays at its cap. |
+| F6 | Receiving: a long `next` at the tick where the WRONG delay ends. The skip acts on the phase that the engine has at the call. One playback of the answer only. |
+| F7 | Sending: a long `next` and a keyer CHAR_GAP in the same main loop pass, in both orders. The state after both is valid, and no attempt is lost or added. |
+| F8 | Settings: a version 3 record with every flag value loads with both training flags 0. A Settings exit with no edit step writes nothing. |
+| F9 | Settings: a power loss after each operation of a version 4 save never leaves a valid record with wrong data. |
+
+Q8 mutation cases:
+
+| ID | Mutant |
+| --- | --- |
+| M1 | The wrong counter wraps at 255. |
+| M2 | Unlimited attempts still give FAILED at the third wrong attempt. |
+| M3 | A skip adds to the score, or adds to the wrong counter. |
+| M4 | The skip flag is not cleared at a new item, or at `training_start()`. |
+| M5 | A skip after WRONG keeps the rejected character, so Sending row 5 shows the wrong position. |
+| M6 | A skip acts in GAP, or in RESULT after CORRECT or FAILED. |
+| M7 | Sending sets the drop flag at each skip. |
+| M8 | Sending does not empty the pattern at a skip. |
+| M9 | The Receiving skip does not call `keyboard_top()`. |
+| M10 | `training_start()` resets the unlimited value, or a mode reads the setting of the other mode. |
+| M11 | The CRC position of versions 1 to 3 and of version 4 are swapped. |
+| M12 | Bits 2-7 of the training flags byte stay after a load. |
+| M13 | An item of `Settings > Training` edits the wrong id. |
+| M14 | An IGNORED skip reads the tick or changes a state. |
+
+#### 17.8.1 Scope of T17
+
+| Part | Area | Files | Content |
+| --- | --- | --- | --- |
+| A | Settings | `inc/settings/settings.h`, `src/settings/settings.c` | `menu_subsystem_spec.md` 19.2 to 19.4. Tests: AC-M13 to AC-M18 in the settings test files. Part A target: at most +150 B flash, +2 B xdata. |
+| B | Engine | `inc/modes/training.h`, `src/modes/training.c` | 5.10, 11.1 to 11.3, D-T53 to D-T55. The comments of `TRAINING_CHECK_WRONG`, `TRAINING_CHECK_FAILED`, `TRAINING_CHECK_IGNORED`, `training_prepare()` and `training_wrong_attempts()` as 5.10. Tests: AC-T48 to AC-T50 in `test_training.c`. |
+| B | Mode entry | `src/modes/receiving.c`, `src/modes/sending.c` | Read the attempt setting once, store it with plain stores in a `static MEM_XDATA bool`, give it to `training_prepare()` (D-T60). No other mode change in Part B. Tests: the 15.3 signature changes of developer files. |
+| C | Menu | `src/menu/menu_tree.c`, `src/menu/menu_internal.h`, `inc/menu/menu.h` | `menu_subsystem_spec.md` 19.5, with the labels, texts and widths of D7. Tests: AC-M19 and AC-M20. |
+| C | Modes | `src/modes/receiving.c`, `src/modes/sending.c` | 12.2, 12.3, D-T56, D-T57. One static FAILED helper in `receiving.c`. |
+| C | Shared screen | `src/modes/training_screen.c` | The skip status and the `Try N` text of D7 (D-T59 (2)). The Sending failed position rule of D-T59 (1) in `training_screen_draw_status()`, `tx_draw_input()` and `tx_draw_item_line()`. |
+| C | Tests | `test_receiving.c`, `test_sending.c`, `test_menu_training.c`, the menu test files, `Tests/support/training_harness.h` | AC-T51 to AC-T53, the D7 V-vectors, the 15.3 changes of developer files. |
+| C | Report | - | AC-T54 and `menu_subsystem_spec.md` AC-M21: the 14.2 table before and after each part, the flash per changed file, the deepest chain by name, the `check_asm.sh` result, the `pre-commit` result. A list of the `test_qa_*` tests that fail only for a 15.3 reason, each with its reason. |
+
+Not in T17: a change of the ISR files, `buttons.c`, `keyer.c`, `player.c`, `koch`, `progress`, `eeprom` or
+`firmware/drivers/`. T17 does not change `test_qa_*` files (D-T43 (4)). If Part B changes an interface of section
+5.10, Part C stops and reports to `architector`. If D7 needs a behavior outside D-T53 to D-T59, the designer reports
+to `architector` first.
+
+Exit rule. T17 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
+tests that the 15.3 changes cover can fail. Q8 Part A updates them. Q8 ends with `test.sh` passing in full.
+
 ## 18. Device checks (unverified until the user tests on the device)
 
 | ID | Check |
@@ -2060,6 +2242,7 @@ revised AC-T12 in `test_player.c`. QA check 4 of `sidetone_spec.md` section 24.6
 | DC-T9 | D-T35 to D-T41. In both modes: the selector steps feel right with auto-repeat (400 ms, then every 80 ms), from L1 to an earned level above L50. `enter` and the paddle tip start a session from the start screen and from the end screen. Record whether a plug insertion on a selector screen starts a session (R-T10). The main menu shows the level next to `Receiving` and `Sending`. |
 | DC-T10 | D-T44. Receiving: after the third wrong attempt, wait 10 s. The answer stays on the screen, and row 7 shows only `Next`. A long `enter` and a tip closure of 800 ms play the answer again. An `enter` tap and a short tip closure go on to the blank moment. On the last item, row 7 shows `Finish`, and an `enter` tap shows the end screen. Record whether a plug insertion in the answer state goes on (R-T12). |
 | DC-T11 | D-T45 to D-T47, both modes, `ui-ux.md` D-42 to D-44. On the start screen, the 8 x 16 level text and the Sending code marks are clear on the glass: L1, a character level, the AR level with `<AR/+>`, the level of `,`, and a word level. During auto-repeat, a step redraws pages 0-5. The last level shows within 100 ms after the release (`ui-ux.md` UX-16, D-35). Record the time of one step redraw and of the full redraw from the end screen to the start screen. On the end screen, `enter` and a tip closure show the start screen, and a second press starts the session. |
+| DC-T12 | D-T52 to D-T60, both modes. With `RX Attempts` and `TX Attempts` set to unlimited, five wrong answers in a row: the item comes again each time, and the status shows the `Try N` text of ui-ux.md. A long `next` in an item and right after a wrong answer: the answer shows as after a third wrong attempt. In Sending, skip while a character is half keyed: the first character of the next item counts. A settings upgrade from a 0.1.2 record: all values stay, and both attempt settings show 3. Record whether a `next` hold skips the next item by mistake (R-T16). |
 
 ## 19. Risks
 
@@ -2078,6 +2261,9 @@ revised AC-T12 in `test_player.c`. QA check 4 of `sidetone_spec.md` section 24.6
 | R-T13: in the answer state, row 7 shows `Next` above `enter`. A user can read it as the name of the `next` button and press `next`. | A `next` tap does nothing there, so no wrong action and no lost point follow. The `enter` label position is the same as in phase ITEM. W6 says "tap `enter`". DC-T10 and `ui-ux.md` D-41 record whether users press `next`. If they do, `ui-ux-embedded-designer` proposes a new text and `architector` decides. |
 | R-T14: a step on the start screen redraws pages 0-5 (before: pages 0, 4 and 5), with an 8 x 16 text and code marks. During auto-repeat (80 ms), the screen can skip more levels. | No step is lost: the engine steps at each event, and the last level shows after the release. DC-T11 measures the time. Fallback order, decided by `architector` with `ui-ux-embedded-designer` after D-43 (D-T48 (7)). (a) The last level shows within 100 ms after the release (UX-16): no change. (b) and (c) come with D-T49 (1): unchanged pages, such as page 5 of Receiving or an unchanged label, are not sent. (d) Else the D-T35 (6) fallback: a long `prev` or `next` steps by 10. |
 | R-T9: a slow or uneven fist gets word-space errors at equal character and effective speeds (5 units leave 2 units above the normal space). | User decision (5 units, D-T30). The user can lower `TX Eff. Speed`. W3 tells the user. DC-T8. |
+| R-T15: with unlimited attempts, an item never ends while the user answers wrong and does not skip. | The status shows the try number. A long `next` skips, and a long `menu/back` leaves with no level change. W8 tells the user. |
+| R-T16: a `next` hold that starts near the end of one item reaches 800 ms in the next item and skips it (D-T54 (7)). | A hold of 800 ms is a deliberate action, and a skip changes no level: the item gives no point, as a wrong item. DC-T12 records whether users hit this case. |
+| R-T17: in Sending, the user takes a hand off the paddle to hold `next`. A half-keyed character can stay in the keyer. | D-T57 drops the rest of that character. The first character of the next item still counts. AC-T52 (2) and (3). |
 
 ## 20. Answered questions
 
@@ -2093,6 +2279,9 @@ No open question remains for this contract.
 All dependencies are resolved. T12 Part B can start. Fixes F-1 to F-3 of D2 change only wording and add V-135.
 
 Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 Part B can start.
+
+Unlimited attempts and the long `next` skip (U-34): resolved by D7, review `approved` (D-T61). T17 Part C can start
+after Part B.
 
 | ID | Item | Resolution | Source in `ui-ux.md` |
 | --- | --- | --- | --- |
@@ -2113,9 +2302,9 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 | U-15 | Sending retry | The whole item again (D-T6). | 5.13.1 |
 | U-16 | Score | First-attempt answers only (user decision). | 5.15, 12 |
 | U-17 | Failed reset | `Not saved` over Settings. `OK` returns to Settings (D-T11, D-T19). | 5.7, F-23 |
-| U-18 | Long `next`, repeats | Nothing on both training screens. | 6.8, 6.9 |
+| U-18 | Long `next`, repeats | Nothing on both training screens. | 6.8, 6.9 | Revised by D-T52, D-T56 and D-T57: a long `next` skips in ITEM and in RESULT after WRONG. Repeats still do nothing.
 | U-19 | Shown level | `L + 1`, saturated at 65535 (D-T5). | 5.11.1 |
-| U-20 | Sending long `prev`, long `next` | Nothing. | 6.9 |
+| U-20 | Sending long `prev`, long `next` | Nothing. | 6.9 | Revised by D-T52 and D-T57: a long `next` skips. A long `prev` still does nothing.
 | U-21 | Sending keyer events in delays | Dropped-character rule (D-T15). OVERFLOW uses no attempt (D-T16). | 5.13.2, Q-15 |
 | U-22 | Word keyboard | No prosign (D-T4, `keyboard_reset(training_alphabet_count())`). | 5.12.1, V-102 |
 | U-23 | Four-run keyboard, tap `enter`, long `enter` replay, labels (D-T27, D-T28) | Resolved by D1 (UX-51) and D-T29. | 3.1, 5.12, 5.15, 6.1, 6.2, 6.4, 6.6, 6.8, 9.4 |
@@ -2129,6 +2318,7 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 | U-32 | Receiving answer state (D-T44) | Resolved by D5 (UX-64), review `approved` on 2026-10-15. Row 7: only the `enter` field, right-aligned as every `enter` label: `Next` at x 107, or `Finish` at x 97 on the last item. The other three fields are blank, and the key bars stay. Events of 6.1 and 6.8 match D-T44 (4). New vector V-170, revised V-99, V-121 and V-136. Device check D-41 (DC-T10). | 5.12.2, 5.14, 6.1, 6.8, 6.10, 7, 8 (F-20), 9.4 |
 | U-33 | Start screen with a big level description, split end screen (D-T45 to D-T47) | Resolved by D6 (UX-65 to UX-70), review `approved` on 2026-10-15 (D-T48). Labels `New chars` and `New char` (column 8). Big line at `x = 64 - 4 m`. L1 code gap 9 px. End screen band `OK`, x 52-71. Steps redraw pages 0-5 in both modes. New vector V-171, device checks D-42 to D-44. | 5.15, 5.16, 6.1, 6.8, 6.9, 6.10, 9.4, UX-65 and up |
 | U-25 | Sending word-space result (D-T30, D-T31) | `Wrong: pause too long`, bar under the next character, row 5 at FAILED the code of that character, row 7 kept (WS-1 to WS-5). Resolved by D2 (UX-52). The arming condition text waits for fix F-1. | 5.13.1, 5.13.2, 5.14, 9.4 |
+| U-34 | Unlimited attempts and the long `next` skip (D-T52 to D-T59) | Resolved by D7 (UX-74 to UX-78), review `approved` on 2026-11-02 (D-T61). Settings order `CW`, `Training`, `Prosigns`, `Display`, `Reset Statistics`. Training list `RX Attempts`, `TX Attempts` (choices `3`, `Unlimited`, fw 9), `Max Word Length`, `Show CW Code`. Skip status `Skipped. The answer is:` (Receiving) and `Skipped` (Sending). Sending row 5: one code at the failed position, row 7 unchanged, bar unchanged. Retry status `Try <N>`, N 2 to 99, then `Try 99+`. | 5.3, 5.14, 5.19, 5.20, 6.1, 6.8, 6.9, 9.7 |
 
 ## 22. Final review (2026-10-06)
 
@@ -2337,3 +2527,30 @@ deepest chain is 71 B and the margin is 102 B. No protected file changed.
 T16 is closed. W7 (`technical-writer`) can start with the scope of section 17.6. The release notes entry waits for
 the version decision of the user (proposal: MINOR). Open, not blocking: the device checks DC-T11 and `ui-ux.md` D-42
 to D-44, the ring on the end screen, and B-5 on the device. Do not commit `firmware/Tests/tools/__pycache__/`.
+
+### 22.7 Final review of D-T52 to D-T61, task T17 (2026-11-02)
+
+Verdict T17: `approved`. QA verdict (Q8): `approved` (host level). D7 review `approved` (D-T61).
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 94 of 94 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| `build.sh` | Passes. Run again by `architector`. `check_asm.sh` on `build/CMakeFiles/putikeeg_cw_trainer.dir/src` reports no violation. |
+| `pre-commit` | `reuse lint-file` and `clang-format` pass on every changed and new firmware file. Run again by `architector`. |
+| Memory | Flash 29 105 -> 29 664 B (+559, target +450, hard limit +700). xdata 1823 -> 1830 B (+7, target +6, hard limit +8). Stack starts at 0x44 with 188 B free, as before. DSEG, overlay and bit bytes do not change. Deepest chain +1 B (QA estimate). ISR frame 18 B. Accepted by D-T62 (1) and (2). |
+| ISR and protected files | No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c`, `koch`, `progress`, `eeprom` or `firmware/drivers/`. |
+| Engine | `training_skip()` acts in ITEM and in RESULT after WRONG. After WRONG it removes the rejected character. It sets FAILED and the skip flag. An IGNORED call reads no tick. The wrong counter stops at 255. With unlimited attempts, FAILED comes only from a skip. `training_start()` and the GAP to ITEM step clear the flag. It matches D-T53 to D-T55. |
+| Settings | Layout version 4 with the CRC position by version. Byte 14 becomes 0 for versions 1 to 3 and on a failed load. Version 4 clears its bits 2-7. Two `_Static_assert`s guard the masks and the CRC position. The vectors of `menu_subsystem_spec.md` 19.4 are in `test_settings_training.c`. |
+| Menu | `Settings` and `Settings > Training` follow `menu_subsystem_spec.md` 6.1 and note N6. |
+| Modes | Receiving: the long `next` goes to `training_skip()` first, `keyboard_top()` comes before the answer path, and IGNORED does nothing (D-T56, D-T62 (3)). Sending: only event 0x41 calls the skip. The drop flag is set only for a pattern that is not empty, then the pattern and the armed flag are cleared (D-T57). Both modes read their attempt setting once with plain stores (D-T60). |
+| Screens | `tx_result_slot()` gives the failed position of D-T59 (1) for the bar and row 5. The status tests the skip flag before it reads the last answer character. `Try <N>` stops at `Try 99+`. The Receiving texts share `. The answer is:`. |
+| Tests | AC-T48 to AC-T54 and AC-M13 to AC-M21 have tests. The developer added `test_settings_training.c` and new cases in five test files. QA added five `test_qa_*` files, changed seven, and killed M1 to M14 and X1 to X8. |
+| Comments | Short, and they give the reason. No task-status text and no `TODO`. |
+
+Optional, not blocking (no new review needed): `firmware/src/modes/sending.c:86` says "A wrong character: the bar
+stays under it." After a skip in ITEM, no wrong character exists. A better text is "The bar stays under the
+expected character." Change it only together with a later change of this code.
+
+T17 is closed. W8 (`technical-writer`) can start with the scope of section 17.8. The release notes entry waits for the
+version decision of the user (proposal: MINOR). Open, not blocking: the device checks DC-T12 and `ui-ux.md` D-48 to
+D-52, and the editorial note E-1 of D-T61 for `ui-ux.md` V-119. Do not commit `firmware/Tests/tools/__pycache__/`.

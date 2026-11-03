@@ -494,29 +494,46 @@ static void test_empty_runs_in_narrowed_range(void) {
 
 /*
  * ui-ux.md 6.8, AC-T19: a long enter does nothing in the start pause, in a Wrong RESULT, in the blank moment and on
- * the end screen. A long next does nothing in ITEM. In the answer state after the third wrong attempt, a long enter
- * replays the answer (D-T44, UX-64), and only an enter tap continues.
+ * the end screen. A long next in ITEM skips the item (D-T56, UX-77): the answer state follows, and a long next there
+ * does nothing. In the answer state after the third wrong attempt, a long enter replays the answer (D-T44, UX-64),
+ * and only an enter tap continues.
  */
 static void test_long_enter_outside_item_and_long_next(void) {
-  const char* const items[2] = {"K", "K"};
+  const char* const items[3] = {"K", "K", "K"};
   size_t calls;
 
-  rx_open_items(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 2U);
+  rx_open_items(LEVEL_KM, SETTINGS_PROSIGN_BOTH, items, 3U);
   harness_run_to(HARNESS_T0 + 200U);
   mark_quiet_start();
   tap(LONG_EVENT(ENTER_EVENT));
   TEST_ASSERT(is_quiet_since_mark());
   TEST_ASSERT_EQUAL(0U, fake_player_call_count());
 
+  /* Item 1: a real hold of next skips; its release selects no run (tap mode). */
   run_to_item();
+  calls = fake_player_call_count();
+  pin_press(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 300U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(training_is_skipped());
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  TEST_ASSERT_EQUAL(0U, keyboard_depth());
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(calls));
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_START, fake_player_call_at(calls + 1U));
+  TEST_ASSERT(status("Skipped. The answer is:"));
+  /* A long next in the answer state does nothing. */
   calls = fake_player_call_count();
   mark_quiet_start();
   tap(LONG_EVENT(R_TAP));
   pin_press(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + BUTTONS_LONG_PRESS_MS + 300U));
   TEST_ASSERT(is_quiet_since_mark());
   TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  run_to_item();
 
-  /* A Wrong RESULT: a long enter and an enter tap do nothing. */
+  /* Item 2. A Wrong RESULT: a long enter and an enter tap do nothing. */
   tap(M_TAP);
   TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_last_check());
   calls = fake_player_call_count();
@@ -552,7 +569,7 @@ static void test_long_enter_outside_item_and_long_next(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
   TEST_ASSERT(is_quiet_since_mark());
 
-  /* The enter tap continues: blank moment before item 2. */
+  /* The enter tap continues: blank moment before item 3. */
   tap(ENTER_EVENT);
   TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
   calls = fake_player_call_count();

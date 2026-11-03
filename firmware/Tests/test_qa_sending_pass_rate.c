@@ -89,7 +89,7 @@ static void start_engine(uint8_t mode, uint8_t wpm, uint16_t level) {
   fake_iap_reset();
   progress_fixture_write(mode, wpm, level);
   harness_power_on();
-  training_prepare(mode, wpm, 8U);
+  training_prepare(mode, wpm, 8U, false);
   training_start();
 }
 

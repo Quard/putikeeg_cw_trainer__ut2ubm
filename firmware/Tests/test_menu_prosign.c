@@ -217,22 +217,21 @@ static bool row_is_blank(int r) { return row_matches(r, NO_BAND, 0, NULL, 0U); }
 /* The Settings list with @p prosigns in row 3 and the cursor on item @p selected. */
 static bool settings_list_is(const char* prosigns, int selected) {
   return title_is("Settings") && list_row_is(1, "CW", NULL, true, selected == 0) &&
-         list_row_is(2, "Show CW Code", "On", false, selected == 1) &&
+         list_row_is(2, "Training", NULL, true, selected == 1) &&
          list_row_is(3, "Prosigns", prosigns, false, selected == 2) &&
-         list_row_is(4, "Max Word Length", "5", false, selected == 3) &&
-         list_row_is(5, "Display", NULL, true, selected == 4) &&
-         list_row_is(6, "Reset Statistics", NULL, false, selected == 5) && row_is_blank(7);
+         list_row_is(4, "Display", NULL, true, selected == 3) &&
+         list_row_is(5, "Reset Statistics", NULL, false, selected == 4) && row_is_blank(6) && row_is_blank(7);
 }
 
 /* ---------- Scenarios ---------- */
 
 /* AC-P16: the value buffer holds the longest value or choice text of the tree. */
 static void test_value_texts_fit(void) {
-  static const uint8_t nodes[3] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY};
+  static const uint8_t nodes[4] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY, MENU_NODE_TRAINING};
   size_t node;
   size_t longest = 0U;
 
-  for (node = 0U; node < 3U; ++node) {
+  for (node = 0U; node < 4U; ++node) {
     const menu_node_t* list = &menu_nodes[nodes[node]];
     uint8_t index;
     for (index = 0U; index < list->item_count; ++index) {
@@ -260,10 +259,10 @@ static void test_v80_settings_list(void) {
   open_settings();
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(settings_list_is("Both", 0));
-  TEST_ASSERT_EQUAL(6U, menu_nodes[MENU_NODE_SETTINGS].item_count);
+  TEST_ASSERT_EQUAL(5U, menu_nodes[MENU_NODE_SETTINGS].item_count);
   send(PREV);
-  TEST_ASSERT(probe_sel(6));
-  TEST_ASSERT(settings_list_is("Both", 5));
+  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT(settings_list_is("Both", 4));
   send(NEXT);
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(settings_list_is("Both", 0));
@@ -334,7 +333,7 @@ static void test_v82_save(void) {
     TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
     TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION]);
     TEST_ASSERT_EQUAL(style, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
-    TEST_ASSERT_EQUAL(fake_iap_memory()[14], crc8_compute(fake_iap_memory(), 14U));
+    TEST_ASSERT_EQUAL(fake_iap_memory()[15], crc8_compute(fake_iap_memory(), 15U));
     power_on();
     TEST_ASSERT_EQUAL(style, settings_get(SETTINGS_ID_PROSIGN_STYLE));
     open_settings();
@@ -389,7 +388,7 @@ static void test_v83_version_1_record(void) {
   send(MENU);
   TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
   TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
-  TEST_ASSERT_EQUAL(0x03U, fake_iap_memory()[RECORD_VERSION]);
+  TEST_ASSERT_EQUAL(0x04U, fake_iap_memory()[RECORD_VERSION]);
   TEST_ASSERT_EQUAL(0x6BU, fake_iap_memory()[RECORD_FLAGS]);
   TEST_ASSERT_EQUAL(0x62U, fake_iap_memory()[3]);
   TEST_ASSERT_EQUAL(0x02U, fake_iap_memory()[4]);

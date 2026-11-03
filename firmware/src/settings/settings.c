@@ -17,28 +17,52 @@
 #define RECORD_TONE_LOW 3U
 #define RECORD_TONE_HIGH 4U
 #define RECORD_FLAGS 10U
-#define RECORD_CRC 14U
+#define RECORD_TRAINING_FLAGS 14U
+#define RECORD_CRC 15U    /* version 4: CRC over bytes 0..14 */
+#define RECORD_CRC_V3 14U /* versions 1 to 3: CRC over bytes 0..13 */
 #define RECORD_FIRST_FIELD RECORD_TONE_LOW
-#define RECORD_FIELD_COUNT 11U /* bytes 3..13 */
+#define RECORD_FIELD_COUNT 12U /* bytes 3..14 */
 #define RECORD_FLAG_SHOW_CW_CODE 0x01U
 #define RECORD_FLAG_PADDLE_SWAP 0x02U
 #define RECORD_FLAG_PROSIGN_STYLE 0x0CU
 #define RECORD_FLAG_RAMP_MS 0xF0U
 #define RECORD_FLAGS_USED_V2 0x0FU /* version 2 has no ramp */
 #define RECORD_FLAGS_USED_V1 0x03U /* version 1 has no prosign style and no ramp */
+#define RECORD_TRAINING_FLAG_RX_UNLIMITED 0x01U
+#define RECORD_TRAINING_FLAG_TX_UNLIMITED 0x02U
+#define RECORD_TRAINING_FLAGS_USED 0x03U
 #define RECORD_LAYOUT_VERSION_1 1U
+#define RECORD_LAYOUT_VERSION_3 3U
 _Static_assert((RECORD_FLAG_SHOW_CW_CODE | RECORD_FLAG_PADDLE_SWAP | RECORD_FLAG_PROSIGN_STYLE | RECORD_FLAG_RAMP_MS) ==
                    0xFFU,
                "the flag ids must cover all 8 bits of the flags byte");
+_Static_assert((RECORD_TRAINING_FLAG_RX_UNLIMITED | RECORD_TRAINING_FLAG_TX_UNLIMITED) == RECORD_TRAINING_FLAGS_USED,
+               "the training flag ids must cover the used bits of the training flags byte");
+_Static_assert((RECORD_CRC + 1U == SETTINGS_RECORD_SIZE) && (RECORD_FIRST_FIELD + RECORD_FIELD_COUNT == RECORD_CRC),
+               "the fields must end right before the CRC, and the CRC must be the last byte");
 
 #define SETTINGS_BACKLIGHT_DEFAULT 8U
 
 /*
  * The current values live in record form; field offsets by id. Show CW Code is flags bit 0, Paddle is bit 1,
- * the prosign style is bits 2-3, the ramp is bits 4-7.
+ * the prosign style is bits 2-3, the ramp is bits 4-7. RX Attempts is training flags bit 0, TX Attempts is bit 1.
  */
 static const MEM_CODE uint8_t settings_offsets[SETTINGS_ID_COUNT] = {
-    RECORD_TONE_LOW, 5U, 6U, 7U, 8U, 9U, RECORD_FLAGS, 11U, 12U, 13U, RECORD_FLAGS, RECORD_FLAGS, RECORD_FLAGS,
+    RECORD_TONE_LOW,
+    5U,
+    6U,
+    7U,
+    8U,
+    9U,
+    RECORD_FLAGS,
+    11U,
+    12U,
+    13U,
+    RECORD_FLAGS,
+    RECORD_FLAGS,
+    RECORD_FLAGS,
+    RECORD_TRAINING_FLAGS,
+    RECORD_TRAINING_FLAGS,
 };
 /* Flags-byte bits and their shift by id; mask 0 for an id with a byte of its own. Tables keep settings_store() leaf. */
 static const MEM_CODE uint8_t settings_flag_masks[SETTINGS_ID_COUNT] = {
@@ -55,22 +79,25 @@ static const MEM_CODE uint8_t settings_flag_masks[SETTINGS_ID_COUNT] = {
     RECORD_FLAG_PADDLE_SWAP,
     RECORD_FLAG_PROSIGN_STYLE,
     RECORD_FLAG_RAMP_MS,
+    RECORD_TRAINING_FLAG_RX_UNLIMITED,
+    RECORD_TRAINING_FLAG_TX_UNLIMITED,
 };
 static const MEM_CODE uint8_t settings_flag_shifts[SETTINGS_ID_COUNT] = {
-    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U, 2U, 4U,
+    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U, 2U, 4U, 0U, 1U,
 };
-static const MEM_CODE uint16_t settings_mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U,
-                                                                   4U,   0U, 0U, 0U, 0U, 4U};
-static const MEM_CODE uint16_t settings_maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U,
-                                                                    8U,    10U, 63U, 1U,  2U,  12U};
-static const MEM_CODE uint8_t settings_steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+static const MEM_CODE uint16_t settings_mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U,
+                                                                   0U,   0U, 0U, 0U, 4U, 0U, 0U};
+static const MEM_CODE uint16_t settings_maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U,
+                                                                    10U,   63U, 1U,  2U,  12U, 1U, 1U};
+static const MEM_CODE uint8_t settings_steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U,
+                                                                   1U,  1U, 1U, 1U, 1U, 1U, 1U};
 static const MEM_CODE uint16_t settings_defaults[SETTINGS_ID_COUNT] = {
     600U, 32U, 32U, 20U, 20U, SETTINGS_KEY_IAMBIC_B, 1U, 5U, SETTINGS_BACKLIGHT_DEFAULT, LCD_DEFAULT_CONTRAST,
-    0U,   2U,  6U,
+    0U,   2U,  6U,  0U,  0U,
 };
 
 static MEM_XDATA uint8_t settings_record[SETTINGS_RECORD_SIZE];
-/* Fields (record bytes 3..13) of the stored record, or of the defaults after a failed load. */
+/* Fields (record bytes 3..14) of the stored record, or of the defaults after a failed load. */
 static MEM_XDATA uint8_t settings_baseline[RECORD_FIELD_COUNT];
 static MEM_XDATA bool settings_is_edited_flag;
 
@@ -116,6 +143,8 @@ static uint16_t settings_clamp(settings_id_t id, MEM_XDATA uint16_t value) {
 
 static void settings_set_defaults(void) {
   settings_id_t id;
+  /* The training flag ids cover bits 0-1 only, so this clear keeps no bit of a bad record in byte 14. */
+  settings_record[RECORD_TRAINING_FLAGS] = 0U;
   /* The flag ids cover all 8 bits of the flags byte, so no bit of a bad record stays. */
   for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {
     settings_store(id, settings_defaults[id]);
@@ -131,6 +160,8 @@ static void settings_take_baseline(void) {
 }
 
 static settings_load_status_t settings_check_record(void) {
+  uint8_t crc_offset;
+
   if (eeprom_read(EEPROM_MAP_SETTINGS_ADDRESS, settings_record, SETTINGS_RECORD_SIZE) != EEPROM_OK) {
     return SETTINGS_LOAD_READ_FAILED;
   }
@@ -141,7 +172,9 @@ static settings_load_status_t settings_check_record(void) {
       (settings_record[RECORD_VERSION] < RECORD_LAYOUT_VERSION_1)) {
     return SETTINGS_LOAD_BAD_VERSION;
   }
-  if (crc8_compute(settings_record, RECORD_CRC) != settings_record[RECORD_CRC]) {
+  /* A version 1 to 3 save wrote bytes 0..14 only, so byte 15 of such a record is erased and not checked. */
+  crc_offset = (settings_record[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) ? RECORD_CRC : RECORD_CRC_V3;
+  if (crc8_compute(settings_record, crc_offset) != settings_record[crc_offset]) {
     return SETTINGS_LOAD_BAD_CRC;
   }
   return SETTINGS_LOAD_OK;
@@ -152,15 +185,21 @@ settings_load_status_t settings_load(void) {
   settings_id_t id;
 
   if (status == SETTINGS_LOAD_OK) {
-    /* Version 3 uses every flags bit. An older record has no ramp, and version 1 has no prosign style either. */
-    if (settings_record[RECORD_VERSION] != SETTINGS_LAYOUT_VERSION) {
-      if (settings_record[RECORD_VERSION] == RECORD_LAYOUT_VERSION_1) {
-        settings_record[RECORD_FLAGS] &= RECORD_FLAGS_USED_V1;
-        settings_store(SETTINGS_ID_PROSIGN_STYLE, settings_defaults[SETTINGS_ID_PROSIGN_STYLE]);
-      } else {
-        settings_record[RECORD_FLAGS] &= RECORD_FLAGS_USED_V2;
+    if (settings_record[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) {
+      settings_record[RECORD_TRAINING_FLAGS] &= RECORD_TRAINING_FLAGS_USED;
+    } else {
+      /* Byte 14 of a version 1 to 3 record holds its CRC, not training flags. */
+      settings_record[RECORD_TRAINING_FLAGS] = 0U;
+      /* Version 3 uses every flags bit. An older record has no ramp, and version 1 has no prosign style either. */
+      if (settings_record[RECORD_VERSION] != RECORD_LAYOUT_VERSION_3) {
+        if (settings_record[RECORD_VERSION] == RECORD_LAYOUT_VERSION_1) {
+          settings_record[RECORD_FLAGS] &= RECORD_FLAGS_USED_V1;
+          settings_store(SETTINGS_ID_PROSIGN_STYLE, settings_defaults[SETTINGS_ID_PROSIGN_STYLE]);
+        } else {
+          settings_record[RECORD_FLAGS] &= RECORD_FLAGS_USED_V2;
+        }
+        settings_store(SETTINGS_ID_RAMP_MS, settings_defaults[SETTINGS_ID_RAMP_MS]);
       }
-      settings_store(SETTINGS_ID_RAMP_MS, settings_defaults[SETTINGS_ID_RAMP_MS]);
     }
     /* Id order clamps each base speed before its effective speed. */
     for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {

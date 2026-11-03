@@ -75,14 +75,20 @@ static void send_times(button_event_t event, unsigned count) {
   }
 }
 
-/* From the main menu after a power-on: the cursor goes to list @p node, item @p index. */
+/*
+ * From the main menu after a power-on: the cursor goes to list @p node, item @p index. Settings order of
+ * menu_subsystem_spec.md section 19.1: CW, Training, Prosigns, Display, Reset Statistics.
+ */
 static void go_to_item(uint8_t node, uint8_t index) {
   send_times(NEXT, 3U - menu_cursor());
   send(ENTER);
   if (node == MENU_NODE_CW) {
     send(ENTER);
+  } else if (node == MENU_NODE_TRAINING) {
+    send_times(NEXT, 1U);
+    send(ENTER);
   } else if (node == MENU_NODE_DISPLAY) {
-    send_times(NEXT, 4U);
+    send_times(NEXT, 3U);
     send(ENTER);
   }
   send_times(NEXT, index);
@@ -174,12 +180,12 @@ static void power_on_wide(void) {
 
 /* AC-P15, AC-P16: each value of each value and choice item shows in full in browse mode and in edit mode. */
 static void test_every_value_shows_in_full(void) {
-  static const uint8_t nodes[3] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_DISPLAY};
+  static const uint8_t nodes[4] = {MENU_NODE_SETTINGS, MENU_NODE_CW, MENU_NODE_TRAINING, MENU_NODE_DISPLAY};
   size_t node_index;
   unsigned long checked = 0U;
   size_t longest = 0U;
 
-  for (node_index = 0U; node_index < 3U; ++node_index) {
+  for (node_index = 0U; node_index < 4U; ++node_index) {
     const menu_node_t* node = &menu_nodes[nodes[node_index]];
     uint8_t index;
     for (index = 0U; index < node->item_count; ++index) {
@@ -236,11 +242,11 @@ static void test_every_value_shows_in_full(void) {
 /* AC-P14: the Prosigns row of the list for each record value; bits 2-3 = 3 and a version 1 record give Both. */
 static void test_prosigns_row_per_record(void) {
   static const uint8_t records[5][SETTINGS_RECORD_SIZE] = {
-      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0xB3U},
-      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x05U, 0x05U, 0x08U, 0x20U, 0xEBU},
-      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U},
-      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0x5BU},
-      {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0xBCU},
+      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0xB3U, 0xFFU},
+      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x05U, 0x05U, 0x08U, 0x20U, 0xEBU, 0xFFU},
+      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U, 0xFFU},
+      {0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0x5BU, 0xFFU},
+      {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0xBCU, 0xFFU},
   };
   static const char* const shown[5] = {"Punctuation", "Prosign", "Both", "Both", "Both"};
   const menu_item_t* item = &menu_nodes[MENU_NODE_SETTINGS].items[2];

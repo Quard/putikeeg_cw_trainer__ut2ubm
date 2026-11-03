@@ -56,6 +56,7 @@ static MEM_XDATA uint8_t rx_wpm;
 static MEM_XDATA uint8_t rx_eff_wpm;
 static MEM_XDATA uint8_t rx_max_word_len;
 static MEM_XDATA uint8_t rx_prosign_style;
+static MEM_XDATA bool rx_is_unlimited;
 
 static MEM_XDATA uint8_t rx_label_length;
 /* Work values in xdata, so the calls in the loops need no internal RAM to keep them. */
@@ -192,8 +193,13 @@ void receiving_enter(void) {
   rx_eff_wpm = (uint8_t)settings_get(SETTINGS_ID_RX_EFF_WPM);
   rx_max_word_len = (uint8_t)settings_get(SETTINGS_ID_MAX_WORD_LEN);
   rx_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
+  /* Plain stores: a bool from a compare needs a bit of internal RAM in SDCC. */
+  rx_is_unlimited = false;
+  if (settings_get(SETTINGS_ID_RX_UNLIMITED) != 0U) {
+    rx_is_unlimited = true;
+  }
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
-  training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, rx_max_word_len);
+  training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, rx_max_word_len, rx_is_unlimited);
 }
 
 /* Rows 1-7 of a session. */
@@ -234,19 +240,35 @@ void receiving_poll(void) {
   }
 }
 
+/* FAILED by the third wrong attempt or a skip: the answer plays once more and stays until an enter tap (D-T44). */
+static void rx_show_answer(void) {
+  player_stop();
+  rx_play_item();
+  training_hold_result(true);
+}
+
 /* A pick goes to the engine; a check stops the playback (ui-ux.md section 5.12.2). */
 static void rx_pick(char character) {
   const training_check_t check = training_add_char(character);
 
-  if (check != TRAINING_CHECK_PARTIAL) {
+  if (check == TRAINING_CHECK_FAILED) {
+    rx_show_answer();
+  } else if (check != TRAINING_CHECK_PARTIAL) {
     player_stop();
-    if (check == TRAINING_CHECK_FAILED) {
-      /* The answer plays once more and stays until an enter tap (D-T44). */
-      rx_play_item();
-      training_hold_result(true);
-    }
   }
   rx_draw_input();
+}
+
+/* A long next in ITEM or after a wrong attempt ends the item (D-T56). Returns true when it acted. */
+static bool rx_handle_skip(void) {
+  if (!rx_is_long || (rx_code != BUTTON_EVENT_NEXT) || (training_skip() != TRAINING_CHECK_FAILED)) {
+    return false;
+  }
+  /* A skip can come while a group is open; the labels of the next GAP come from the keyboard state. */
+  keyboard_top();
+  rx_show_answer();
+  rx_draw_input();
+  return true;
 }
 
 /* Applies rx_code and rx_is_long in phase ITEM. Returns true when the event acted. */
@@ -323,7 +345,8 @@ bool receiving_handle(button_event_t event) {
   if ((event & BUTTON_EVENT_LONG_FLAG) != 0U) {
     rx_is_long = true;
   }
-  if (((phase == TRAINING_PHASE_ITEM) && rx_handle_item()) || (rx_is_answer_shown() && rx_handle_answer())) {
+  if (rx_handle_skip() || ((phase == TRAINING_PHASE_ITEM) && rx_handle_item()) ||
+      (rx_is_answer_shown() && rx_handle_answer())) {
     rng_mix(tick_now());
   }
   return false;

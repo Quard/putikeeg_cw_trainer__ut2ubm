@@ -71,11 +71,13 @@ copy Morse code by ear.
 4. Pick the characters. The bottom row shows four labels, one above each button. A label shows a character or a
    group of characters, for example `A-K`. Press a button to pick its character, or to split its group into four
    smaller groups. One pick takes three presses at most.
-5. When you fill the last slot, the trainer checks the answer. You have three attempts for each item.
-6. After the third wrong attempt, the answer stays on the screen and plays one time. `Next` shows above `enter`,
-   or `Finish` on the last item. Tap `enter` to go on. The `next` button does nothing here. Hold `enter` to hear
-   the answer again.
-7. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
+5. When you fill the last slot, the trainer checks the answer. `RX Attempts` sets the attempts for each item: `3`
+   (default) or `Unlimited`.
+6. To skip an item, hold `next`. The status line shows `Skipped. The answer is:`.
+7. After the third wrong attempt or a skip, the answer stays on the screen and plays one time. `Next` shows above
+   `enter`, or `Finish` on the last item. Tap `enter` to go on. The `next` button does nothing here. Hold `enter`
+   to hear the answer again.
+8. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
    the level of the next session. Press `enter` again to start it.
 
 | Screen | Button | Short press | Long press |
@@ -89,11 +91,11 @@ copy Morse code by ear.
 | End screen | `enter` | Opens the start screen with the level of the next session. | Same as short press. |
 | Session | `menu/back` | Keyboard key 1. | Leaves the session. The session is lost. |
 | Session | `prev` | Keyboard key 2. | Undoes one step: the last group or the last pick. |
-| Session | `next` | Keyboard key 3. | Does nothing. |
+| Session | `next` | Keyboard key 3. | Skips the item. The answer shows. |
 | Session | `enter` | Keyboard key 4. | Plays the item again. This is free. |
-| Answer after the third wrong attempt | `enter` | Goes to the next item, or to the end screen. | Plays the answer again. |
-| Answer after the third wrong attempt | `prev`, `next` | Do nothing. | Do nothing. |
-| Answer after the third wrong attempt | `menu/back` | Does nothing. | Leaves the session. The session is lost. |
+| Answer after the third wrong attempt or a skip | `enter` | Goes to the next item, or to the end screen. | Plays the answer again. |
+| Answer after the third wrong attempt or a skip | `prev`, `next` | Do nothing. | Do nothing. |
+| Answer after the third wrong attempt or a skip | `menu/back` | Does nothing. | Leaves the session. The session is lost. |
 
 ## Sending
 
@@ -106,12 +108,24 @@ checks each character at once. Use it to learn to send clean Morse code.
    its dots and dashes show, also with `Show CW Code` = `Off`.
 3. Select a level with `prev` and `next`, and press `enter`.
 4. Key the item at the `TX Speed` setting. In a word, a bar shows the next character to key.
-5. A wrong character ends the attempt. Then key the whole item again. You have three attempts for each item.
-6. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
+5. A wrong character ends the attempt. Then key the whole item again. `TX Attempts` sets the attempts for each item:
+   `3` (default) or `Unlimited`.
+6. To skip an item, hold `next`. The status line shows `Skipped` for 2.5 s. Below the item, the dots and dashes of
+   the expected character show.
+7. After the last item, the end screen shows your score and the result. Press `enter` to see the start screen with
    the level of the next session. Press `enter` again to start it.
 
 In a word, do not pause too long between two characters. A long pause is an error. If you need more time, set a
 lower `TX Eff. Speed`.
+
+## Attempts and skip
+
+- With `3` attempts, the third wrong attempt ends the item, and the answer shows.
+- With `Unlimited` attempts, the item comes again after each wrong answer, until your answer is correct or you skip
+  it. The status line shows `Try 2`, `Try 3` and so on. From attempt 100, it shows `Try 99+`.
+- A hold of `next` skips the item while the item shows, and during a `Wrong` result. In other states, it does
+  nothing.
+- Only an answer that is correct on the first attempt gives a point. A retry or a skip never gives a point.
 
 | Screen | Button | Short press | Long press |
 | --- | --- | --- | --- |
@@ -123,7 +137,8 @@ lower `TX Eff. Speed`.
 | End screen | `prev`, `next` | Do nothing. | Do nothing. |
 | End screen | `enter` | Opens the start screen with the level of the next session. | Same as short press. |
 | Session | `menu/back` | Does nothing. | Leaves the session. The session is lost. |
-| Session | `prev`, `next` | Do nothing. | Do nothing. |
+| Session | `prev` | Does nothing. | Does nothing. |
+| Session | `next` | Does nothing. | Skips the item. |
 | Session | `enter` | Keys like the dit lever. | Keys like the dit lever. |
 
 ## Levels
@@ -131,6 +146,7 @@ lower `TX Eff. Speed`.
 - Each level is a session of 50 characters or of 10 or more words. Each character level adds one new character.
   After two character levels, a word level uses all the characters that you learned.
 - To pass a character level, answer 90 % of the items right on the first attempt. For a word level, you need 80 %.
+  A retry or a skip gives no point, also with `Unlimited` attempts.
 - A pass at your level opens the next level. You can repeat any level up to your level. A repeat does not change
   your level.
 - Each speed has its own level. If you change `RX Speed` or `TX Speed`, the level can change. Set the speed back to
@@ -167,9 +183,11 @@ leave `Settings` and go back to the main menu, the trainer saves the settings. B
 | `Settings > CW` | `TX Eff. Speed` | The pause between characters and words in `Sending` and `Free Input`. A lower value gives you more time. | 5 WPM to `TX Speed` | 20 WPM |
 | `Settings > CW` | `Key Type` | The type of your key. | `Straight`, `Iambic A`, `Iambic B` | `Iambic B` |
 | `Settings > CW` | `Paddle` | Which lever gives the dits. `Reversed` swaps the levers. | `Normal`, `Reversed` | `Normal` |
-| `Settings` | `Show CW Code` | Shows the dots and dashes that you key in `Sending`. | `Off`, `On` | `On` |
+| `Settings > Training` | `RX Attempts` | The attempts for each item in `Receiving`. | `3`, `Unlimited` | `3` |
+| `Settings > Training` | `TX Attempts` | The attempts for each item in `Sending`. | `3`, `Unlimited` | `3` |
+| `Settings > Training` | `Max Word Length` | The longest word in the training modes. | 4 to 8 characters | 5 |
+| `Settings > Training` | `Show CW Code` | Shows the dots and dashes that you key in `Sending`. | `Off`, `On` | `On` |
 | `Settings` | `Prosigns` | How AR, BT, KN and AS show, for example `+`, `<AR>` or `<AR/+>`. | `Punctuation`, `Prosign`, `Both` | `Both` |
-| `Settings` | `Max Word Length` | The longest word in the training modes. | 4 to 8 characters | 5 |
 | `Settings > Display` | `Backlight` | The brightness of the screen light. | `Off`, 1 to 10 | 8 |
 | `Settings > Display` | `Contrast` | The contrast of the screen. | 0 to 63 | 32 |
 | `Settings` | `Reset Statistics` | Sets all levels back to L1. Select `Yes` and press `enter` to reset. | - | - |

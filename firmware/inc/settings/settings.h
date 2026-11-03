@@ -32,7 +32,9 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_PADDLE_SWAP 10U   /* 0 Normal, 1 Reversed */
 #define SETTINGS_ID_PROSIGN_STYLE 11U /* SETTINGS_PROSIGN_*: 0 Punctuation, 1 Prosign, 2 Both */
 #define SETTINGS_ID_RAMP_MS 12U       /* sidetone rise and fall time, 4..12 ms */
-#define SETTINGS_ID_COUNT 13U
+#define SETTINGS_ID_RX_UNLIMITED 13U  /* RX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_TX_UNLIMITED 14U  /* TX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_COUNT 15U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
@@ -54,21 +56,22 @@ typedef uint8_t settings_save_status_t;
 #define SETTINGS_SAVE_OK 1U
 #define SETTINGS_SAVE_FAILED 2U
 
-#define SETTINGS_RECORD_SIZE 15U
+#define SETTINGS_RECORD_SIZE 16U
 #define SETTINGS_MAGIC_0 0x43U /* 'C' */
 #define SETTINGS_MAGIC_1 0x57U /* 'W' */
-#define SETTINGS_LAYOUT_VERSION 3U
+#define SETTINGS_LAYOUT_VERSION 4U
 
 /**
- * Reads the record and checks read status, magic, version and CRC in this order. Layout versions 1, 2 and 3 pass; a
- * version 1 record gets the default prosign style, and a version 1 or 2 record gets the default ramp. On a failure
- * all values take their defaults. On success every field is clamped. Never writes the EEPROM. Sets the change baseline
- * to the resulting values and clears the edited flag. Call once at start-up, before any other settings call.
+ * Reads the record and checks read status, magic, version and CRC in this order. Layout versions 1 to 4 pass; the
+ * CRC position follows the version. A version 1 to 3 record gets the default training flags, a version 1 record the
+ * default prosign style, and a version 1 or 2 record the default ramp. On a failure all values take their defaults. On
+ * success every field is clamped. Never writes the EEPROM. Sets the change baseline to the resulting values and clears
+ * the edited flag. Call once at start-up, before any other settings call.
  */
 settings_load_status_t settings_load(void);
 
 /**
- * Saves when the edited flag is set and the values differ from the baseline: erase page 0, program bytes 2..14,
+ * Saves when the edited flag is set and the values differ from the baseline: erase page 0, program bytes 2..15,
  * then the magic. Without a difference it clears the edited flag. On an EEPROM error it keeps the baseline and the
  * edited flag and returns SETTINGS_SAVE_FAILED.
  */

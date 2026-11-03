@@ -3,7 +3,9 @@
 Owner: `architector`. Status: approved for implementation. Change request D-A1 to D-A15 (firmware version,
 start-up screen, `About` item, approved plan of 2026-10-08): specification published on 2026-10-08, section 17.
 Change request `Ramp` setting (plan `noble-bubbling-dahl.md`, user-approved 2026-10-16): specification published on
-2026-10-16, section 18. It revises sections 4.8, 5.1, 5.2, 6.1, 6.2 and 6.3 in place. Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
+2026-10-16, section 18. It revises sections 4.8, 5.1, 5.2, 6.1, 6.2 and 6.3 in place. Change request unlimited attempts
+and the long `next` skip (plan `harmonic-doodling-dragonfly.md`, user-approved, `training_spec.md` D-T52 to D-T60):
+specification published on 2026-11-02, section 19. It revises sections 4.8, 5.1, 5.2 and 6.1 in place. Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
 
@@ -619,7 +621,9 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_PADDLE_SWAP 10U  /* 0 Normal, 1 Reversed (keyer_spec.md section 6.13) */
 #define SETTINGS_ID_PROSIGN_STYLE 11U  /* SETTINGS_PROSIGN_* (keyer_spec.md section 17) */
 #define SETTINGS_ID_RAMP_MS 12U        /* sidetone rise and fall time, 4..12 ms (section 18) */
-#define SETTINGS_ID_COUNT 13U
+#define SETTINGS_ID_RX_UNLIMITED 13U   /* RX Attempts: 0 gives 3 attempts, 1 unlimited (section 19) */
+#define SETTINGS_ID_TX_UNLIMITED 14U   /* TX Attempts: 0 gives 3 attempts, 1 unlimited (section 19) */
+#define SETTINGS_ID_COUNT 15U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U
@@ -641,10 +645,10 @@ typedef uint8_t settings_save_status_t;
 #define SETTINGS_SAVE_OK 1U
 #define SETTINGS_SAVE_FAILED 2U
 
-#define SETTINGS_RECORD_SIZE 15U
+#define SETTINGS_RECORD_SIZE 16U
 #define SETTINGS_MAGIC_0 0x43U        /* 'C' */
 #define SETTINGS_MAGIC_1 0x57U        /* 'W' */
-#define SETTINGS_LAYOUT_VERSION 3U
+#define SETTINGS_LAYOUT_VERSION 4U
 
 settings_load_status_t settings_load(void);
 settings_save_status_t settings_save_if_changed(void);
@@ -662,9 +666,10 @@ void settings_use_display_defaults(void);
 
 - Call it once at start-up, before any other settings call.
 - It reads the record (section 5). It checks in this order: read status, magic, version, CRC.
-- Layout versions 1, 2 and 3 pass the version check. A version 1 or 2 record loads as section 5.1 says: its values
-  stay, and the settings that its layout does not have take their defaults (`Prosigns` for version 1, `Ramp` for
-  versions 1 and 2).
+- Layout versions 1, 2, 3 and 4 pass the version check. The CRC position depends on the version (section 19.3). A
+  version 1, 2 or 3 record loads as section 5.1 says, and its values stay. A setting that its layout does not have
+  takes its default: `Prosigns` for version 1, `Ramp` for versions 1 and 2, `RX Attempts` and `TX Attempts` for
+  versions 1 to 3.
 - On a failure, all values take their defaults and the function returns the matching status.
 - On success, every field goes through the clamp rule (section 5.3). Base speeds come before effective speeds.
 - It never writes the EEPROM.
@@ -675,14 +680,14 @@ void settings_use_display_defaults(void);
 - When the edited flag is clear, it returns `SETTINGS_SAVE_NOT_NEEDED` and does not access the EEPROM.
 - When the current values are equal to the baseline, it clears the edited flag, returns
   `SETTINGS_SAVE_NOT_NEEDED` and does not access the EEPROM.
-- Else it calls `eeprom_clear_low_supply()`, serializes the record, erases page 0, programs bytes 2..14 and then bytes 0..1. The magic comes last, so
+- Else it calls `eeprom_clear_low_supply()`, serializes the record, erases page 0, programs bytes 2..15 and then bytes 0..1. The magic comes last, so
   an interrupted write never has a valid magic.
 - On an EEPROM error (`EEPROM_ERR_FAIL`, `EEPROM_ERR_LOW_SUPPLY` or `EEPROM_ERR_RANGE`), it stops at once,
   returns `SETTINGS_SAVE_FAILED` and keeps the baseline and the edited flag. The next Settings exit tries again,
   also without a new edit.
 - On success, the baseline becomes the current values, the edited flag is cleared, and it returns
   `SETTINGS_SAVE_OK`. The record holds all current values, also contrast and backlight from a recovery start.
-- It touches only page 0, and it programs only bytes 0x000-0x00E.
+- It touches only page 0, and it programs only bytes 0x000-0x00F.
 
 `settings_has_unsaved_changes`: it returns true for current values that differ from the baseline.
 
@@ -737,6 +742,7 @@ follows the pattern of `src/lcd/lcd_commands.h`.
 #define MENU_NODE_SETTINGS 1U
 #define MENU_NODE_CW 2U
 #define MENU_NODE_DISPLAY 3U
+#define MENU_NODE_TRAINING 4U          /* section 19 */
 
 #define MENU_DIALOG_NO 0U
 #define MENU_DIALOG_YES 1U
@@ -826,7 +832,7 @@ only file that sets `EA`.
 | --- | --- | --- | --- |
 | 0 | 1 | magic 0 | `0x43` |
 | 1 | 1 | magic 1 | `0x57` |
-| 2 | 1 | layout version | `0x03`. A load also accepts `0x01` and `0x02` (see below). |
+| 2 | 1 | layout version | `0x04`. A load also accepts `0x01`, `0x02` and `0x03` (see below and section 19.3). |
 | 3 | 2 | tone, Hz | little-endian (low byte at 3) |
 | 5 | 1 | RX speed, WPM | |
 | 6 | 1 | effective RX speed, WPM | |
@@ -837,37 +843,42 @@ only file that sets `EA`.
 | 11 | 1 | max word length | |
 | 12 | 1 | backlight level | |
 | 13 | 1 | contrast | |
-| 14 | 1 | CRC-8 over bytes 0..13 | |
+| 14 | 1 | training flags | Bit 0 = `RX Attempts` unlimited. Bit 1 = `TX Attempts` unlimited. Bits 2-7 = 0 (a load clears them). Version 4 only. |
+| 15 | 1 | CRC-8 over bytes 0..14 | Version 4. Versions 1 to 3 have the CRC-8 over bytes 0..13 in byte 14 and no byte 15. |
 
-Serialize and parse byte by byte. Never copy a C struct. Bytes 0x00F-0x1FF of page 0 stay erased and unused.
+Serialize and parse byte by byte. Never copy a C struct. Bytes 0x010-0x1FF of page 0 stay erased and unused.
 
 CRC-8: polynomial `0x07`, initial value `0x00`, no reflection, no final XOR, MSB first, bitwise (no table). Check
 value: ASCII `123456789` gives `0xF4`.
 
-Default record (test vector): `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B`.
+Default record (test vector, version 4): `43 57 04 58 02 20 20 14 14 02 69 05 08 20 00 D4`. Section 19.4 gives the
+version 4 vectors. The version 3 default record was `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B`.
 
 Section 18.2 gives the test vectors of version 3. `keyer_spec.md` section 17.4.2 gives the vectors of versions 2
 and 1. Its "version 3 gives `SETTINGS_LOAD_BAD_VERSION`" vector is replaced by the version 4 vector of 18.2.
+Section 19.4 replaces the version 4 vector of 18.2 in turn: version 5 gives `SETTINGS_LOAD_BAD_VERSION`.
 
 Flag fields: `settings_get()` returns `(flags & mask) >> shift` of the id: bit 0 for `SETTINGS_ID_SHOW_CW_CODE`,
 bit 1 for `SETTINGS_ID_PADDLE_SWAP`, bits 2-3 for `SETTINGS_ID_PROSIGN_STYLE`, bits 4-7 for `SETTINGS_ID_RAMP_MS`
 (mask 0xF0, shift 4). `settings_set()` for these ids changes only the bits of the id. The `Paddle` setting changed
 neither the layout nor the version.
 
-Layout version 3 (section 18). Versions 1 and 2 have no `Ramp`: bits 4-7 of their flags byte have no meaning.
-Load of a record with a valid CRC:
+Layout version 4 (section 19), revises the version 3 rules of section 18. Versions 1 and 2 have no `Ramp`: bits 4-7
+of their flags byte have no meaning. Versions 1 to 3 have no training flags: their byte 14 is the CRC. The CRC check
+uses the position of the record version (section 19.3). Load of a record with a valid CRC:
 
-| Version | Flags bits kept | Then store the default of | Then |
-| --- | --- | --- | --- |
-| 3 | 0-7 | - | Clamp every field (section 5.3). |
-| 2 | 0-3 (clear 4-7) | `SETTINGS_ID_RAMP_MS` (6) | Clamp every field. |
-| 1 | 0-1 (clear 2-7) | `SETTINGS_ID_PROSIGN_STYLE` (2), `SETTINGS_ID_RAMP_MS` (6) | Clamp every field. |
-| Other (0, 4-255) | - | all ids (`SETTINGS_LOAD_BAD_VERSION`) | - |
+| Version | Flags bits kept (byte 10) | Training flags (byte 14) | Then store the default of | Then |
+| --- | --- | --- | --- | --- |
+| 4 | 0-7 | bits 0-1 kept, bits 2-7 cleared | - | Clamp every field (section 5.3). |
+| 3 | 0-7 | set to 0 | `SETTINGS_ID_RX_UNLIMITED` (0), `SETTINGS_ID_TX_UNLIMITED` (0) | Clamp every field. |
+| 2 | 0-3 (clear 4-7) | set to 0 | `SETTINGS_ID_RAMP_MS` (6), both training ids (0) | Clamp every field. |
+| 1 | 0-1 (clear 2-7) | set to 0 | `SETTINGS_ID_PROSIGN_STYLE` (2), `SETTINGS_ID_RAMP_MS` (6), both training ids (0) | Clamp every field. |
+| Other (0, 5-255) | - | set to 0 | all ids (`SETTINGS_LOAD_BAD_VERSION`) | - |
 
-After a valid load, the status is `SETTINGS_LOAD_OK` and the record in RAM gets version 3. The baseline takes these
+After a valid load, the status is `SETTINGS_LOAD_OK` and the record in RAM gets version 4. The baseline takes these
 values, so no save happens until an edit step (UX-15). The load never writes the EEPROM. Every save writes
-version 3. Earlier firmware reads a version 3 record as `SETTINGS_LOAD_BAD_VERSION` and uses its defaults. This is
-accepted, as for version 2.
+version 4. Earlier firmware reads a version 4 record as `SETTINGS_LOAD_BAD_VERSION` and uses its defaults. This is
+accepted, as for versions 2 and 3.
 
 The older text below describes the version 2 rules of `keyer_spec.md` section 17.
 
@@ -902,6 +913,8 @@ Version 1 test vectors, for load tests only: `43 57 01 58 02 20 20 14 14 02 01 0
 | `PADDLE_SWAP` | Paddle | 0 | 1 | 1 | 0 (Normal) | choice (0 Normal, 1 Reversed) |
 | `PROSIGN_STYLE` | Prosigns | 0 | 2 | 1 | 2 (Both) | choice (0 Punctuation, 1 Prosign, 2 Both) |
 | `RAMP_MS` | Ramp (sidetone rise and fall time) | 4 | 12 | 1 | 6 | ms |
+| `RX_UNLIMITED` | RX Attempts | 0 | 1 | 1 | 0 (3 attempts) | choice (0 three attempts, 1 unlimited, texts from `ui-ux.md`) |
+| `TX_UNLIMITED` | TX Attempts | 0 | 1 | 1 | 0 (3 attempts) | choice (0 three attempts, 1 unlimited, texts from `ui-ux.md`) |
 
 The final unit and choice strings come from `ui-ux.md`.
 
@@ -935,11 +948,19 @@ Node `MENU_NODE_SETTINGS` (title `Settings`, flag: save on exit):
 | Index | Item | Kind | Target |
 | --- | --- | --- | --- |
 | 0 | `CW` | submenu | `MENU_NODE_CW` |
-| 1 | `Show CW Code` | choice | `SETTINGS_ID_SHOW_CW_CODE` (`Off`, `On`) |
+| 1 | `Training` | submenu | `MENU_NODE_TRAINING` (section 19) |
 | 2 | `Prosigns` | choice | `SETTINGS_ID_PROSIGN_STYLE` (`Punctuation`, `Prosign`, `Both`), field width 11 (`keyer_spec.md` section 17.4.3) |
-| 3 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN` |
-| 4 | `Display` | submenu | `MENU_NODE_DISPLAY` |
-| 5 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` (0) |
+| 3 | `Display` | submenu | `MENU_NODE_DISPLAY` |
+| 4 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` (0) |
+
+Node `MENU_NODE_TRAINING` (title `Settings > Training`, section 19, `ui-ux.md` section 5.19, UX-74 and UX-75):
+
+| Index | Item | Kind | Target |
+| --- | --- | --- | --- |
+| 0 | `RX Attempts` | choice | `SETTINGS_ID_RX_UNLIMITED` (`3`, `Unlimited`), field width 9 |
+| 1 | `TX Attempts` | choice | `SETTINGS_ID_TX_UNLIMITED` (`3`, `Unlimited`), field width 9 |
+| 2 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN`, field width 1 (no change) |
+| 3 | `Show CW Code` | choice | `SETTINGS_ID_SHOW_CW_CODE` (`Off`, `On`), field width 3 (no change) |
 
 Node `MENU_NODE_CW` (title `Settings > CW`):
 
@@ -964,7 +985,7 @@ Node `MENU_NODE_DISPLAY` (title `Settings > Display`):
 | 1 | `Contrast` | value | `SETTINGS_ID_CONTRAST` |
 
 `MENU_MODE_*` and `MENU_ACTION_*` are private constants in `menu_internal.h`. The maximum depth is 3 (main,
-Settings, CW or Display), which is `MENU_STACK_DEPTH`.
+Settings, CW or Training or Display), which is `MENU_STACK_DEPTH`.
 
 ### 6.2 Scrolling (`ui-ux.md` section 5.5, UX-72)
 
@@ -2057,3 +2078,143 @@ section 10.1). The rest of the start-up order does not change.
 
 `ui-ux.md` D-45 (scroll on the glass and the transfer time of a window move), D-46 (Ramp preview by ear), D-47
 (Ramp in use at 50 WPM). `sidetone_spec.md` DC-13 and DC-14.
+
+## 19. Change request: unlimited attempts, `Settings > Training` and settings layout version 4 (2026-11-02)
+
+This section is the binding contract of the settings and menu part of the change. The engine and mode part is in
+`training_spec.md` D-T52 to D-T60. The task split is `training_spec.md` section 17.8 (task T17 Part A for 19.2 to
+19.4, Part C for 19.5). Where this section differs from sections 1 to 18, this section wins. `ui-ux.md` (new UX
+decisions for unlimited attempts and skip) wins for labels, choice texts and field widths.
+
+### 19.1 User decisions and UI inputs
+
+- New list `Settings > Training` with the items `RX Attempts`, `TX Attempts`, `Max Word Length` and `Show CW Code`,
+  in this order (`training_spec.md` D-T52).
+- `RX Attempts` and `TX Attempts` are choices with two values: 3 attempts (default) and unlimited.
+- `Max Word Length` and `Show CW Code` move from `Settings` to `Settings > Training`. Their ids, ranges, defaults and
+  stored bytes do not change.
+- New `Settings` order: `CW`, `Training`, `Prosigns`, `Display`, `Reset Statistics`.
+- Labels, choice texts and field widths: `ui-ux.md` sections 5.3 and 5.19, UX-74 and UX-75 (D7, review `approved`,
+  `training_spec.md` D-T61). Choice texts `3` and `Unlimited`, field width 9.
+
+### 19.2 Settings interface (`settings.h`, task T17 Part A)
+
+```c
+#define SETTINGS_ID_RX_UNLIMITED 13U  /* RX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_TX_UNLIMITED 14U  /* TX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_COUNT 15U
+
+#define SETTINGS_RECORD_SIZE 16U
+#define SETTINGS_LAYOUT_VERSION 4U
+```
+
+No new function and no signature change. The doc comment of `settings_load()` names versions 1 to 4 and the
+defaults of section 5.1. The doc comment of `settings_save_if_changed()` says "program bytes 2..15".
+
+### 19.3 Settings private changes (`settings.c`, task T17 Part A)
+
+| Table or macro | New value |
+| --- | --- |
+| `RECORD_TRAINING_FLAGS` (new) | 14 |
+| `RECORD_TRAINING_FLAG_RX_UNLIMITED` (new) | 0x01 |
+| `RECORD_TRAINING_FLAG_TX_UNLIMITED` (new) | 0x02 |
+| `RECORD_TRAINING_FLAGS_USED` (new) | 0x03, the OR of the two masks (`_Static_assert`) |
+| `RECORD_CRC` | 15: the CRC of version 4, over bytes 0..14 |
+| `RECORD_CRC_V3` (new) | 14: the CRC of versions 1 to 3, over bytes 0..13 |
+| `RECORD_LAYOUT_VERSION_3` (new) | 3 |
+| `RECORD_FIELD_COUNT` | 12: bytes 3..14. The baseline covers the training flags, so an edit of them causes a save. |
+| `settings_offsets` | ids 13 and 14: `RECORD_TRAINING_FLAGS` |
+| `settings_flag_masks` | ids 13 and 14: 0x01 and 0x02 |
+| `settings_flag_shifts` | ids 13 and 14: 0 and 1 |
+| `settings_mins`, `settings_maxes`, `settings_steps`, `settings_defaults` | ids 13 and 14: 0, 1, 1, 0 |
+
+Load rules:
+
+- `settings_check_record()` reads `SETTINGS_RECORD_SIZE` (16) bytes for every version. A version 1 to 3 record on
+  the device has byte 15 erased (0xFF), because those saves wrote bytes 0..14 only. The read covers it with no
+  error.
+- The version check accepts `RECORD_LAYOUT_VERSION_1` (1) to `SETTINGS_LAYOUT_VERSION` (4), as before.
+- The CRC check takes the CRC position from the record version. Version 4: `crc8_compute(record, 15)` against
+  byte 15. Versions 1 to 3: `crc8_compute(record, 14)` against byte 14. Byte 15 of a version 1 to 3 record is not
+  read for the check.
+- `settings_load()`, valid record: for versions 1 to 3, set byte 14 to 0 before the other version steps of section
+  5.1. For version 4, clear bits 2-7 of byte 14. The clamp loop then runs in id order, as before.
+- `settings_load()`, failed load: byte 14 becomes 0, then `settings_set_defaults()` stores each default. The two
+  training flag ids cover only bits 0-1 of byte 14. So the D-RM15 rule ("the flag ids cover all 8 bits") does not
+  apply to byte 14. The explicit clear keeps no bit of a bad record.
+- After every load path, bits 2-7 of byte 14 are 0, and the record in RAM has version 4.
+- `settings_save_if_changed()` computes the CRC over bytes 0..14 into byte 15. It programs bytes 2..15, then bytes
+  0..1 (the magic last), as before. It touches only page 0, bytes 0x000-0x00F. Page 0 has room
+  (`inc/eeprom/eeprom_map.h`).
+- `settings_store()` stays a leaf (no `lcall`, no library helper). `settings_get()` and `settings_set()` keep their
+  form. The two new ids need table rows only.
+
+Memory: xdata +2 B (record +1, baseline +1). No new internal RAM.
+
+### 19.4 Test vectors
+
+CRC-8 of section 5.1, computed by `architector` with a script on 2026-11-02. All vectors are 16 bytes. The load
+reads 16 bytes.
+
+| Record | Bytes 0..15 | Load result |
+| --- | --- | --- |
+| Version 4, defaults | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 00 D4` | OK, both training ids 0. This is the default save. |
+| Version 4, `RX Attempts` unlimited | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 01 D3` | OK, RX 1, TX 0 |
+| Version 4, `TX Attempts` unlimited | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 02 DA` | OK, RX 0, TX 1 |
+| Version 4, both unlimited | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 03 DD` | OK, RX 1, TX 1 |
+| Version 4, byte 14 = 0xFF | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 FF 27` | OK, RX 1, TX 1, byte 14 = 0x03 in RAM, no unsaved change |
+| Version 4, byte 14 = 0xFC | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 FC 2E` | OK, RX 0, TX 0, byte 14 = 0x00 in RAM |
+| Version 4, CRC only at the version 3 position | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 9F 01` | `SETTINGS_LOAD_BAD_CRC`, defaults (the CRC over 0..14 is 0x00) |
+| Version 4 vector of 18.2 with byte 15 erased | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 9F FF` | `SETTINGS_LOAD_BAD_CRC`, defaults. This vector gave `SETTINGS_LOAD_BAD_VERSION` before. |
+| Version 3, defaults | `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B FF` | OK, `Ramp` 6, both training ids 0, no unsaved change |
+| Version 3, `Ramp` 4 | `43 57 03 58 02 20 20 14 14 02 49 05 08 20 C5 FF` | OK, `Ramp` 4, both training ids 0 |
+| Version 3, `Show CW Code` off, `Max Word Length` 8 | `43 57 03 58 02 20 20 14 14 02 68 08 08 20 8C FF` | OK, both values kept, both training ids 0 |
+| Version 3, bad CRC at byte 14, byte 15 = CRC over 0..14 | `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0A 07` | `SETTINGS_LOAD_BAD_CRC`, defaults |
+| Version 2, defaults | `43 57 02 58 02 20 20 14 14 02 09 05 08 20 03 FF` | OK, `Ramp` 6, both training ids 0, no unsaved change |
+| Version 1, `Reversed` | `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78 FF` | OK, `Reversed`, `Both`, `Ramp` 6, both training ids 0 |
+| Version 5, valid CRC at byte 15 | `43 57 05 58 02 20 20 14 14 02 69 05 08 20 00 40` | `SETTINGS_LOAD_BAD_VERSION`, defaults |
+
+The other version 1 to 3 vectors of 18.2 and `keyer_spec.md` 17.4.2 keep their load results. Byte 15 is 0xFF, and
+both training ids load as 0.
+
+### 19.5 Menu changes (task T17 Part C)
+
+- `menu.h`: `#define MENU_NODE_TRAINING 4U`. No new function.
+- `menu_internal.h`: `MENU_NODE_COUNT` 5.
+- `menu_tree.c`: a new `menu_training_items[]` with the four items of section 6.1 and a choice text table with two
+  entries for the attempt ids. `menu_settings_items[]` in the order of section 6.1. A new entry in `menu_nodes[]`
+  at index 4: title `Settings > Training`, the four items, `is_save_on_exit` false. Labels, choice texts and field
+  widths as section 6.1 (`training_spec.md` 17.8, note N6).
+- The `Settings` node keeps `is_save_on_exit` true. An edit in `Settings > Training` is saved at the exit from
+  `Settings`, as an edit in `Settings > CW`.
+- `MENU_STACK_DEPTH` stays 3: main, Settings, Training.
+- No change in `menu.c` or `menu_render.c` is expected. If the `ui-ux.md` field width or text length needs one,
+  the developer reports it to `architector` first.
+
+Memory: xdata +0 B. Flash: the new node, items and texts.
+
+### 19.6 Acceptance criteria
+
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| AC-M13 | Ranges: `settings_min`, `settings_max`, `settings_step` of ids 13 and 14 are 0, 1, 1. The default after a failed load is 0. `settings_set()` clamps 2..65535 to 1. `SETTINGS_ID_COUNT` is 15, and id 15 gives 0 and false as an unknown id. | test |
+| AC-M14 | Every vector of 19.4 gives its load result and its values. Every older vector of 18.2 and `keyer_spec.md` 17.4.2 keeps its load result with byte 15 = 0xFF, except the replaced version 4 vector. | test, QA |
+| AC-M15 | A version 1, 2 or 3 load leaves `settings_has_unsaved_changes()` false, and a Settings exit with no edit step writes nothing. The load never writes the EEPROM. | test, QA |
+| AC-M16 | Round trip of the four training flag values through a save and a load. Every save writes version 4 and 16 bytes, with the magic last. The default save writes the version 4 default vector. The save programs only bytes 0x000-0x00F. | test |
+| AC-M17 | Flag independence: a change of id 13 or 14 keeps byte 10 and the other training bit. A change of each byte 10 flag id keeps byte 14. After every load path, also after a failed load of a record with byte 14 = 0xFF, bits 2-7 of byte 14 are 0. | test, QA |
+| AC-M18 | `settings_store()` has no `lcall` and no library helper (`.asm`). The flags `_Static_assert` of D-RM15 stays, and a new one checks `RECORD_TRAINING_FLAGS_USED`. | review |
+| AC-M19 | Tree: `Settings` has 5 items and `Settings > Training` has 4 items, in the order of section 6.1. `Show CW Code` and `Max Word Length` in `Settings > Training` edit ids 6 and 7. `RX Attempts` and `TX Attempts` edit ids 13 and 14. Labels, texts and widths match `ui-ux.md`. The V-vectors of task D7 for the menu pass. | test |
+| AC-M20 | An edit in `Settings > Training`, then back to `Settings`, then an exit from `Settings`: one save, with the new value after a load. Back from `Settings > Training` with no edit: no write. The cursor returns to `Training` in `Settings`. | test, QA |
+| AC-M21 | Memory: settings xdata +2 B, menu xdata +0 B, no new internal RAM. Flash within the T17 budget of `training_spec.md` section 14.2. | report |
+
+### 19.7 Device checks (unverified until the user tests on the device)
+
+`training_spec.md` DC-T12: a settings upgrade from a 0.1.2 record (layout version 3). All values stay, and both
+attempt settings show 3 attempts. The new list shows on the glass with the texts of `ui-ux.md`.
+
+### 19.8 Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| A downgrade to an earlier firmware reads a version 4 record as `SETTINGS_LOAD_BAD_VERSION` and uses the defaults. | Accepted, as for versions 2 and 3. The user can set the values again. |
+| A version 1 to 3 record has its old CRC in byte 14. If the load reads it as training flags, the attempt settings take random values. | The load sets byte 14 to 0 for these versions. Vectors of 19.4 and mutant M11 and M12 of `training_spec.md` 17.8 check it. |

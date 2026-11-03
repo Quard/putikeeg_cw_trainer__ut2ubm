@@ -3,6 +3,50 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
+## Version 0.1.3 (in development)
+
+Version 0.1.3 adds the `Settings > Training` list. Each training mode gets its own attempt setting, with 3 attempts
+or unlimited attempts. In both modes, a hold of `next` skips the current item. The device saves the settings in a
+new format. It is not released. Work on it continues, and the next changes go into this version too.
+
+### Settings: the Training list
+
+- **New list `Settings > Training`.** It has four items: `RX Attempts`, `TX Attempts`, `Max Word Length` and
+  `Show CW Code`.
+- **Two items moved.** `Max Word Length` and `Show CW Code` moved from `Settings` to `Settings > Training`. Their
+  values, ranges and defaults do not change.
+- **New `Settings` order.** `CW`, `Training`, `Prosigns`, `Display` and `Reset Statistics`.
+- **New settings `RX Attempts` and `TX Attempts`.** `RX Attempts` sets the attempts for each item in Receiving.
+  `TX Attempts` sets them in Sending. The values are `3` (default) and `Unlimited`. A change applies the next time
+  that you open the mode.
+
+### Koch training: Receiving and Sending
+
+- **Unlimited attempts.** With `Unlimited`, each wrong answer gives a retry. The item comes again until your answer
+  is correct, or until you skip it. The status line shows `Try 2`, `Try 3` and so on. From attempt 100, it shows
+  `Try 99+`. With `3`, the status line shows `Try 2 of 3` and `Try 3 of 3`, and the third wrong attempt ends the
+  item.
+- **Skip an item.** Hold `next` for about 0.8 s to skip the current item. This works in both modes, with each
+  attempt setting. It works while the item shows and during a `Wrong` result. In the other states of a session, a
+  hold of `next` does nothing.
+- **Skip in Receiving.** The playback stops. The status line shows `Skipped. The answer is:`, and the answer plays
+  one time. The screen waits for an `enter` tap, as after the third wrong attempt. `Next`, or `Finish` on the last
+  item, shows above `enter`. A hold of `enter` plays the answer again. A tap of `next` is still keyboard key 3.
+- **Skip in Sending.** The status line shows `Skipped` for 2.5 s. Below the item, the dots and dashes of the
+  expected character show, also with `Show CW Code` = `Off`. In a word, the bar stays under that character. If you
+  key a character at the moment of the skip, the device ignores that character.
+- **Score and levels do not change.** Only an item that is correct on the first attempt gives a point. A retry or
+  a skip never gives a point. So the pass rules are the same with each attempt setting.
+
+### Saved settings
+
+- **Your settings stay.** A firmware download can keep the settings of version 0.1.2 or earlier. Then they stay as
+  they were, and `RX Attempts` and `TX Attempts` are `3`. `Max Word Length` and `Show CW Code` keep their values.
+  The device shows no message.
+- **New settings format.** At the first save after you change a setting, the device writes a new settings format.
+  An earlier firmware version cannot read it. If you download an earlier version after that save, it uses all
+  default values and shows no message. Set the values again.
+
 ## Version 0.1.2
 
 Version 0.1.2 changes the answer state of Receiving, and the start screen and the session end screen of Receiving
