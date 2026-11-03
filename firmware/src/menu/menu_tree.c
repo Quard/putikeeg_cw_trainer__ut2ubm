@@ -20,6 +20,8 @@ static const menu_text_t MEM_CODE menu_paddle_texts[2] = {"Normal", "Reversed"};
 /* Indexed by SETTINGS_PROSIGN_*. */
 static const menu_text_t MEM_CODE menu_prosign_texts[3] = {"Punctuation", "Prosign", "Both"};
 static const menu_text_t MEM_CODE menu_attempt_texts[2] = {"3", "Unlimited"};
+/* Indexed by the stored value: SETTINGS_ID_TX_MARKER_HIDDEN stores 0 for On. */
+static const menu_text_t MEM_CODE menu_tx_marker_texts[2] = {"On", "Off"};
 
 static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Receiving", NULL, NULL, MENU_KIND_MODE, MENU_MODE_RECEIVING, 0U},
@@ -53,6 +55,7 @@ static const menu_item_t MEM_CODE menu_training_items[] = {
     {"TX Attempts", NULL, menu_attempt_texts, MENU_KIND_CHOICE, SETTINGS_ID_TX_UNLIMITED, 9U},
     {"Max Word Length", NULL, NULL, MENU_KIND_VALUE, SETTINGS_ID_MAX_WORD_LEN, 1U},
     {"Show CW Code", NULL, menu_show_code_texts, MENU_KIND_CHOICE, SETTINGS_ID_SHOW_CW_CODE, 3U},
+    {"TX Char Marker", NULL, menu_tx_marker_texts, MENU_KIND_CHOICE, SETTINGS_ID_TX_MARKER_HIDDEN, 3U},
 };
 
 static const menu_item_t MEM_CODE menu_display_items[] = {

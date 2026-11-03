@@ -28,18 +28,24 @@
 #define OFFSET_TRAINING 14U
 #define OFFSET_CRC_V4 15U
 #define ERASED 0xFFU
-#define ID_COUNT 15U
+#define ID_COUNT 16U
 #define SAVE_OPERATIONS (1U + 2U * SETTINGS_RECORD_SIZE)
 
 typedef struct {
   uint16_t values[ID_COUNT];
 } values_t;
 
-/* menu_subsystem_spec.md sections 5.2, 18.2 and 19.3. */
-static const uint16_t oracle_min[ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U, 0U, 0U};
-static const uint16_t oracle_max[ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U, 1U, 1U};
-static const uint16_t oracle_step[ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
-static const uint16_t oracle_default[ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U, 0U, 0U};
+/* menu_subsystem_spec.md sections 5.2, 18.2, 19.3 and 20.3. */
+static const uint16_t oracle_min[] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U, 0U, 0U, 0U};
+static const uint16_t oracle_max[] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U, 1U, 1U, 1U};
+static const uint16_t oracle_step[] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+static const uint16_t oracle_default[] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U, 0U, 0U, 0U};
+/* A table without one entry per id would get a silent 0 entry. */
+_Static_assert((sizeof(oracle_min) == ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(oracle_max) == ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(oracle_step) == ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(oracle_default) == ID_COUNT * sizeof(uint16_t)),
+               "each oracle table needs one entry per settings id");
 
 /* keyer_spec.md section 17.4.2. */
 static const uint8_t v1_defaults[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
@@ -84,6 +90,7 @@ static values_t oracle_load(const uint8_t* record) {
   /* Byte 14 of a version 1 to 3 record is its CRC (19.3). */
   out.values[13] = (record[OFFSET_VERSION] < 4U) ? 0U : (uint16_t)(record[OFFSET_TRAINING] & 0x01U);
   out.values[14] = (record[OFFSET_VERSION] < 4U) ? 0U : (uint16_t)((record[OFFSET_TRAINING] >> 1) & 0x01U);
+  out.values[15] = (record[OFFSET_VERSION] < 4U) ? 0U : (uint16_t)((record[OFFSET_TRAINING] >> 2) & 0x01U);
   return out;
 }
 
@@ -93,7 +100,7 @@ static values_t oracle_defaults(void) {
   return out;
 }
 
-/* The version 4 record of @p values (5.1, 19.3). */
+/* The version 4 record of @p values (5.1, 19.3, 20.3). */
 static void oracle_record(const values_t* values, uint8_t* record) {
   record[0] = 0x43U;
   record[1] = 0x57U;
@@ -110,7 +117,7 @@ static void oracle_record(const values_t* values, uint8_t* record) {
   record[11] = (uint8_t)values->values[7];
   record[12] = (uint8_t)values->values[8];
   record[13] = (uint8_t)values->values[9];
-  record[14] = (uint8_t)(values->values[13] | (values->values[14] << 1));
+  record[14] = (uint8_t)(values->values[13] | (values->values[14] << 1) | (values->values[15] << 2));
   record[15] = crc8_compute(record, 15U);
 }
 
@@ -176,6 +183,7 @@ static void test_contract_constants(void) {
   TEST_ASSERT_EQUAL(12U, SETTINGS_ID_RAMP_MS);
   TEST_ASSERT_EQUAL(13U, SETTINGS_ID_RX_UNLIMITED);
   TEST_ASSERT_EQUAL(14U, SETTINGS_ID_TX_UNLIMITED);
+  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_TX_MARKER_HIDDEN);
   TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(16U, SETTINGS_RECORD_SIZE);
   TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_BOTH, oracle_default[SETTINGS_ID_PROSIGN_STYLE]);
@@ -253,7 +261,7 @@ static void test_first_save_writes_oracle_record(void) {
 
 /*
  * AC-P7: from each of the 12 start states (a version 3 record, ramp 6 ms), every permutation of the three flag sets
- * reaches each of the 12 targets. After every set: the set id has its value, the other 14 ids do not change, and the
+ * reaches each of the 12 targets. After every set: the set id has its value, the other 15 ids do not change, and the
  * saved flags byte is show + 2 * paddle + 4 * prosigns + 16 * ramp.
  */
 static void test_flag_bits_independent_from_every_state(void) {

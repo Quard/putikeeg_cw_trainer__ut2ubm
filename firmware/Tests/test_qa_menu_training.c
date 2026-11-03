@@ -4,9 +4,10 @@
  */
 
 /*
- * QA tests of the Settings > Training list (references/internal/menu_subsystem_spec.md sections 19.1 and 19.5,
- * AC-M19, AC-M20; training_spec.md D-T60, note N6, Q8 mutant M13; ui-ux.md section 5.19, UX-74, UX-75). The real
- * menu, buttons and settings run with the fake EEPROM. The oracle is the item table of 19.1 and 5.19: each item
+ * QA tests of the Settings > Training list (references/internal/menu_subsystem_spec.md sections 19.1, 19.5 and 20.5,
+ * AC-M19, AC-M20, AC-M28, AC-M29; training_spec.md D-T60, D-T65, note N6, Q8 mutant M13, Q9 mutant M16; ui-ux.md
+ * section 5.19, UX-74, UX-75, UX-79 to UX-81). The real menu, buttons and settings run with the fake EEPROM. The
+ * oracle is the item table of 19.1, 20.5 and 5.19: each item
  * edits only its own id through the buttons, an edit in the Training list saves once at the exit from Settings, and
  * a visit with no edit step writes nothing.
  */
@@ -35,7 +36,8 @@
 #define MENU BUTTON_EVENT_MENU
 #define MAIN_SETTINGS_ROW 3U
 #define SETTINGS_TRAINING_ROW 1U
-#define TRAINING_ITEM_COUNT 4U
+#define TRAINING_ITEM_COUNT 5U
+#define MARKER_ITEM 4U
 
 typedef struct {
   const char* label;
@@ -44,12 +46,13 @@ typedef struct {
   uint8_t field_width;
 } expected_item_t;
 
-/* ui-ux.md section 5.19 and note N6. */
+/* ui-ux.md section 5.19, note N6 and UX-79. */
 static const expected_item_t training_items[TRAINING_ITEM_COUNT] = {
     {"RX Attempts", MENU_KIND_CHOICE, SETTINGS_ID_RX_UNLIMITED, 9U},
     {"TX Attempts", MENU_KIND_CHOICE, SETTINGS_ID_TX_UNLIMITED, 9U},
     {"Max Word Length", MENU_KIND_VALUE, SETTINGS_ID_MAX_WORD_LEN, 1U},
     {"Show CW Code", MENU_KIND_CHOICE, SETTINGS_ID_SHOW_CW_CODE, 3U},
+    {"TX Char Marker", MENU_KIND_CHOICE, SETTINGS_ID_TX_MARKER_HIDDEN, 3U},
 };
 
 static void power_on(void) {
@@ -101,7 +104,7 @@ static void open_training_list(void) {
   TEST_ASSERT_EQUAL(0U, menu_cursor());
 }
 
-/* AC-M19: the tree of 19.1 and 19.5. */
+/* AC-M19, AC-M28: the tree of 19.1, 19.5 and 20.5. */
 static void test_tree(void) {
   static const char* const settings_labels[5] = {"CW", "Training", "Prosigns", "Display", "Reset Statistics"};
   const menu_node_t* settings = &menu_nodes[MENU_NODE_SETTINGS];
@@ -134,7 +137,11 @@ static void test_tree(void) {
     TEST_ASSERT_EQUAL(0, strcmp("3", item->texts[0]));
     TEST_ASSERT_EQUAL(0, strcmp("Unlimited", item->texts[1]));
   }
-  /* No other node edits the moved ids or the attempt ids. */
+  /* M16: the text index is the stored "hidden" value, so 0 shows On. The list does not scroll (UX-81). */
+  TEST_ASSERT_EQUAL(0, strcmp("On", training->items[MARKER_ITEM].texts[0]));
+  TEST_ASSERT_EQUAL(0, strcmp("Off", training->items[MARKER_ITEM].texts[1]));
+  TEST_ASSERT(training->item_count < MENU_VISIBLE_ROWS);
+  /* No other node edits the moved ids, the attempt ids or the marker id. */
   for (index = 0U; index < MENU_NODE_COUNT; ++index) {
     uint8_t k;
     if (index == MENU_NODE_TRAINING) {
@@ -147,6 +154,7 @@ static void test_tree(void) {
         TEST_ASSERT(item->target != SETTINGS_ID_TX_UNLIMITED);
         TEST_ASSERT(item->target != SETTINGS_ID_MAX_WORD_LEN);
         TEST_ASSERT(item->target != SETTINGS_ID_SHOW_CW_CODE);
+        TEST_ASSERT(item->target != SETTINGS_ID_TX_MARKER_HIDDEN);
       }
     }
   }
@@ -225,9 +233,38 @@ static void test_save_rule(void) {
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_UNLIMITED));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_RX_UNLIMITED));
   TEST_ASSERT_EQUAL(0U, write_operations());
+
+  /* AC-M29: TX Char Marker to Off: no write in the Training list, one save at the Settings exit, Off after a load. */
+  fake_iap_reset();
+  power_on();
+  open_training_list();
+  send_times(NEXT, MARKER_ITEM);
+  send(ENTER);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_EDIT, menu_screen());
+  send(PREV); /* no wrap below On */
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  send(NEXT);
+  send(NEXT); /* no wrap above Off */
+  send(ENTER);
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_TX_UNLIMITED));
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_RX_UNLIMITED));
+  send(MENU);
+  TEST_ASSERT_EQUAL(SETTINGS_TRAINING_ROW, menu_cursor());
+  TEST_ASSERT_EQUAL(0U, write_operations());
+  send(MENU);
+  TEST_ASSERT_EQUAL(1U, fake_iap_command_count(3U));
+  TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(2U));
+  TEST_ASSERT_EQUAL(4U, fake_iap_memory()[2]);
+  TEST_ASSERT_EQUAL(0x04U, fake_iap_memory()[14]);
+  TEST_ASSERT_EQUAL(0xC8U, fake_iap_memory()[15]);
+  TEST_ASSERT_EQUAL(0x69U, fake_iap_memory()[10]);
+  power_on();
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  TEST_ASSERT_EQUAL(0U, write_operations());
 }
 
-/* F-27, AC-M15: after a version 3 record, a visit of both lists with no edit writes nothing. */
+/* F-27, AC-M15, AC-M24: after a version 3 record, a visit of both lists with no edit writes nothing. */
 static void test_version_3_record_visit(void) {
   static const uint8_t v3_record[16] = {0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14,
                                         0x14, 0x02, 0x68, 0x08, 0x08, 0x20, 0x8C, 0xFF};
@@ -236,8 +273,9 @@ static void test_version_3_record_visit(void) {
   power_on();
   TEST_ASSERT_EQUAL(8U, settings_get(SETTINGS_ID_MAX_WORD_LEN));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
   open_training_list();
-  send_times(NEXT, 3U);
+  send_times(NEXT, TRAINING_ITEM_COUNT - 1U);
   send(MENU);
   send(MENU);
   TEST_ASSERT_EQUAL(0U, write_operations());

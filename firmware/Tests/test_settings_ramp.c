@@ -156,7 +156,7 @@ static void test_vectors_have_valid_crc(void) {
   TEST_ASSERT_EQUAL(reversed_record_v4[RECORD_CRC_V4], crc8_compute(reversed_record_v4, RECORD_CRC_V4));
   TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(12U, SETTINGS_ID_RAMP_MS);
-  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(16U, SETTINGS_ID_COUNT);
 }
 
 /* AC-M1 */

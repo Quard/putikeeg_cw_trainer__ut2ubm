@@ -36,6 +36,7 @@ static MEM_XDATA uint8_t tx_wpm;
 static MEM_XDATA uint8_t tx_eff_wpm;
 static MEM_XDATA uint8_t tx_max_word_len;
 static MEM_XDATA bool tx_is_code_shown;
+static MEM_XDATA bool tx_is_marker_shown;
 static MEM_XDATA uint8_t tx_prosign_style;
 static MEM_XDATA bool tx_is_unlimited;
 
@@ -67,7 +68,7 @@ static uint8_t tx_result_slot(void) {
   return slot;
 }
 
-/* The item in the 8 x 16 font; in a word item, the bar under the character that the user keys next. */
+/* The item in the 8 x 16 font; in a word item, the bar under the next character (marker On) or the failed one. */
 static void tx_draw_item_line(void) {
   const training_phase_t phase = training_phase();
   const uint8_t length = training_item_length();
@@ -83,8 +84,10 @@ static void tx_draw_item_line(void) {
     if (training_last_check() == TRAINING_CHECK_CORRECT) {
       return;
     }
-    /* A wrong character: the bar stays under it. */
+    /* After an error, the bar stays under the failed character, also with TX Char Marker Off. */
     bar_slot = tx_result_slot();
+  } else if (!tx_is_marker_shown) {
+    return;
   }
   if (length > 1U) {
     training_screen_draw_mark(bar_slot, length, false);
@@ -183,6 +186,10 @@ void sending_enter(void) {
   tx_is_code_shown = false;
   if (settings_get(SETTINGS_ID_SHOW_CW_CODE) != 0U) {
     tx_is_code_shown = true;
+  }
+  tx_is_marker_shown = false;
+  if (settings_get(SETTINGS_ID_TX_MARKER_HIDDEN) == 0U) {
+    tx_is_marker_shown = true;
   }
   tx_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
   tx_is_unlimited = false;

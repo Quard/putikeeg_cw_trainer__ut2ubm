@@ -4,10 +4,11 @@
  */
 
 /*
- * QA tests of settings layout version 4 and the attempt ids (references/internal/menu_subsystem_spec.md section 19,
- * AC-M13 to AC-M17; training_spec.md D-T60, Q8 fault cases F8, F9 and mutants M11, M12). The oracle is the vector
- * table of 19.4, copied byte by byte, and a record parser written from 19.3: the CRC position follows the version,
- * byte 14 of a version 1 to 3 record is its CRC and gives both attempt ids 0, bits 2-7 of byte 14 never survive.
+ * QA tests of settings layout version 4, the attempt ids and the TX Char Marker id (references/internal/
+ * menu_subsystem_spec.md sections 19 and 20, AC-M13 to AC-M17, AC-M22 to AC-M26; training_spec.md D-T60, D-T65, Q8
+ * fault cases F8, F9, mutants M11, M12, and Q9 mutants M18 to M20). The oracle is the vector tables of 19.4 and 20.4,
+ * copied byte by byte, and a record parser written from 19.3 and 20.3: the CRC position follows the version, byte 14
+ * of a version 1 to 3 record is its CRC and gives ids 13 to 15 the value 0, bits 3-7 of byte 14 never survive.
  * Fault injection: power loss, CMD_FAIL and a low supply at each operation of a version 4 save.
  */
 
@@ -30,6 +31,7 @@
 #define SAVE_OPERATIONS (1U + 2U * SETTINGS_RECORD_SIZE)
 #define RX_ID SETTINGS_ID_RX_UNLIMITED
 #define TX_ID SETTINGS_ID_TX_UNLIMITED
+#define MARKER_ID SETTINGS_ID_TX_MARKER_HIDDEN
 
 typedef struct {
   uint8_t bytes[16];
@@ -39,9 +41,13 @@ typedef struct {
   uint8_t ramp;
   uint8_t show;
   uint8_t max_word;
+  uint8_t marker_hidden;
 } qa_vector_t;
 
-/* menu_subsystem_spec.md section 19.4, in its order. */
+/*
+ * menu_subsystem_spec.md section 19.4, in its order, with the id 15 results of 20.4 (0xFF and 0xFC load as Off). Then
+ * the new vectors of 20.4.
+ */
 static const qa_vector_t qa_vectors[] = {
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x00, 0xD4},
      SETTINGS_LOAD_OK,
@@ -49,109 +55,173 @@ static const qa_vector_t qa_vectors[] = {
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x01, 0xD3},
      SETTINGS_LOAD_OK,
      1,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x02, 0xDA},
      SETTINGS_LOAD_OK,
      0,
      1,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x03, 0xDD},
      SETTINGS_LOAD_OK,
      1,
      1,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0xFF, 0x27},
      SETTINGS_LOAD_OK,
      1,
      1,
      6,
      1,
-     5},
+     5,
+     1},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0xFC, 0x2E},
      SETTINGS_LOAD_OK,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     1},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x9F, 0x01},
      SETTINGS_LOAD_BAD_CRC,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x9F, 0xFF},
      SETTINGS_LOAD_BAD_CRC,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0B, 0xFF},
      SETTINGS_LOAD_OK,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x49, 0x05, 0x08, 0x20, 0xC5, 0xFF},
      SETTINGS_LOAD_OK,
      0,
      0,
      4,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x68, 0x08, 0x08, 0x20, 0x8C, 0xFF},
      SETTINGS_LOAD_OK,
      0,
      0,
      6,
      0,
-     8},
+     8,
+     0},
     {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0A, 0x07},
      SETTINGS_LOAD_BAD_CRC,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x02, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x09, 0x05, 0x08, 0x20, 0x03, 0xFF},
      SETTINGS_LOAD_OK,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x01, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x03, 0x05, 0x08, 0x20, 0x78, 0xFF},
      SETTINGS_LOAD_OK,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
     {{0x43, 0x57, 0x05, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x00, 0x40},
      SETTINGS_LOAD_BAD_VERSION,
      0,
      0,
      6,
      1,
-     5},
+     5,
+     0},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x04, 0xC8},
+     SETTINGS_LOAD_OK,
+     0,
+     0,
+     6,
+     1,
+     5,
+     1},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x05, 0xCF},
+     SETTINGS_LOAD_OK,
+     1,
+     0,
+     6,
+     1,
+     5,
+     1},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x06, 0xC6},
+     SETTINGS_LOAD_OK,
+     0,
+     1,
+     6,
+     1,
+     5,
+     1},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x07, 0xC1},
+     SETTINGS_LOAD_OK,
+     1,
+     1,
+     6,
+     1,
+     5,
+     1},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0xF8, 0x32},
+     SETTINGS_LOAD_OK,
+     0,
+     0,
+     6,
+     1,
+     5,
+     0},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0xFB, 0x3B},
+     SETTINGS_LOAD_OK,
+     1,
+     1,
+     6,
+     1,
+     5,
+     0},
 };
 #define QA_VECTOR_COUNT (sizeof(qa_vectors) / sizeof(qa_vectors[0]))
 #define V4_DEFAULTS 0U
 #define V3_DEFAULTS 8U
+#define V4_MARKER_OFF 15U
 
 static size_t write_operations(void) { return fake_iap_command_count(CMD_PROGRAM) + fake_iap_command_count(CMD_ERASE); }
 
@@ -171,15 +241,16 @@ static uint8_t training_byte_in_ram(void) {
   return fake_iap_memory()[OFFSET_TRAINING];
 }
 
-/* AC-M13 */
+/* AC-M13, AC-M22, M20: ids 13 to 15 have the range 0..1, step 1, default 0. */
 static void test_ids_and_ranges(void) {
   settings_id_t id;
   TEST_ASSERT_EQUAL(13U, RX_ID);
   TEST_ASSERT_EQUAL(14U, TX_ID);
-  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(15U, MARKER_ID);
+  TEST_ASSERT_EQUAL(16U, SETTINGS_ID_COUNT);
   TEST_ASSERT_EQUAL(16U, SETTINGS_RECORD_SIZE);
   TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
-  for (id = RX_ID; id <= TX_ID; ++id) {
+  for (id = RX_ID; id <= MARKER_ID; ++id) {
     uint32_t value;
     TEST_ASSERT_EQUAL(0U, settings_min(id));
     TEST_ASSERT_EQUAL(1U, settings_max(id));
@@ -200,7 +271,8 @@ static void test_ids_and_ranges(void) {
   TEST_ASSERT_EQUAL(0U, settings_max(SETTINGS_ID_COUNT));
 }
 
-/* AC-M14, M11, M12: every vector of 19.4 gives its load result and values, and no load writes. */
+/* AC-M14, AC-M23, M11, M12, M18, M19: every vector of 19.4 and 20.4 gives its load result and values, no load writes.
+ */
 static void test_vectors(void) {
   size_t i;
   for (i = 0U; i < QA_VECTOR_COUNT; ++i) {
@@ -211,6 +283,9 @@ static void test_vectors(void) {
     }
     TEST_ASSERT_EQUAL(vector->rx, settings_get(RX_ID));
     TEST_ASSERT_EQUAL(vector->tx, settings_get(TX_ID));
+    if (!TEST_ASSERT_EQUAL(vector->marker_hidden, settings_get(MARKER_ID))) {
+      fprintf(stderr, "vector %zu: marker\n", i);
+    }
     TEST_ASSERT_EQUAL(vector->ramp, settings_get(SETTINGS_ID_RAMP_MS));
     TEST_ASSERT_EQUAL(vector->show, settings_get(SETTINGS_ID_SHOW_CW_CODE));
     TEST_ASSERT_EQUAL(vector->max_word, settings_get(SETTINGS_ID_MAX_WORD_LEN));
@@ -220,8 +295,9 @@ static void test_vectors(void) {
     TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
     TEST_ASSERT_EQUAL(0U, write_operations());
     TEST_ASSERT_EQUAL(0, memcmp(vector->bytes, fake_iap_memory(), SETTINGS_RECORD_SIZE));
-    /* After every load path bits 2-7 of byte 14 are 0; the RAM byte holds exactly the two flags. */
-    if (!TEST_ASSERT_EQUAL((uint8_t)(vector->rx | (vector->tx << 1)), training_byte_in_ram())) {
+    /* After every load path bits 3-7 of byte 14 are 0; the RAM byte holds exactly the three flags. */
+    if (!TEST_ASSERT_EQUAL((uint8_t)(vector->rx | (vector->tx << 1) | (vector->marker_hidden << 2)),
+                           training_byte_in_ram())) {
       fprintf(stderr, "vector %zu: training byte\n", i);
     }
   }
@@ -233,6 +309,15 @@ static void test_vectors(void) {
   (void)settings_set(SETTINGS_ID_TONE_HZ, 600U);
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   TEST_ASSERT_EQUAL(0, memcmp(qa_vectors[V4_DEFAULTS].bytes, fake_iap_memory(), SETTINGS_RECORD_SIZE));
+  /* AC-M25: one edit of id 15 to Off from the defaults writes the 20.4 vector with CRC C8. */
+  fake_iap_reset();
+  (void)settings_load();
+  TEST_ASSERT(settings_set(MARKER_ID, 1U));
+  fake_iap_clear_counters();
+  TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
+  TEST_ASSERT_EQUAL(0, memcmp(qa_vectors[V4_MARKER_OFF].bytes, fake_iap_memory(), SETTINGS_RECORD_SIZE));
+  TEST_ASSERT_EQUAL(0xC8U, fake_iap_memory()[OFFSET_CRC_V4]);
+  TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
 }
 
 /* M11: each valid record with the CRC copied to the position of the other layout gives BAD_CRC. */
@@ -252,6 +337,7 @@ static void test_crc_position_by_version(void) {
         TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
         TEST_ASSERT_EQUAL(trial & 1U, settings_get(RX_ID));
         TEST_ASSERT_EQUAL((trial >> 1) & 1U, settings_get(TX_ID));
+        TEST_ASSERT_EQUAL((trial >> 2) & 1U, settings_get(MARKER_ID));
         /* The CRC of 0..13 at byte 14 and a wrong byte 15: not a valid version 4 record. */
         record[OFFSET_CRC_V3] = crc8_compute(record, 14U);
         record[OFFSET_CRC_V4] = (uint8_t)~crc8_compute(record, 15U);
@@ -262,6 +348,7 @@ static void test_crc_position_by_version(void) {
         TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
         TEST_ASSERT_EQUAL(0U, settings_get(RX_ID));
         TEST_ASSERT_EQUAL(0U, settings_get(TX_ID));
+        TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
         TEST_ASSERT(!settings_has_unsaved_changes());
         /* A wrong byte 14 with a CRC over 0..14 at byte 15: not a valid old record. */
         record[OFFSET_CRC_V3] ^= 0x01U;
@@ -274,8 +361,9 @@ static void test_crc_position_by_version(void) {
 }
 
 /*
- * F8, AC-M15, AC-M17: a version 1, 2 or 3 record with every flags value loads with both attempt ids 0 and no unsaved
- * change; a Settings exit with no edit writes nothing. The first save writes byte 14 = 0 and the old values.
+ * F8, AC-M15, AC-M17, AC-M24, F14: a version 1, 2 or 3 record with every flags value loads with ids 13 to 15 at 0
+ * (TX Char Marker On) and no unsaved change; a Settings exit with no edit writes nothing. The first save writes
+ * byte 14 = 0 and the old values.
  */
 static void test_old_versions_every_flags_value(void) {
   unsigned version;
@@ -292,6 +380,7 @@ static void test_old_versions_every_flags_value(void) {
       TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
       TEST_ASSERT_EQUAL(0U, settings_get(RX_ID));
       TEST_ASSERT_EQUAL(0U, settings_get(TX_ID));
+      TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
       TEST_ASSERT(!settings_has_unsaved_changes());
       TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
       TEST_ASSERT_EQUAL(0U, write_operations());
@@ -304,11 +393,15 @@ static void test_old_versions_every_flags_value(void) {
       TEST_ASSERT_EQUAL(show, settings_get(SETTINGS_ID_SHOW_CW_CODE));
       TEST_ASSERT_EQUAL(paddle, settings_get(SETTINGS_ID_PADDLE_SWAP));
       TEST_ASSERT_EQUAL(0U, settings_get(RX_ID));
+      TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
     }
   }
 }
 
-/* M12, AC-M17: every byte 14 of a valid version 4 record; every byte 14 of a bad record of each failure kind. */
+/*
+ * M12, M18, AC-M17, AC-M24, AC-M26: every byte 14 of a valid version 4 record; every byte 14 of a bad record of each
+ * failure kind.
+ */
 static void test_training_byte_every_value(void) {
   unsigned value;
   for (value = 0U; value <= 0xFFU; ++value) {
@@ -320,8 +413,9 @@ static void test_training_byte_every_value(void) {
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(record));
     TEST_ASSERT_EQUAL(value & 1U, settings_get(RX_ID));
     TEST_ASSERT_EQUAL((value >> 1) & 1U, settings_get(TX_ID));
+    TEST_ASSERT_EQUAL((value >> 2) & 1U, settings_get(MARKER_ID));
     TEST_ASSERT(!settings_has_unsaved_changes());
-    TEST_ASSERT_EQUAL(value & 0x03U, training_byte_in_ram());
+    TEST_ASSERT_EQUAL(value & 0x07U, training_byte_in_ram());
     for (failure = 0U; failure < 3U; ++failure) {
       memcpy(record, qa_vectors[V4_DEFAULTS].bytes, sizeof(record));
       record[OFFSET_TRAINING] = (uint8_t)value;
@@ -337,6 +431,7 @@ static void test_training_byte_every_value(void) {
       TEST_ASSERT(load(record) != SETTINGS_LOAD_OK);
       TEST_ASSERT_EQUAL(0U, settings_get(RX_ID));
       TEST_ASSERT_EQUAL(0U, settings_get(TX_ID));
+      TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
       if (!TEST_ASSERT_EQUAL(0U, training_byte_in_ram())) {
         fprintf(stderr, "byte 14 0x%02X failure %u\n", value, failure);
       }
@@ -344,63 +439,80 @@ static void test_training_byte_every_value(void) {
   }
 }
 
-/* AC-M16, AC-M17: round trip of the four flag values; the other bit and byte 10 stay; only bytes 0..15 of page 0. */
+/*
+ * AC-M16, AC-M17, AC-M25, AC-M26, M19: round trip of the eight values of bits 0-2 of byte 14. Each set changes only
+ * its own bit; byte 10 stays; only bytes 0..15 of page 0 are written.
+ */
 static void test_round_trip_and_independence(void) {
-  unsigned rx;
-  for (rx = 0U; rx <= 1U; ++rx) {
-    unsigned tx;
-    for (tx = 0U; tx <= 1U; ++tx) {
-      uint8_t flags_before;
-      uint16_t address;
-      fake_iap_reset();
-      (void)settings_load();
-      (void)settings_set(SETTINGS_ID_PADDLE_SWAP, 1U);
-      (void)settings_set(SETTINGS_ID_RAMP_MS, 11U);
-      (void)settings_save_if_changed();
-      flags_before = fake_iap_memory()[OFFSET_FLAGS];
-      TEST_ASSERT_EQUAL((rx != 0U), settings_set(RX_ID, (uint16_t)rx));
-      TEST_ASSERT_EQUAL(0U, settings_get(TX_ID));
-      TEST_ASSERT_EQUAL(tx != 0U, settings_set(TX_ID, (uint16_t)tx));
-      TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
-      TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
-      TEST_ASSERT_EQUAL(11U, settings_get(SETTINGS_ID_RAMP_MS));
-      fake_iap_clear_counters();
-      if ((rx | tx) == 0U) {
-        TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
-        TEST_ASSERT_EQUAL(0U, write_operations());
-        continue;
-      }
-      TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-      TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
-      TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
-      for (address = 0U; address < FAKE_IAP_PAGE_SIZE; ++address) {
-        TEST_ASSERT_EQUAL((address < SETTINGS_RECORD_SIZE) ? 1U : 0U, fake_iap_program_count(address));
-      }
-      TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
-      TEST_ASSERT_EQUAL((uint8_t)(rx | (tx << 1)), fake_iap_memory()[OFFSET_TRAINING]);
-      TEST_ASSERT_EQUAL(flags_before, fake_iap_memory()[OFFSET_FLAGS]);
-      TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
-      TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
-      TEST_ASSERT_EQUAL(tx, settings_get(TX_ID));
-      TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
-      TEST_ASSERT_EQUAL(11U, settings_get(SETTINGS_ID_RAMP_MS));
-      /* Each byte 10 flag id keeps byte 14. */
-      (void)settings_set(SETTINGS_ID_SHOW_CW_CODE, 0U);
-      (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, 0U);
-      (void)settings_set(SETTINGS_ID_RAMP_MS, 4U);
-      (void)settings_set(SETTINGS_ID_PADDLE_SWAP, 0U);
-      TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
-      TEST_ASSERT_EQUAL(tx, settings_get(TX_ID));
-      TEST_ASSERT_EQUAL((uint8_t)(rx | (tx << 1)), training_byte_in_ram());
+  unsigned value;
+  for (value = 0U; value < 8U; ++value) {
+    const uint16_t rx = (uint16_t)(value & 1U);
+    const uint16_t tx = (uint16_t)((value >> 1) & 1U);
+    const uint16_t marker = (uint16_t)((value >> 2) & 1U);
+    uint8_t flags_before;
+    uint16_t address;
+    fake_iap_reset();
+    (void)settings_load();
+    (void)settings_set(SETTINGS_ID_PADDLE_SWAP, 1U);
+    (void)settings_set(SETTINGS_ID_RAMP_MS, 11U);
+    (void)settings_save_if_changed();
+    flags_before = fake_iap_memory()[OFFSET_FLAGS];
+    TEST_ASSERT_EQUAL(rx != 0U, settings_set(RX_ID, rx));
+    TEST_ASSERT_EQUAL(0U, settings_get(TX_ID));
+    TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
+    TEST_ASSERT_EQUAL(tx != 0U, settings_set(TX_ID, tx));
+    TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
+    TEST_ASSERT_EQUAL(0U, settings_get(MARKER_ID));
+    TEST_ASSERT_EQUAL(marker != 0U, settings_set(MARKER_ID, marker));
+    TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
+    TEST_ASSERT_EQUAL(tx, settings_get(TX_ID));
+    TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+    TEST_ASSERT_EQUAL(11U, settings_get(SETTINGS_ID_RAMP_MS));
+    fake_iap_clear_counters();
+    if (value == 0U) {
+      TEST_ASSERT_EQUAL(SETTINGS_SAVE_NOT_NEEDED, settings_save_if_changed());
+      TEST_ASSERT_EQUAL(0U, write_operations());
+      continue;
     }
+    TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
+    TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
+    TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
+    for (address = 0U; address < FAKE_IAP_PAGE_SIZE; ++address) {
+      TEST_ASSERT_EQUAL((address < SETTINGS_RECORD_SIZE) ? 1U : 0U, fake_iap_program_count(address));
+    }
+    TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
+    TEST_ASSERT_EQUAL(4U, fake_iap_memory()[OFFSET_VERSION]);
+    TEST_ASSERT_EQUAL(value, fake_iap_memory()[OFFSET_TRAINING]);
+    TEST_ASSERT_EQUAL(flags_before, fake_iap_memory()[OFFSET_FLAGS]);
+    TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
+    TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
+    TEST_ASSERT_EQUAL(tx, settings_get(TX_ID));
+    TEST_ASSERT_EQUAL(marker, settings_get(MARKER_ID));
+    TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_PADDLE_SWAP));
+    TEST_ASSERT_EQUAL(11U, settings_get(SETTINGS_ID_RAMP_MS));
+    /* Each byte 10 flag id keeps byte 14. */
+    (void)settings_set(SETTINGS_ID_SHOW_CW_CODE, 0U);
+    (void)settings_set(SETTINGS_ID_PROSIGN_STYLE, 0U);
+    (void)settings_set(SETTINGS_ID_RAMP_MS, 4U);
+    (void)settings_set(SETTINGS_ID_PADDLE_SWAP, 0U);
+    TEST_ASSERT_EQUAL(rx, settings_get(RX_ID));
+    TEST_ASSERT_EQUAL(tx, settings_get(TX_ID));
+    TEST_ASSERT_EQUAL(marker, settings_get(MARKER_ID));
+    TEST_ASSERT_EQUAL(value, training_byte_in_ram());
+    /* A toggle of id 15 flips only bit 2 of byte 14 and keeps byte 10. */
+    flags_before = fake_iap_memory()[OFFSET_FLAGS];
+    TEST_ASSERT(settings_set(MARKER_ID, (uint16_t)(1U - marker)));
+    TEST_ASSERT_EQUAL(value ^ 0x04U, training_byte_in_ram());
+    TEST_ASSERT_EQUAL(flags_before, fake_iap_memory()[OFFSET_FLAGS]);
   }
 }
 
 typedef enum { FAULT_POWER_LOSS, FAULT_CMD_FAIL, FAULT_SUPPLY_LOW } qa_fault_t;
 
 /*
- * F9: each fault at each operation of the save that sets both attempt ids, after a version 3 load and after a
- * version 4 load. The next load gives the old values, the new values or the defaults, never a mix, and never writes.
+ * F9: each fault at each operation of the save that sets both attempt ids and TX Char Marker Off, after a version 3
+ * load and after a version 4 load. The next load gives the old values, the new values or the defaults, never a mix, and
+ * never writes.
  */
 static void test_faults_in_version_4_save(void) {
   static const qa_fault_t faults[3] = {FAULT_POWER_LOSS, FAULT_CMD_FAIL, FAULT_SUPPLY_LOW};
@@ -424,11 +536,13 @@ static void test_faults_in_version_4_save(void) {
         const uint16_t old_tx = (base == 0U) ? 0U : 1U;
         uint16_t rx;
         uint16_t tx;
+        uint16_t marker;
         uint16_t tone;
         TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, load(old_record));
         TEST_ASSERT_EQUAL(old_tx, settings_get(TX_ID));
         (void)settings_set(RX_ID, 1U);
         (void)settings_set(TX_ID, 1U - old_tx);
+        (void)settings_set(MARKER_ID, 1U);
         (void)settings_set(SETTINGS_ID_TONE_HZ, 700U);
         fake_iap_clear_counters();
         if (faults[f] == FAULT_POWER_LOSS) {
@@ -444,12 +558,13 @@ static void test_faults_in_version_4_save(void) {
         TEST_ASSERT_EQUAL(0U, write_operations());
         rx = settings_get(RX_ID);
         tx = settings_get(TX_ID);
+        marker = settings_get(MARKER_ID);
         tone = settings_get(SETTINGS_ID_TONE_HZ);
-        if ((rx == 0U) && (tx == old_tx) && (tone == 900U)) {
+        if ((rx == 0U) && (tx == old_tx) && (marker == 0U) && (tone == 900U)) {
           ++outcomes[0];
-        } else if ((rx == 1U) && (tx == 1U - old_tx) && (tone == 700U)) {
+        } else if ((rx == 1U) && (tx == 1U - old_tx) && (marker == 1U) && (tone == 700U)) {
           ++outcomes[1];
-        } else if ((rx == 0U) && (tx == 0U) && (tone == 600U)) {
+        } else if ((rx == 0U) && (tx == 0U) && (marker == 0U) && (tone == 600U)) {
           ++outcomes[2];
         } else {
           TEST_ASSERT(false);

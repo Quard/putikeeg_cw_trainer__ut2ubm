@@ -30,13 +30,15 @@
 #define RECORD_FLAGS_USED_V1 0x03U /* version 1 has no prosign style and no ramp */
 #define RECORD_TRAINING_FLAG_RX_UNLIMITED 0x01U
 #define RECORD_TRAINING_FLAG_TX_UNLIMITED 0x02U
-#define RECORD_TRAINING_FLAGS_USED 0x03U
+#define RECORD_TRAINING_FLAG_TX_MARKER_HIDDEN 0x04U
+#define RECORD_TRAINING_FLAGS_USED 0x07U
 #define RECORD_LAYOUT_VERSION_1 1U
 #define RECORD_LAYOUT_VERSION_3 3U
 _Static_assert((RECORD_FLAG_SHOW_CW_CODE | RECORD_FLAG_PADDLE_SWAP | RECORD_FLAG_PROSIGN_STYLE | RECORD_FLAG_RAMP_MS) ==
                    0xFFU,
                "the flag ids must cover all 8 bits of the flags byte");
-_Static_assert((RECORD_TRAINING_FLAG_RX_UNLIMITED | RECORD_TRAINING_FLAG_TX_UNLIMITED) == RECORD_TRAINING_FLAGS_USED,
+_Static_assert((RECORD_TRAINING_FLAG_RX_UNLIMITED | RECORD_TRAINING_FLAG_TX_UNLIMITED |
+                RECORD_TRAINING_FLAG_TX_MARKER_HIDDEN) == RECORD_TRAINING_FLAGS_USED,
                "the training flag ids must cover the used bits of the training flags byte");
 _Static_assert((RECORD_CRC + 1U == SETTINGS_RECORD_SIZE) && (RECORD_FIRST_FIELD + RECORD_FIELD_COUNT == RECORD_CRC),
                "the fields must end right before the CRC, and the CRC must be the last byte");
@@ -45,7 +47,8 @@ _Static_assert((RECORD_CRC + 1U == SETTINGS_RECORD_SIZE) && (RECORD_FIRST_FIELD 
 
 /*
  * The current values live in record form; field offsets by id. Show CW Code is flags bit 0, Paddle is bit 1,
- * the prosign style is bits 2-3, the ramp is bits 4-7. RX Attempts is training flags bit 0, TX Attempts is bit 1.
+ * the prosign style is bits 2-3, the ramp is bits 4-7. RX Attempts is training flags bit 0, TX Attempts is bit 1,
+ * TX Char Marker is bit 2.
  */
 static const MEM_CODE uint8_t settings_offsets[SETTINGS_ID_COUNT] = {
     RECORD_TONE_LOW,
@@ -61,6 +64,7 @@ static const MEM_CODE uint8_t settings_offsets[SETTINGS_ID_COUNT] = {
     RECORD_FLAGS,
     RECORD_FLAGS,
     RECORD_FLAGS,
+    RECORD_TRAINING_FLAGS,
     RECORD_TRAINING_FLAGS,
     RECORD_TRAINING_FLAGS,
 };
@@ -81,19 +85,20 @@ static const MEM_CODE uint8_t settings_flag_masks[SETTINGS_ID_COUNT] = {
     RECORD_FLAG_RAMP_MS,
     RECORD_TRAINING_FLAG_RX_UNLIMITED,
     RECORD_TRAINING_FLAG_TX_UNLIMITED,
+    RECORD_TRAINING_FLAG_TX_MARKER_HIDDEN,
 };
 static const MEM_CODE uint8_t settings_flag_shifts[SETTINGS_ID_COUNT] = {
-    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U, 2U, 4U, 0U, 1U,
+    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U, 2U, 4U, 0U, 1U, 2U,
 };
 static const MEM_CODE uint16_t settings_mins[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U,
-                                                                   0U,   0U, 0U, 0U, 4U, 0U, 0U};
+                                                                   0U,   0U, 0U, 0U, 4U, 0U, 0U, 0U};
 static const MEM_CODE uint16_t settings_maxes[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U,
-                                                                    10U,   63U, 1U,  2U,  12U, 1U, 1U};
+                                                                    10U,   63U, 1U,  2U,  12U, 1U, 1U, 1U};
 static const MEM_CODE uint8_t settings_steps[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U,
-                                                                   1U,  1U, 1U, 1U, 1U, 1U, 1U};
+                                                                   1U,  1U, 1U, 1U, 1U, 1U, 1U, 1U};
 static const MEM_CODE uint16_t settings_defaults[SETTINGS_ID_COUNT] = {
-    600U, 32U, 32U, 20U, 20U, SETTINGS_KEY_IAMBIC_B, 1U, 5U, SETTINGS_BACKLIGHT_DEFAULT, LCD_DEFAULT_CONTRAST,
-    0U,   2U,  6U,  0U,  0U,
+    600U, 32U, 32U, 20U, 20U, SETTINGS_KEY_IAMBIC_B, 1U, 5U, SETTINGS_BACKLIGHT_DEFAULT, LCD_DEFAULT_CONTRAST, 0U,
+    2U,   6U,  0U,  0U,  0U,
 };
 
 static MEM_XDATA uint8_t settings_record[SETTINGS_RECORD_SIZE];
@@ -143,7 +148,7 @@ static uint16_t settings_clamp(settings_id_t id, MEM_XDATA uint16_t value) {
 
 static void settings_set_defaults(void) {
   settings_id_t id;
-  /* The training flag ids cover bits 0-1 only, so this clear keeps no bit of a bad record in byte 14. */
+  /* The training flag ids cover bits 0-2 only, so this clear keeps no bit of a bad record in byte 14. */
   settings_record[RECORD_TRAINING_FLAGS] = 0U;
   /* The flag ids cover all 8 bits of the flags byte, so no bit of a bad record stays. */
   for (id = 0U; id < SETTINGS_ID_COUNT; ++id) {
