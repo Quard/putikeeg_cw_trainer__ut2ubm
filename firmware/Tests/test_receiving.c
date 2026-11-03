@@ -4,9 +4,9 @@
  */
 
 /*
- * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19, AC-T38; ui-ux.md section 9.4,
- * V-90 to V-109, V-120 and V-170). The real menu, buttons, engine, keyboard and progress run with a fake player and
- * fake items.
+ * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19, AC-T38, AC-T51, AC-T53;
+ * ui-ux.md sections 9.4 and 9.7, V-90 to V-109, V-120, V-170 and V-196 to V-201). The real menu, buttons, engine,
+ * keyboard and progress run with a fake player and fake items.
  */
 
 #include "cw/morse.h"
@@ -406,14 +406,20 @@ static void test_v95_hold_prev(void) {
   TEST_ASSERT_EQUAL(1U, training_score());
 }
 
-/* V-96: a held next does nothing; a held menu/back below the long time is a tap at its release. */
+/* V-96: a hold below the long time is a tap at its release; the skip of a longer hold is V-199. */
 static void test_v96_holds(void) {
   rx_open_one(LEVEL_ALL_CHARS, "K");
   harness_run_to(HARNESS_T0 + 1000U);
   snapshot(snapshot_before);
-  harness_pins_for(BUTTON_BIT_NEXT, (uint16_t)(BUTTONS_DEBOUNCE_MS + 2000U));
-  harness_pins_for(0U, 100U);
+  harness_pins_for(BUTTON_BIT_NEXT, 790U);
   TEST_ASSERT(is_screen_unchanged());
+  harness_pins_for(0U, 30U);
+  TEST_ASSERT(keys("WXY", "Z01", "234", "56"));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT(!training_is_skipped());
+  tap(LONG_EVENT(M_TAP));
+  TEST_ASSERT(keys("A-K", "L-V", "W-6", "7-<AR>"));
+  snapshot(snapshot_before);
   harness_pins_for(BUTTON_BIT_MENU, 790U);
   TEST_ASSERT(is_screen_unchanged());
   harness_pins_for(0U, 30U);
@@ -2432,6 +2438,331 @@ static void test_v172_changed_pages(void) {
   }
 }
 
+/* ---------- Unlimited attempts and the skip (ui-ux.md sections 5.20 and 9.7, D-T56, D-T59) ---------- */
+
+#define SKIP_EVENT LONG_EVENT(R_TAP)
+#define SKIP_RX_TEXT "Skipped. The answer is:"
+
+/* RX(...) with the attempt settings of both modes (UNL(m) of ui-ux.md section 9.7). */
+static void rx_open_attempts(uint16_t level, const char* const* items, size_t count, bool is_rx_unlimited,
+                             bool is_tx_unlimited) {
+  size_t index;
+
+  fake_iap_reset();
+  if (level != 0U) {
+    progress_fixture_write(PROGRESS_MODE_RECEIVING, 32U, level);
+  }
+  harness_power_on();
+  (void)settings_set(SETTINGS_ID_RX_UNLIMITED, is_rx_unlimited ? 1U : 0U);
+  (void)settings_set(SETTINGS_ID_TX_UNLIMITED, is_tx_unlimited ? 1U : 0U);
+  fake_koch_item_reset();
+  for (index = 0U; index < count; ++index) {
+    fake_koch_item_push(items[index]);
+  }
+  harness_open_mode(0U);
+}
+
+/* The answer state of a skip: the status, the item, the enter field only, the key bars (UX-78). */
+static bool is_skip_answer_shown(const char* item, const char* enter_label) {
+  const size_t length = strlen(item);
+  if (length == 1U) {
+    expect_item_line_big(60, item);
+  } else {
+    expect_word_slots(item, (uint8_t)length);
+  }
+  return status(SKIP_RX_TEXT) && text_at(1, 1, SKIP_RX_TEXT) && keys("", "", "", enter_label) &&
+         training_is_skipped() && margins_off();
+}
+
+/* The last two player calls are stop() and then play(@p text). */
+static bool is_stop_then_play(const char* text) {
+  const size_t count = fake_player_call_count();
+  return (count >= 2U) && (fake_player_call_at(count - 2U) == FAKE_PLAYER_CALL_STOP) &&
+         (fake_player_call_at(count - 1U) == FAKE_PLAYER_CALL_START) && (strcmp(text, fake_player_last_text()) == 0);
+}
+
+/* A long next that must change nothing: no redraw, no dirty page, no player call, no state change. */
+static void expect_skip_ignored(void) {
+  const size_t calls = fake_player_call_count();
+  const training_phase_t phase = training_phase();
+  const training_check_t check = training_last_check();
+
+  snapshot(snapshot_before);
+  clear_dirty_pages();
+  tap(SKIP_EVENT);
+  TEST_ASSERT(is_screen_unchanged());
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask());
+  TEST_ASSERT_EQUAL(calls, fake_player_call_count());
+  TEST_ASSERT_EQUAL(phase, training_phase());
+  TEST_ASSERT_EQUAL(check, training_last_check());
+}
+
+/* V-196: every wrong pick gives Wrong and a retry with Try <N>; a late correct pick gives no point. */
+static void test_v196_unlimited_retries(void) {
+  const char* const items[2] = {"K", "K"};
+  uint8_t attempt;
+  uint16_t t;
+  char text[16];
+
+  rx_open_attempts(LEVEL_KM, items, 2U, true, false);
+  run_to_item();
+  for (attempt = 1U; attempt <= 5U; ++attempt) {
+    const size_t starts = fake_player_start_count();
+    tap(M_TAP);
+    t = harness_now;
+    expect_item_line_big(60, "M");
+    TEST_ASSERT(status("Wrong"));
+    harness_run_to((uint16_t)(t + 1199U));
+    TEST_ASSERT(status("Wrong"));
+    harness_run_to((uint16_t)(t + 1200U));
+    (void)snprintf(text, sizeof(text), "Try %u", attempt + 1U);
+    TEST_ASSERT(text_at(1, 10, text));
+    expect_item_line_block(60);
+    TEST_ASSERT(keys("K", "M", "", ""));
+    TEST_ASSERT_EQUAL(starts + 1U, fake_player_start_count());
+    TEST_ASSERT_EQUAL(0, strcmp("K", fake_player_last_text()));
+  }
+  tap(L_TAP);
+  TEST_ASSERT(status("Correct"));
+  run_to_item();
+  TEST_ASSERT_EQUAL(2U, training_item_number());
+  TEST_ASSERT_EQUAL(0U, training_score());
+
+  /* TX Attempts does not change Receiving. */
+  rx_open_attempts(LEVEL_KM, items, 2U, false, true);
+  run_to_item();
+  tap(M_TAP);
+  run_to_item();
+  TEST_ASSERT(status("Try 2 of 3"));
+  tap(M_TAP);
+  run_to_item();
+  tap(M_TAP);
+  TEST_ASSERT(status("Wrong. The answer is:"));
+  TEST_ASSERT(keys("", "", "", "Next"));
+}
+
+/* V-199, AC-T51 (1): a skip by a real hold inside an open group of a word item, then the answer state. */
+static void test_v199_skip_word_in_group(void) {
+  const char* const items[2] = {"KMRS", "UAPT"};
+  size_t calls;
+  uint16_t t;
+  uint16_t v;
+
+  rx_open_attempts(LEVEL_WORDS_13, items, 2U, false, false);
+  run_to_item();
+  TEST_ASSERT(fake_player_is_running());
+  tap(L_TAP);
+  tap(R_TAP);
+  tap(L_TAP);
+  TEST_ASSERT(keys("A", "I", "K", "L"));
+  t = (uint16_t)(harness_now + 100U);
+  pins_at(BUTTON_BIT_NEXT, (uint16_t)(t - HARNESS_T0));
+  harness_run_to((uint16_t)(t + 799U));
+  expect_word_slots("K", 4U);
+  TEST_ASSERT(keys("A", "I", "K", "L"));
+  TEST_ASSERT(status(NULL));
+  calls = fake_player_call_count();
+  harness_run_to((uint16_t)(t + 800U));
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  TEST_ASSERT(is_stop_then_play("KMRS"));
+  TEST_ASSERT(is_skip_answer_shown("KMRS", "Next"));
+  TEST_ASSERT(key_bars());
+  TEST_ASSERT(hdr(rx_header(18U, 1U, training_item_count())));
+  TEST_ASSERT_EQUAL(1U, training_answer_length());
+  snapshot(snapshot_before);
+  pins_at(0U, (uint16_t)(t + 1000U - HARNESS_T0));
+  harness_run_to((uint16_t)(t + 1100U));
+  TEST_ASSERT(is_screen_unchanged());
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  /* AC-T51 (4): the taps, a long prev and a long next do nothing in the answer state. */
+  clear_dirty_pages();
+  tap(L_TAP);
+  tap(M_TAP);
+  tap(R_TAP);
+  tap(LONG_EVENT(M_TAP));
+  tap(SKIP_EVENT);
+  TEST_ASSERT(is_screen_unchanged());
+  TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask());
+  TEST_ASSERT_EQUAL(calls + 2U, fake_player_call_count());
+  /* A long enter plays the answer again, with no redraw. */
+  v = (uint16_t)(harness_now + 100U);
+  pins_at(BUTTON_BIT_ENTER, (uint16_t)(v - HARNESS_T0));
+  harness_run_to((uint16_t)(v + 800U));
+  TEST_ASSERT_EQUAL(calls + 3U, fake_player_call_count());
+  TEST_ASSERT_EQUAL(0, strcmp("KMRS", fake_player_last_text()));
+  TEST_ASSERT(is_screen_unchanged());
+  pins_at(0U, (uint16_t)(v + 1000U - HARNESS_T0));
+  harness_run_to((uint16_t)(v + 1100U));
+  /* AC-T51 (3): an enter tap continues; the GAP shows the labels of the whole set. */
+  tap(ENTER_EVENT);
+  t = harness_now;
+  TEST_ASSERT_EQUAL(FAKE_PLAYER_CALL_STOP, fake_player_call_at(fake_player_call_count() - 1U));
+  TEST_ASSERT(body_off(1, 5));
+  TEST_ASSERT(hdr(rx_header(18U, 2U, training_item_count())));
+  TEST_ASSERT(keys("AIKL", "MOP", "RST", "UW."));
+  harness_run_to((uint16_t)(t + 500U));
+  expect_word_slots("", 4U);
+  TEST_ASSERT_EQUAL(0, strcmp("UAPT", fake_player_last_text()));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* V-200 runs 1 and 2, AC-T51 (2): a skip in a Wrong result, with each attempt setting. */
+static void check_v200_skip_after_wrong(bool is_unlimited, uint8_t wrong_count) {
+  const char* const items[2] = {"K", "M"};
+  uint8_t attempt;
+  uint16_t t;
+
+  rx_open_attempts(LEVEL_KM, items, 2U, is_unlimited, false);
+  for (attempt = 0U; attempt < wrong_count; ++attempt) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  t = harness_now;
+  TEST_ASSERT(status("Wrong"));
+  expect_item_line_big(60, "M");
+  harness_set_time((uint16_t)(t + 900U));
+  harness_event(SKIP_EVENT);
+  TEST_ASSERT(is_stop_then_play("K"));
+  TEST_ASSERT(is_skip_answer_shown("K", "Next"));
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  TEST_ASSERT_EQUAL(wrong_count, training_wrong_attempts());
+  snapshot(snapshot_before);
+  harness_run_to((uint16_t)(t + 3000U));
+  TEST_ASSERT(is_screen_unchanged());
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  tap(ENTER_EVENT);
+  t = harness_now;
+  TEST_ASSERT(body_off(1, 5));
+  TEST_ASSERT(hdr("RX 32/32 L1          2/50"));
+  TEST_ASSERT(keys("K", "M", "", ""));
+  harness_run_to((uint16_t)(t + 500U));
+  expect_item_line_block(60);
+  TEST_ASSERT_EQUAL(0, strcmp("M", fake_player_last_text()));
+  TEST_ASSERT_EQUAL(0U, training_score());
+}
+
+/* V-200 run 3, AC-T51 (3): a skip on the last item shows Finish, and the tap shows the end screen. */
+static void check_v200_skip_last_item(bool is_unlimited) {
+  const char* const items[1] = {"K"};
+  uint8_t number;
+
+  rx_open_attempts(LEVEL_KM, items, 1U, is_unlimited, false);
+  for (number = 1U; number < 50U; ++number) {
+    run_to_item();
+    fake_player_finish();
+    tap(L_TAP);
+  }
+  run_to_item();
+  tap(SKIP_EVENT);
+  TEST_ASSERT(hdr("RX 32/32 L1         50/50"));
+  TEST_ASSERT(is_skip_answer_shown("K", "Finish"));
+  tap(ENTER_EVENT);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+  TEST_ASSERT(text_at(2, 7, "Score 49/50"));
+  TEST_ASSERT(end_screen_is(49U, 50U, 45U));
+}
+
+static void test_v200_skip_in_result_and_last_item(void) {
+  check_v200_skip_after_wrong(false, 1U);
+  check_v200_skip_after_wrong(false, 2U);
+  check_v200_skip_after_wrong(true, 4U);
+  check_v200_skip_last_item(false);
+  check_v200_skip_last_item(true);
+}
+
+/* V-201, AC-T51 (4): a long next in the start pause, Correct, the blank moment and the answer state does nothing. */
+static void test_v201_long_next_outside_skip_states(void) {
+  const char* const items[3] = {"K", "K", "K"};
+  uint8_t attempt;
+
+  rx_open_attempts(LEVEL_KM, items, 3U, false, false);
+  harness_run_to(HARNESS_T0 + 900U);
+  expect_skip_ignored();
+  run_to_item();
+  fake_player_finish();
+  tap(L_TAP);
+  TEST_ASSERT(status("Correct"));
+  expect_skip_ignored();
+  harness_run_to((uint16_t)(harness_now + 700U));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_GAP, training_phase());
+  expect_skip_ignored();
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT(status("Wrong. The answer is:"));
+  expect_skip_ignored();
+  TEST_ASSERT(status("Wrong. The answer is:"));
+  TEST_ASSERT(!training_is_skipped());
+  TEST_ASSERT_EQUAL(1U, training_score());
+
+  /* Run 2: the skip acts on the item of the long event, also when the press began before it. */
+  rx_open_attempts(LEVEL_KM, items, 3U, false, false);
+  run_to_item();
+  fake_player_finish();
+  tap(L_TAP);
+  run_to_item();
+  tap(SKIP_EVENT);
+  TEST_ASSERT_EQUAL(2U, training_item_number());
+  TEST_ASSERT(is_stop_then_play("K"));
+  TEST_ASSERT(is_skip_answer_shown("K", "Next"));
+  TEST_ASSERT_EQUAL(1U, training_score());
+}
+
+/* AC-T51 (1): a skip with picks of a word and with no pick, for both attempt settings. */
+static void test_skip_word_with_and_without_picks(void) {
+  const char* const items[1] = {"KMRS"};
+  unsigned setting;
+
+  for (setting = 0U; setting < 2U; ++setting) {
+    rx_open_attempts(LEVEL_WORDS_13, items, 1U, setting != 0U, false);
+    run_to_item();
+    pick('K');
+    pick('M');
+    tap(SKIP_EVENT);
+    TEST_ASSERT(is_stop_then_play("KMRS"));
+    TEST_ASSERT(is_skip_answer_shown("KMRS", "Next"));
+    TEST_ASSERT_EQUAL(2U, training_answer_length());
+    rx_open_attempts(LEVEL_WORDS_13, items, 1U, setting != 0U, false);
+    run_to_item();
+    tap(SKIP_EVENT);
+    TEST_ASSERT(is_skip_answer_shown("KMRS", "Next"));
+    TEST_ASSERT_EQUAL(0U, training_answer_length());
+  }
+}
+
+/* AC-T53: RX Attempts acts in Receiving only, read once at the mode start; Try 99+ at a counter of 255. */
+static void test_rx_attempts_read_once_and_cap(void) {
+  const char* const items[1] = {"K"};
+  unsigned attempt;
+  char text[16];
+
+  rx_open_attempts(LEVEL_KM, items, 1U, false, false);
+  (void)settings_set(SETTINGS_ID_RX_UNLIMITED, 1U);
+  for (attempt = 0U; attempt < TRAINING_ATTEMPTS; ++attempt) {
+    run_to_item();
+    tap(M_TAP);
+  }
+  TEST_ASSERT(status("Wrong. The answer is:"));
+
+  rx_open_attempts(LEVEL_KM, items, 1U, true, false);
+  run_to_item();
+  for (attempt = 1U; attempt <= 260U; ++attempt) {
+    tap(M_TAP);
+    run_to_item();
+    if (attempt < 99U) {
+      (void)snprintf(text, sizeof(text), "Try %u", attempt + 1U);
+    } else {
+      (void)snprintf(text, sizeof(text), "Try 99+");
+    }
+    if (!TEST_ASSERT(status(text))) {
+      fprintf(stderr, "attempt %u\n", attempt + 1U);
+    }
+  }
+  TEST_ASSERT_EQUAL(TRAINING_WRONG_MAX, training_wrong_attempts());
+  TEST_ASSERT(text_at(1, 9, "Try 99+"));
+}
+
 int main(void) {
   TEST_RUN(test_v90_start);
   TEST_RUN(test_v91_correct_and_gap);
@@ -2486,5 +2817,11 @@ int main(void) {
   TEST_RUN(test_v148_top_levels);
   TEST_RUN(test_v151_every_selector_line);
   TEST_RUN(test_v172_changed_pages);
+  TEST_RUN(test_v196_unlimited_retries);
+  TEST_RUN(test_v199_skip_word_in_group);
+  TEST_RUN(test_v200_skip_in_result_and_last_item);
+  TEST_RUN(test_v201_long_next_outside_skip_states);
+  TEST_RUN(test_skip_word_with_and_without_picks);
+  TEST_RUN(test_rx_attempts_read_once_and_cap);
   return TEST_FINISH();
 }

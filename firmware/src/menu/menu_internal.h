@@ -27,7 +27,7 @@
 
 #define MENU_ACTION_RESET_STATS 0U
 
-#define MENU_NODE_COUNT 4U
+#define MENU_NODE_COUNT 5U
 #define MENU_MESSAGE_COUNT 3U
 #define MENU_MESSAGE_NONE 0xFFU /* no message stored, spec D-A9 */
 #define MENU_ABOUT_LINK_ROWS 3U

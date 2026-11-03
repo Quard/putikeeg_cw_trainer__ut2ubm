@@ -6,9 +6,10 @@
 /*
  * QA tests of the Ramp setting and settings layout version 3 (references/internal/sidetone_spec.md section 24.6
  * check 6, menu_subsystem_spec.md sections 5.1, 5.2 and 18.2, AC-M1 to AC-M4, AC-M6, D-RM15). The oracle is the
- * vector table of 18.2, copied byte by byte, and a flags byte built from the four flag fields. Fault injection:
- * power loss, CMD_FAIL, a low supply and an interrupted erase at each operation of a version 3 save, and every
- * flags byte in a bad record.
+ * vector table of 18.2, copied byte by byte, and a flags byte built from the four flag fields. A save writes layout
+ * version 4 (section 19): the CRC moves to byte 15, and byte 15 of a version 1 to 3 record is erased. Fault
+ * injection: power loss, CMD_FAIL, a low supply and an interrupted erase at each operation of the first save after a
+ * version 3 load, and every flags byte in a bad record.
  */
 
 #include <string.h>
@@ -23,40 +24,119 @@
 #define CMD_ERASE 3U
 #define OFFSET_VERSION 2U
 #define OFFSET_FLAGS 10U
-#define OFFSET_CRC 14U
+#define OFFSET_CRC 14U /* versions 1 to 3 */
+#define OFFSET_TRAINING 14U
+#define OFFSET_CRC_V4 15U
+#define ERASED 0xFFU
 #define SAVE_OPERATIONS (1U + 2U * SETTINGS_RECORD_SIZE)
 #define RAMP_ID 12U
 
 typedef struct {
   uint8_t bytes[SETTINGS_RECORD_SIZE];
-  bool is_ok;
+  settings_load_status_t status;
   uint8_t ramp;
   uint8_t show;
   uint8_t paddle;
   uint8_t prosigns;
 } qa_vector_t;
 
-/* menu_subsystem_spec.md section 18.2, in its order. */
+/*
+ * menu_subsystem_spec.md section 18.2, in its order, with byte 15 erased. The last vector (version 4, the CRC of
+ * version 3 at byte 14) gives SETTINGS_LOAD_BAD_CRC since layout version 4 (section 19.4).
+ */
 static const qa_vector_t qa_vectors[] = {
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0B}, true, 6, 1, 0, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x49, 0x05, 0x08, 0x20, 0xC5}, true, 4, 1, 0, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x89, 0x05, 0x08, 0x20, 0x6F}, true, 8, 1, 0, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xC9, 0x05, 0x08, 0x20, 0xF4}, true, 12, 1, 0, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x6B, 0x05, 0x08, 0x20, 0x27}, true, 6, 1, 1, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x61, 0x05, 0x08, 0x20, 0xBB}, true, 6, 1, 0, 0},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x6F, 0x05, 0x08, 0x20, 0x7F}, true, 6, 1, 1, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x09, 0x05, 0x08, 0x20, 0x5E}, true, 4, 1, 0, 2},
-    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF9, 0x05, 0x08, 0x20, 0x5D}, true, 12, 1, 0, 2},
-    {{0x43, 0x57, 0x02, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x09, 0x05, 0x08, 0x20, 0x03}, true, 6, 1, 0, 2},
-    {{0x43, 0x57, 0x02, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF9, 0x05, 0x08, 0x20, 0x00}, true, 6, 1, 0, 2},
-    {{0x43, 0x57, 0x01, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x03, 0x05, 0x08, 0x20, 0x78}, true, 6, 1, 1, 2},
-    {{0x43, 0x57, 0x01, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF3, 0x05, 0x08, 0x20, 0x7B}, true, 6, 1, 1, 2},
-    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x9F}, false, 6, 1, 0, 2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0B, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x49, 0x05, 0x08, 0x20, 0xC5, ERASED},
+     SETTINGS_LOAD_OK,
+     4,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x89, 0x05, 0x08, 0x20, 0x6F, ERASED},
+     SETTINGS_LOAD_OK,
+     8,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xC9, 0x05, 0x08, 0x20, 0xF4, ERASED},
+     SETTINGS_LOAD_OK,
+     12,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x6B, 0x05, 0x08, 0x20, 0x27, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     1,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x61, 0x05, 0x08, 0x20, 0xBB, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     0,
+     0},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x6F, 0x05, 0x08, 0x20, 0x7F, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     1,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x09, 0x05, 0x08, 0x20, 0x5E, ERASED},
+     SETTINGS_LOAD_OK,
+     4,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF9, 0x05, 0x08, 0x20, 0x5D, ERASED},
+     SETTINGS_LOAD_OK,
+     12,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x02, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x09, 0x05, 0x08, 0x20, 0x03, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x02, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF9, 0x05, 0x08, 0x20, 0x00, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     0,
+     2},
+    {{0x43, 0x57, 0x01, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x03, 0x05, 0x08, 0x20, 0x78, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     1,
+     2},
+    {{0x43, 0x57, 0x01, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0xF3, 0x05, 0x08, 0x20, 0x7B, ERASED},
+     SETTINGS_LOAD_OK,
+     6,
+     1,
+     1,
+     2},
+    {{0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14, 0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x9F, ERASED},
+     SETTINGS_LOAD_BAD_CRC,
+     6,
+     1,
+     0,
+     2},
 };
 #define QA_VECTOR_COUNT (sizeof(qa_vectors) / sizeof(qa_vectors[0]))
 
 static const uint8_t qa_default_v3[SETTINGS_RECORD_SIZE] = {0x43, 0x57, 0x03, 0x58, 0x02, 0x20, 0x20, 0x14,
-                                                            0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0B};
+                                                            0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x0B, ERASED};
+/* The default save of layout version 4 (section 19.4). */
+static const uint8_t qa_default_v4[SETTINGS_RECORD_SIZE] = {0x43, 0x57, 0x04, 0x58, 0x02, 0x20, 0x20, 0x14,
+                                                            0x14, 0x02, 0x69, 0x05, 0x08, 0x20, 0x00, 0xD4};
 
 static size_t write_operations(void) { return fake_iap_command_count(CMD_PROGRAM) + fake_iap_command_count(CMD_ERASE); }
 
@@ -82,14 +162,15 @@ static bool are_other_fields_default(void) {
 /* AC-M1, AC-28 side: the id, the ranges and the default. */
 static void test_contract(void) {
   TEST_ASSERT_EQUAL(RAMP_ID, SETTINGS_ID_RAMP_MS);
-  TEST_ASSERT_EQUAL(13U, SETTINGS_ID_COUNT);
-  TEST_ASSERT_EQUAL(3U, SETTINGS_LAYOUT_VERSION);
+  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(4U, settings_min(SETTINGS_ID_RAMP_MS));
   TEST_ASSERT_EQUAL(12U, settings_max(SETTINGS_ID_RAMP_MS));
   TEST_ASSERT_EQUAL(1U, settings_step(SETTINGS_ID_RAMP_MS));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_COUNT));
   TEST_ASSERT(!settings_set(SETTINGS_ID_COUNT, 6U));
   TEST_ASSERT_EQUAL(0x0BU, crc8_compute(qa_default_v3, 14U));
+  TEST_ASSERT_EQUAL(0xD4U, crc8_compute(qa_default_v4, 15U));
 }
 
 /* AC-M2: every vector of 18.2 gives its load result and its values; no load writes. */
@@ -99,7 +180,7 @@ static void test_vectors(void) {
     const qa_vector_t* vector = &qa_vectors[i];
     const settings_load_status_t status = load(vector->bytes);
     TEST_ASSERT_EQUAL(crc8_compute(vector->bytes, 14U), vector->bytes[OFFSET_CRC]);
-    if (!TEST_ASSERT_EQUAL(vector->is_ok ? SETTINGS_LOAD_OK : SETTINGS_LOAD_BAD_VERSION, status)) {
+    if (!TEST_ASSERT_EQUAL(vector->status, status)) {
       fprintf(stderr, "vector %zu\n", i);
     }
     if (!TEST_ASSERT_EQUAL(vector->ramp, settings_get(SETTINGS_ID_RAMP_MS))) {
@@ -121,7 +202,7 @@ static void test_vectors(void) {
 
 /*
  * AC-M2: a version 1 or 2 record whose values equal the version 3 defaults has no unsaved change; a ramp edit and
- * an edit back keep the old record. The first real edit writes a full version 3 record.
+ * an edit back keep the old record. The first real edit writes a full version 4 record.
  */
 static void test_old_versions_save_only_after_an_edit(void) {
   size_t i;
@@ -135,9 +216,9 @@ static void test_old_versions_save_only_after_an_edit(void) {
     TEST_ASSERT_EQUAL(0U, write_operations());
     TEST_ASSERT(settings_set(SETTINGS_ID_RAMP_MS, 11U));
     TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-    memcpy(expected, qa_default_v3, sizeof(expected));
+    memcpy(expected, qa_default_v4, sizeof(expected));
     expected[OFFSET_FLAGS] = flags_of(1U, qa_vectors[i].paddle, 2U, 11U);
-    expected[OFFSET_CRC] = crc8_compute(expected, 14U);
+    expected[OFFSET_CRC_V4] = crc8_compute(expected, 15U);
     TEST_ASSERT_EQUAL(0, memcmp(expected, fake_iap_memory(), SETTINGS_RECORD_SIZE));
   }
 }
@@ -161,7 +242,7 @@ static void test_set_clamps(void) {
   TEST_ASSERT_EQUAL(6U, settings_get(SETTINGS_ID_RAMP_MS));
 }
 
-/* AC-M3: round trip of every ramp value; every save writes version 3 with a valid CRC. */
+/* AC-M3: round trip of every ramp value; every save writes version 4 with a valid CRC at byte 15. */
 static void test_round_trip(void) {
   uint8_t ramp;
   fake_iap_reset();
@@ -170,15 +251,16 @@ static void test_round_trip(void) {
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   (void)settings_set(SETTINGS_ID_TONE_HZ, 600U);
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-  TEST_ASSERT_EQUAL(0, memcmp(qa_default_v3, fake_iap_memory(), SETTINGS_RECORD_SIZE));
+  TEST_ASSERT_EQUAL(0, memcmp(qa_default_v4, fake_iap_memory(), SETTINGS_RECORD_SIZE));
   for (ramp = 4U; ramp <= 12U; ++ramp) {
     (void)settings_set(SETTINGS_ID_RAMP_MS, (uint16_t)((ramp == 4U) ? 5U : 4U));
     (void)settings_save_if_changed();
     TEST_ASSERT(settings_set(SETTINGS_ID_RAMP_MS, ramp));
     TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
-    TEST_ASSERT_EQUAL(3U, fake_iap_memory()[OFFSET_VERSION]);
+    TEST_ASSERT_EQUAL(4U, fake_iap_memory()[OFFSET_VERSION]);
     TEST_ASSERT_EQUAL(flags_of(1U, 0U, 2U, ramp), fake_iap_memory()[OFFSET_FLAGS]);
-    TEST_ASSERT_EQUAL(crc8_compute(fake_iap_memory(), 14U), fake_iap_memory()[OFFSET_CRC]);
+    TEST_ASSERT_EQUAL(0U, fake_iap_memory()[OFFSET_TRAINING]);
+    TEST_ASSERT_EQUAL(crc8_compute(fake_iap_memory(), 15U), fake_iap_memory()[OFFSET_CRC_V4]);
     TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
     TEST_ASSERT_EQUAL(ramp, settings_get(SETTINGS_ID_RAMP_MS));
   }
@@ -231,8 +313,8 @@ static void test_flag_independence(void) {
 
 /*
  * D-RM15: settings_set_defaults() does not clear the flags byte, so the four flag ids must rewrite all 8 bits. Every
- * flags byte in a record that fails each check (bad CRC, bad version, no magic) gives the default flags 0x69 in RAM
- * and in the next save.
+ * flags byte in a record that fails each check (bad CRC, bad version 5 with a valid CRC at both positions, no magic)
+ * gives the default flags 0x69 in RAM and in the next save.
  */
 static void test_bad_record_flags_never_survive(void) {
   unsigned flags;
@@ -247,8 +329,9 @@ static void test_bad_record_flags_never_survive(void) {
       if (failure == 0U) {
         record[OFFSET_CRC] ^= 0x5AU;
       } else if (failure == 1U) {
-        record[OFFSET_VERSION] = 4U;
+        record[OFFSET_VERSION] = 5U;
         record[OFFSET_CRC] = crc8_compute(record, 14U);
+        record[OFFSET_CRC_V4] = crc8_compute(record, 15U);
       } else {
         record[1] = 0x00U;
       }
@@ -270,8 +353,8 @@ static void test_bad_record_flags_never_survive(void) {
 typedef enum { FAULT_POWER_LOSS, FAULT_CMD_FAIL, FAULT_SUPPLY_LOW, FAULT_ERASE_ZEROS, FAULT_ERASE_HALF } qa_fault_t;
 
 /*
- * AC-M6: each fault at each operation of a version 3 save that changes the ramp. The next load gives the old
- * record in full, the new record in full or the defaults, never a mix, and it never writes.
+ * AC-M6: each fault at each operation of the save after a version 3 load that changes the ramp. The next load gives
+ * the old record in full, the new record in full or the defaults, never a mix, and it never writes.
  */
 static void test_faults_during_version_3_save(void) {
   static const qa_fault_t faults[5] = {FAULT_POWER_LOSS, FAULT_CMD_FAIL, FAULT_SUPPLY_LOW, FAULT_ERASE_ZEROS,

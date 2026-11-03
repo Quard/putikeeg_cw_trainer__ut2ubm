@@ -420,7 +420,13 @@ static void test_v182_short_lists_have_no_mark(void) {
   harness_mark_frame();
   step(BUTTON_EVENT_NEXT);
   TEST_ASSERT_EQUAL(PAGE(1) | PAGE(2), harness_changed_pages());
-  steps(BUTTON_EVENT_NEXT, 3U);
+  step(ENTER_EVENT);
+  TEST_ASSERT(plain_title_is("Settings > Training"));
+  harness_mark_frame();
+  step(BUTTON_EVENT_NEXT);
+  TEST_ASSERT_EQUAL(PAGE(1) | PAGE(2), harness_changed_pages());
+  step(BUTTON_EVENT_MENU);
+  steps(BUTTON_EVENT_NEXT, 2U);
   step(ENTER_EVENT);
   TEST_ASSERT(plain_title_is("Settings > Display"));
   harness_mark_frame();

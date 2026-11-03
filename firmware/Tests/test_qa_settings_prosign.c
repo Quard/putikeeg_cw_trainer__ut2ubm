@@ -4,11 +4,11 @@
  */
 
 /*
- * QA tests of the prosign style setting and the migration of layout versions 1 and 2 to version 3
- * (references/internal/keyer_spec.md sections 17.3.3 and 17.4.2, menu_subsystem_spec.md sections 4.8, 5.1 and 18.2;
- * AC-P6 to AC-P12). An independent oracle parses a record byte by byte and builds the record that a save must write.
- * Fault injection: random version 1, 2 and 3 records, every flags value, power loss, CMD_FAIL, an interrupted erase
- * and a low supply at each operation of the first save after a version 1 load.
+ * QA tests of the prosign style setting and the migration of layout versions 1 to 3 to version 4
+ * (references/internal/keyer_spec.md sections 17.3.3 and 17.4.2, menu_subsystem_spec.md sections 4.8, 5.1, 18.2 and
+ * 19; AC-P6 to AC-P12). An independent oracle parses a record byte by byte and builds the record that a save must
+ * write. Fault injection: random version 1 to 4 records, every flags value, power loss, CMD_FAIL, an interrupted
+ * erase and a low supply at each operation of the first save after a version 1 load.
  */
 
 #include <string.h>
@@ -24,25 +24,28 @@
 #define OFFSET_VERSION 2U
 #define OFFSET_TONE_LOW 3U
 #define OFFSET_FLAGS 10U
-#define OFFSET_CRC 14U
-#define ID_COUNT 13U
+#define OFFSET_CRC 14U /* versions 1 to 3 */
+#define OFFSET_TRAINING 14U
+#define OFFSET_CRC_V4 15U
+#define ERASED 0xFFU
+#define ID_COUNT 15U
 #define SAVE_OPERATIONS (1U + 2U * SETTINGS_RECORD_SIZE)
 
 typedef struct {
   uint16_t values[ID_COUNT];
 } values_t;
 
-/* menu_subsystem_spec.md sections 5.2 and 18.2. */
-static const uint16_t oracle_min[ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U};
-static const uint16_t oracle_max[ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U};
-static const uint16_t oracle_step[ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
-static const uint16_t oracle_default[ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U};
+/* menu_subsystem_spec.md sections 5.2, 18.2 and 19.3. */
+static const uint16_t oracle_min[ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U, 0U, 0U};
+static const uint16_t oracle_max[ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U, 1U, 1U};
+static const uint16_t oracle_step[ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+static const uint16_t oracle_default[ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U, 0U, 0U};
 
 /* keyer_spec.md section 17.4.2. */
 static const uint8_t v1_defaults[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
-                                                          0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U};
+                                                          0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U, ERASED};
 static const uint8_t v1_reversed[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
-                                                          0x14U, 0x02U, 0x03U, 0x05U, 0x08U, 0x20U, 0x78U};
+                                                          0x14U, 0x02U, 0x03U, 0x05U, 0x08U, 0x20U, 0x78U, ERASED};
 
 static uint32_t rng_state;
 static uint32_t rng_next(void) {
@@ -78,6 +81,9 @@ static values_t oracle_load(const uint8_t* record) {
   out.values[10] = (uint16_t)((flags >> 1) & 0x01U);
   out.values[11] = (record[OFFSET_VERSION] == 1U) ? 2U : (uint16_t)((style > 2U) ? 2U : style);
   out.values[12] = (record[OFFSET_VERSION] < 3U) ? 6U : oracle_clamp(12U, (uint32_t)(flags >> 4), oracle_max[12]);
+  /* Byte 14 of a version 1 to 3 record is its CRC (19.3). */
+  out.values[13] = (record[OFFSET_VERSION] < 4U) ? 0U : (uint16_t)(record[OFFSET_TRAINING] & 0x01U);
+  out.values[14] = (record[OFFSET_VERSION] < 4U) ? 0U : (uint16_t)((record[OFFSET_TRAINING] >> 1) & 0x01U);
   return out;
 }
 
@@ -87,11 +93,11 @@ static values_t oracle_defaults(void) {
   return out;
 }
 
-/* The version 3 record of @p values (5.1). */
+/* The version 4 record of @p values (5.1, 19.3). */
 static void oracle_record(const values_t* values, uint8_t* record) {
   record[0] = 0x43U;
   record[1] = 0x57U;
-  record[2] = 0x03U;
+  record[2] = 0x04U;
   record[3] = (uint8_t)values->values[0];
   record[4] = (uint8_t)(values->values[0] >> 8);
   record[5] = (uint8_t)values->values[1];
@@ -104,7 +110,8 @@ static void oracle_record(const values_t* values, uint8_t* record) {
   record[11] = (uint8_t)values->values[7];
   record[12] = (uint8_t)values->values[8];
   record[13] = (uint8_t)values->values[9];
-  record[14] = crc8_compute(record, 14U);
+  record[14] = (uint8_t)(values->values[13] | (values->values[14] << 1));
+  record[15] = crc8_compute(record, 15U);
 }
 
 static bool live_is(const values_t* expected) {
@@ -134,13 +141,16 @@ static settings_load_status_t load(const uint8_t* record) {
   return settings_load();
 }
 
-/* A random record of layout @p version with a valid CRC; fields are biased to the range edges. */
+/*
+ * A random record of layout @p version with a valid CRC at the position of its version; fields are biased to the
+ * range edges. Byte 15 of a version 1 to 3 record is random: the load must not read it.
+ */
 static void random_record(uint8_t version, uint8_t* record) {
   unsigned offset;
   record[0] = 0x43U;
   record[1] = 0x57U;
   record[2] = version;
-  for (offset = 3U; offset < OFFSET_CRC; ++offset) {
+  for (offset = 3U; offset < SETTINGS_RECORD_SIZE; ++offset) {
     record[offset] = (uint8_t)rng_next();
   }
   if ((rng_next() % 2U) == 0U) {
@@ -152,7 +162,11 @@ static void random_record(uint8_t version, uint8_t* record) {
     record[9] = (uint8_t)(rng_next() % 3U);
     record[13] = (uint8_t)(rng_next() % 64U);
   }
-  record[OFFSET_CRC] = crc8_compute(record, 14U);
+  if (version == 4U) {
+    record[OFFSET_CRC_V4] = crc8_compute(record, 15U);
+  } else {
+    record[OFFSET_CRC] = crc8_compute(record, 14U);
+  }
 }
 
 /* Spec constants of 17.3.2 that the oracle uses. */
@@ -160,8 +174,10 @@ static void test_contract_constants(void) {
   TEST_ASSERT_EQUAL(ID_COUNT, SETTINGS_ID_COUNT);
   TEST_ASSERT_EQUAL(11U, SETTINGS_ID_PROSIGN_STYLE);
   TEST_ASSERT_EQUAL(12U, SETTINGS_ID_RAMP_MS);
-  TEST_ASSERT_EQUAL(3U, SETTINGS_LAYOUT_VERSION);
-  TEST_ASSERT_EQUAL(15U, SETTINGS_RECORD_SIZE);
+  TEST_ASSERT_EQUAL(13U, SETTINGS_ID_RX_UNLIMITED);
+  TEST_ASSERT_EQUAL(14U, SETTINGS_ID_TX_UNLIMITED);
+  TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
+  TEST_ASSERT_EQUAL(16U, SETTINGS_RECORD_SIZE);
   TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_BOTH, oracle_default[SETTINGS_ID_PROSIGN_STYLE]);
 }
 
@@ -171,8 +187,8 @@ static void test_random_records_against_oracle(void) {
   rng_state = 0xC0FFEEU;
   for (trial = 0U; trial < 30000U; ++trial) {
     uint8_t record[SETTINGS_RECORD_SIZE];
-    const uint8_t version = (trial % 4U == 3U) ? (uint8_t)rng_next() : (uint8_t)(1U + trial % 4U);
-    const bool is_accepted = (version >= 1U) && (version <= 3U);
+    const uint8_t version = (trial % 5U == 4U) ? (uint8_t)rng_next() : (uint8_t)(1U + trial % 5U);
+    const bool is_accepted = (version >= 1U) && (version <= 4U);
     values_t expected;
     settings_load_status_t status;
     random_record(version, record);
@@ -195,7 +211,8 @@ static void test_random_records_against_oracle(void) {
 
 /*
  * AC-P10: after an accepted load and one edit, the save writes exactly the oracle record of the live values:
- * version 3, flags bits 4-7 = the ramp, a valid CRC. The next load gives the same values.
+ * version 4, flags bits 4-7 = the ramp, the training flags in byte 14, a valid CRC in byte 15. The next load gives
+ * the same values.
  */
 static void test_first_save_writes_oracle_record(void) {
   unsigned trial;
@@ -205,7 +222,7 @@ static void test_first_save_writes_oracle_record(void) {
     uint8_t expected_record[SETTINGS_RECORD_SIZE];
     values_t expected;
     const unsigned edit = rng_next() % 3U;
-    random_record((uint8_t)(1U + trial % 3U), record);
+    random_record((uint8_t)(1U + trial % 4U), record);
     (void)load(record);
     expected = oracle_load(record);
     if (edit == 0U) {
@@ -236,7 +253,7 @@ static void test_first_save_writes_oracle_record(void) {
 
 /*
  * AC-P7: from each of the 12 start states (a version 3 record, ramp 6 ms), every permutation of the three flag sets
- * reaches each of the 12 targets. After every set: the set id has its value, the other 12 ids do not change, and the
+ * reaches each of the 12 targets. After every set: the set id has its value, the other 14 ids do not change, and the
  * saved flags byte is show + 2 * paddle + 4 * prosigns + 16 * ramp.
  */
 static void test_flag_bits_independent_from_every_state(void) {
@@ -510,7 +527,7 @@ static void test_faults_in_first_save_after_version_1_load(void) {
   TEST_ASSERT(outcomes[2] > 0U);
 }
 
-/* A failed first save after a version 1 load keeps the edit; the next save writes the full version 3 record. */
+/* A failed first save after a version 1 load keeps the edit; the next save writes the full version 4 record. */
 static void test_retry_after_failed_first_save(void) {
   size_t point;
   for (point = 1U; point <= SAVE_OPERATIONS; ++point) {

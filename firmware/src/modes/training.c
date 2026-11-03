@@ -20,6 +20,7 @@ static MEM_XDATA uint8_t training_mode_value;
 static MEM_XDATA uint8_t training_wpm_value;
 static MEM_XDATA uint8_t training_max_word_len;
 static MEM_XDATA uint16_t training_level_value;
+static MEM_XDATA bool training_is_unlimited;
 /* Selection (D-T36). The earned level has no copy, so it is never stale. */
 static MEM_XDATA uint16_t training_selected;
 /* Counters. */
@@ -30,6 +31,7 @@ static MEM_XDATA uint8_t training_threshold;
 static MEM_XDATA uint8_t training_wrong;
 static MEM_XDATA training_check_t training_check;
 static MEM_XDATA training_outcome_t training_outcome_value;
+static MEM_XDATA bool training_is_skip;
 /* Time. */
 static MEM_XDATA uint16_t training_now;
 static MEM_XDATA uint16_t training_phase_start;
@@ -49,15 +51,23 @@ static void training_set_phase(training_phase_t phase, MEM_XDATA uint16_t durati
   training_is_held = false;
 }
 
+/* A check result starts at the tick of the check (section 11.2). */
+static void training_set_result(uint16_t duration) {
+  training_now = tick_now();
+  training_set_phase(TRAINING_PHASE_RESULT, duration);
+}
+
 static void training_clear_answer(void) {
   training_answer_len = 0U;
   training_answer[0] = '\0';
 }
 
-void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len) {
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len,
+                      MEM_XDATA bool has_unlimited_attempts) {
   training_mode_value = (mode == TRAINING_MODE_SENDING) ? TRAINING_MODE_SENDING : TRAINING_MODE_RECEIVING;
   training_wpm_value = wpm;
   training_max_word_len = max_word_len;
+  training_is_unlimited = has_unlimited_attempts;
   training_selected = training_earned_level();
   training_phase_value = TRAINING_PHASE_SELECT;
 }
@@ -70,6 +80,7 @@ void training_start(void) {
   training_score_value = 0U;
   training_wrong = 0U;
   training_check = TRAINING_CHECK_PARTIAL;
+  training_is_skip = false;
   training_outcome_value = TRAINING_OUTCOME_FAIL;
   training_item_len = 0U;
   training_item[0] = '\0';
@@ -140,6 +151,7 @@ training_event_t training_poll(void) {
   if (training_phase_value == TRAINING_PHASE_GAP) {
     ++training_item_number_value;
     training_wrong = 0U;
+    training_is_skip = false;
     training_item_len = koch_make_item(training_level_value, training_max_word_len, training_item);
     training_clear_answer();
     training_set_phase(TRAINING_PHASE_ITEM, 0U);
@@ -187,8 +199,11 @@ training_check_t training_add_char(char character) {
   ++training_answer_len;
   training_answer[training_answer_len] = '\0';
   if (training_is_answer_wrong()) {
-    ++training_wrong;
-    if (training_wrong >= TRAINING_ATTEMPTS) {
+    /* A wrap to 0 would score the next correct answer as a first attempt (D-T53). */
+    if (training_wrong != TRAINING_WRONG_MAX) {
+      ++training_wrong;
+    }
+    if (!training_is_unlimited && (training_wrong >= TRAINING_ATTEMPTS)) {
       training_check = TRAINING_CHECK_FAILED;
       duration = TRAINING_FAILED_MS;
     } else {
@@ -204,8 +219,7 @@ training_check_t training_add_char(char character) {
     training_check = TRAINING_CHECK_CORRECT;
     duration = TRAINING_CORRECT_MS;
   }
-  training_now = tick_now();
-  training_set_phase(TRAINING_PHASE_RESULT, duration);
+  training_set_result(duration);
   return training_check;
 }
 
@@ -227,6 +241,24 @@ void training_hold_result(bool is_held) {
     training_duration = 0U;
   }
 }
+
+training_check_t training_skip(void) {
+  if ((training_phase_value == TRAINING_PHASE_RESULT) && (training_check == TRAINING_CHECK_WRONG)) {
+    /* The rejected character goes, so the failed position is the answer length (D-T54). */
+    --training_answer_len;
+    training_answer[training_answer_len] = '\0';
+  } else if (training_phase_value != TRAINING_PHASE_ITEM) {
+    return TRAINING_CHECK_IGNORED;
+  }
+  training_check = TRAINING_CHECK_FAILED;
+  training_is_skip = true;
+  training_set_result(TRAINING_FAILED_MS);
+  return TRAINING_CHECK_FAILED;
+}
+
+bool training_is_skipped(void) { return training_is_skip; }
+
+bool training_has_unlimited_attempts(void) { return training_is_unlimited; }
 
 training_phase_t training_phase(void) { return training_phase_value; }
 

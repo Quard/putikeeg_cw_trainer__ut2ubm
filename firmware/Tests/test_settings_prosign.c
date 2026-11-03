@@ -19,7 +19,8 @@
 #define RECORD_TONE_LOW 3U
 #define RECORD_TONE_HIGH 4U
 #define RECORD_FLAGS 10U
-#define RECORD_CRC 14U
+#define RECORD_CRC 14U    /* versions 1 to 3 */
+#define RECORD_CRC_V4 15U /* version 4 */
 
 typedef struct {
   uint8_t bytes[SETTINGS_RECORD_SIZE];
@@ -30,47 +31,52 @@ typedef struct {
 
 /* keyer_spec.md section 17.4.2. */
 static const vector_t v2_vectors[] = {
-    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U},
+    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x09U, 0x05U, 0x08U, 0x20U, 0x03U, 0xFFU},
      1U,
      0U,
      2U},
-    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0xB3U},
+    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0xB3U, 0xFFU},
      1U,
      0U,
      0U},
-    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x05U, 0x05U, 0x08U, 0x20U, 0xEBU},
+    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x05U, 0x05U, 0x08U, 0x20U, 0xEBU, 0xFFU},
      1U,
      0U,
      1U},
-    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0BU, 0x05U, 0x08U, 0x20U, 0x2FU},
+    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0BU, 0x05U, 0x08U, 0x20U, 0x2FU, 0xFFU},
      1U,
      1U,
      2U},
-    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0x5BU},
+    {{0x43U, 0x57U, 0x02U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0x5BU, 0xFFU},
      1U,
      0U,
      2U},
 };
 static const vector_t v1_vectors[] = {
-    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U},
+    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x01U, 0x05U, 0x08U, 0x20U, 0x54U, 0xFFU},
      1U,
      0U,
      2U},
-    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x03U, 0x05U, 0x08U, 0x20U, 0x78U},
+    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x03U, 0x05U, 0x08U, 0x20U, 0x78U, 0xFFU},
      1U,
      1U,
      2U},
-    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0xBCU},
+    {{0x43U, 0x57U, 0x01U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x0DU, 0x05U, 0x08U, 0x20U, 0xBCU, 0xFFU},
      1U,
      0U,
      2U},
 };
-static const uint8_t v4_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x04U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
-                                                        0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U, 0x9FU};
-/* menu_subsystem_spec.md section 18.2: the saved form of v2_vectors[1], Punctuation and Ramp 6 ms. */
-static const uint8_t v3_punctuation_record[SETTINGS_RECORD_SIZE] = {
-    0x43U, 0x57U, 0x03U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x61U, 0x05U, 0x08U, 0x20U, 0xBBU};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U};
+/* menu_subsystem_spec.md section 19.4: a version 4 record with its CRC only at the version 3 position. */
+static const uint8_t v4_record_v3_crc[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x04U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                               0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U, 0x9FU, 0xFFU};
+/* menu_subsystem_spec.md section 19.4: version 5 with a valid CRC at byte 15. */
+static const uint8_t v5_record[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x05U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U,
+                                                        0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U, 0x00U, 0x40U};
+/* The saved form of v2_vectors[1], Punctuation and Ramp 6 ms, in layout version 4. */
+static const uint8_t v4_punctuation_record[SETTINGS_RECORD_SIZE] = {
+    0x43U, 0x57U, 0x04U, 0x58U, 0x02U, 0x20U, 0x20U, 0x14U, 0x14U, 0x02U, 0x61U, 0x05U, 0x08U, 0x20U, 0x00U, 0xCDU};
+static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U,
+                                                           8U,   32U, 0U,  2U,  6U,  0U, 0U};
 
 #define V2_COUNT (sizeof(v2_vectors) / sizeof(v2_vectors[0]))
 #define V1_COUNT (sizeof(v1_vectors) / sizeof(v1_vectors[0]))
@@ -109,7 +115,8 @@ static bool flags_are(uint16_t show_cw_code, uint16_t paddle, uint16_t prosigns)
 static bool is_saved_record_valid(void) {
   const uint8_t* memory = fake_iap_memory();
   return (memory[0] == SETTINGS_MAGIC_0) && (memory[1] == SETTINGS_MAGIC_1) &&
-         (memory[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) && (memory[RECORD_CRC] == crc8_compute(memory, 14U));
+         (memory[RECORD_VERSION] == SETTINGS_LAYOUT_VERSION) &&
+         (memory[RECORD_CRC_V4] == crc8_compute(memory, RECORD_CRC_V4));
 }
 
 static void test_vectors_have_valid_crc(void) {
@@ -120,10 +127,11 @@ static void test_vectors_have_valid_crc(void) {
   for (index = 0U; index < V1_COUNT; ++index) {
     TEST_ASSERT_EQUAL(v1_vectors[index].bytes[RECORD_CRC], crc8_compute(v1_vectors[index].bytes, 14U));
   }
-  TEST_ASSERT_EQUAL(v4_record[RECORD_CRC], crc8_compute(v4_record, 14U));
-  TEST_ASSERT_EQUAL(v3_punctuation_record[RECORD_CRC], crc8_compute(v3_punctuation_record, 14U));
-  TEST_ASSERT_EQUAL(3U, SETTINGS_LAYOUT_VERSION);
-  TEST_ASSERT_EQUAL(15U, SETTINGS_RECORD_SIZE);
+  TEST_ASSERT_EQUAL(v4_record_v3_crc[RECORD_CRC], crc8_compute(v4_record_v3_crc, 14U));
+  TEST_ASSERT_EQUAL(v5_record[RECORD_CRC_V4], crc8_compute(v5_record, RECORD_CRC_V4));
+  TEST_ASSERT_EQUAL(v4_punctuation_record[RECORD_CRC_V4], crc8_compute(v4_punctuation_record, RECORD_CRC_V4));
+  TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
+  TEST_ASSERT_EQUAL(16U, SETTINGS_RECORD_SIZE);
 }
 
 /* AC-P6 */
@@ -131,7 +139,7 @@ static void test_values(void) {
   static const uint16_t stored[] = {0U, 1U, 2U};
   size_t index;
 
-  TEST_ASSERT_EQUAL(13U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_COUNT);
   TEST_ASSERT_EQUAL(11U, SETTINGS_ID_PROSIGN_STYLE);
   TEST_ASSERT_EQUAL(0U, SETTINGS_PROSIGN_PUNCTUATION);
   TEST_ASSERT_EQUAL(1U, SETTINGS_PROSIGN_NAME);
@@ -239,11 +247,12 @@ static void test_version_2_vectors(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   memcpy(expected, v2_vectors[0].bytes, sizeof(expected));
-  expected[RECORD_VERSION] = 0x03U;
+  expected[RECORD_VERSION] = 0x04U;
   expected[RECORD_FLAGS] = 0x69U;
   expected[RECORD_TONE_LOW] = 0xBCU;
   expected[RECORD_TONE_HIGH] = 0x02U;
-  expected[RECORD_CRC] = crc8_compute(expected, 14U);
+  expected[RECORD_CRC] = 0x00U;
+  expected[RECORD_CRC_V4] = crc8_compute(expected, RECORD_CRC_V4);
   TEST_ASSERT_EQUAL(0, memcmp(expected, fake_iap_memory(), sizeof(expected)));
 }
 
@@ -328,7 +337,7 @@ static void test_save_after_version_1_load(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_TONE_HZ, 700U));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   TEST_ASSERT(is_saved_record_valid());
-  TEST_ASSERT_EQUAL(0x03U, fake_iap_memory()[RECORD_VERSION]);
+  TEST_ASSERT_EQUAL(0x04U, fake_iap_memory()[RECORD_VERSION]);
   TEST_ASSERT_EQUAL(2U, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
   TEST_ASSERT_EQUAL(0x6BU, fake_iap_memory()[RECORD_FLAGS]);
   TEST_ASSERT_EQUAL(0xBCU, fake_iap_memory()[RECORD_TONE_LOW]);
@@ -343,7 +352,7 @@ static void test_save_after_version_1_load(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_PROSIGN_STYLE, SETTINGS_PROSIGN_PUNCTUATION));
   TEST_ASSERT_EQUAL(SETTINGS_SAVE_OK, settings_save_if_changed());
   TEST_ASSERT_EQUAL(0U, (fake_iap_memory()[RECORD_FLAGS] >> 2) & 0x03U);
-  TEST_ASSERT_EQUAL(0, memcmp(v3_punctuation_record, fake_iap_memory(), SETTINGS_RECORD_SIZE));
+  TEST_ASSERT_EQUAL(0, memcmp(v4_punctuation_record, fake_iap_memory(), SETTINGS_RECORD_SIZE));
   TEST_ASSERT_EQUAL(SETTINGS_LOAD_OK, settings_load());
   TEST_ASSERT_EQUAL(SETTINGS_PROSIGN_PUNCTUATION, settings_get(SETTINGS_ID_PROSIGN_STYLE));
 }
@@ -354,7 +363,7 @@ static void test_other_versions(void) {
 
   for (version = 0U; version <= 255U; ++version) {
     uint8_t record[SETTINGS_RECORD_SIZE];
-    if ((version >= 1U) && (version <= 3U)) {
+    if ((version >= 1U) && (version <= 4U)) {
       continue;
     }
     memcpy(record, v2_vectors[2].bytes, sizeof(record));
@@ -365,7 +374,10 @@ static void test_other_versions(void) {
     TEST_ASSERT_EQUAL(0U, write_operations());
     TEST_ASSERT(!settings_has_unsaved_changes());
   }
-  TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, load(v4_record));
+  TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_VERSION, load(v5_record));
+  TEST_ASSERT(are_defaults());
+  TEST_ASSERT_EQUAL(0U, write_operations());
+  TEST_ASSERT_EQUAL(SETTINGS_LOAD_BAD_CRC, load(v4_record_v3_crc));
   TEST_ASSERT(are_defaults());
   TEST_ASSERT_EQUAL(0U, write_operations());
 }

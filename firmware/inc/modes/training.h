@@ -20,7 +20,8 @@
 
 #define TRAINING_MODE_RECEIVING 0U /* equal to PROGRESS_MODE_RECEIVING */
 #define TRAINING_MODE_SENDING 1U   /* equal to PROGRESS_MODE_SENDING */
-#define TRAINING_ATTEMPTS 3U
+#define TRAINING_ATTEMPTS 3U       /* attempts per item without unlimited attempts */
+#define TRAINING_WRONG_MAX 255U    /* the wrong counter stops here and never wraps (D-T53) */
 #define TRAINING_TEXT_SIZE (KOCH_WORD_LEN_MAX + 1U)
 /* Sending answer character for a word space inside a word (D-T31). No item or decoded character is ' '. */
 #define TRAINING_CHAR_WORD_SPACE ' '
@@ -56,9 +57,11 @@ typedef uint8_t training_phase_t;
 typedef uint8_t training_check_t;
 #define TRAINING_CHECK_PARTIAL 0U /* the answer so far is accepted; more characters needed */
 #define TRAINING_CHECK_CORRECT 1U
-#define TRAINING_CHECK_WRONG 2U   /* an attempt is used; attempts remain */
-#define TRAINING_CHECK_FAILED 3U  /* third wrong attempt; the answer shows */
-#define TRAINING_CHECK_IGNORED 4U /* not in TRAINING_PHASE_ITEM; the character is dropped */
+#define TRAINING_CHECK_WRONG 2U /* an attempt is used; the item comes again (always with unlimited attempts) */
+/* The item ends with no point: third wrong attempt or training_skip(); the answer shows. */
+#define TRAINING_CHECK_FAILED 3U
+/* No effect: a character outside TRAINING_PHASE_ITEM, or a skip outside its cases. */
+#define TRAINING_CHECK_IGNORED 4U
 
 typedef uint8_t training_event_t;
 #define TRAINING_EVENT_NONE 0U
@@ -75,10 +78,12 @@ typedef uint8_t training_outcome_t;
 #define TRAINING_OUTCOME_PASS_REPLAY 4U    /* passed below the earned level; no change, no save (D-T36) */
 
 /**
- * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. Phase
- * SELECT. No session runs. Reads the progress RAM only (D-T36).
+ * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. With
+ * @p has_unlimited_attempts, a wrong answer never ends the item (D-T53). Phase SELECT. No session runs. Reads the
+ * progress RAM only (D-T36).
  */
-void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len);
+void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len,
+                      MEM_XDATA bool has_unlimited_attempts);
 /**
  * Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS.
  * No phase check: the modes call it in SELECT only (D-T46).
@@ -111,6 +116,16 @@ bool training_undo_char(void);
  * training_poll() ends the RESULT. Other phases: no effect. A phase change clears the hold (D-T14, D-T44).
  */
 void training_hold_result(bool is_held);
+/**
+ * In phase ITEM, or in phase RESULT after TRAINING_CHECK_WRONG: ends the item as TRAINING_CHECK_FAILED with no point
+ * and sets training_is_skipped(). After WRONG, removes the rejected answer character. Phase RESULT with
+ * TRAINING_FAILED_MS. Returns TRAINING_CHECK_FAILED. Other cases: no change, returns TRAINING_CHECK_IGNORED (D-T54).
+ */
+training_check_t training_skip(void);
+/** True when training_skip() gave the last FAILED. training_start() and each new item clear it (D-T55). */
+bool training_is_skipped(void);
+/** The value that training_prepare() got (D-T53). */
+bool training_has_unlimited_attempts(void);
 
 training_phase_t training_phase(void);
 uint8_t training_mode(void);
@@ -126,7 +141,8 @@ uint8_t training_shown_item_number(void); /* header number: GAP gives item numbe
 uint8_t training_item_count(void);
 uint8_t training_score(void); /* items correct on the first attempt */
 uint8_t training_pass_threshold(void);
-uint8_t training_wrong_attempts(void); /* of the current item, 0..TRAINING_ATTEMPTS */
+/* Of the current item: 0..TRAINING_ATTEMPTS, with unlimited attempts 0..TRAINING_WRONG_MAX. */
+uint8_t training_wrong_attempts(void);
 training_check_t training_last_check(void);
 training_outcome_t training_outcome(void);      /* meaningful in phase END */
 const char MEM_XDATA* training_item_text(void); /* NUL-terminated, 1..KOCH_WORD_LEN_MAX characters */

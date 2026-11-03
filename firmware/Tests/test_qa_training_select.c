@@ -187,7 +187,7 @@ static void test_replay_never_saves(void) {
     for (index = 0U; index < sizeof(replay_levels) / sizeof(replay_levels[0]); ++index) {
       const uint16_t level = replay_levels[index];
       load(19U, 30U, 7U, 8U);
-      training_prepare(mode, WPM, MAX_WORD);
+      training_prepare(mode, WPM, MAX_WORD, false);
       TEST_ASSERT_EQUAL((mode == RX) ? 19U : 30U, training_selected_level());
       select_level(level);
       training_start();
@@ -217,7 +217,7 @@ static void test_replay_never_saves(void) {
  */
 static void test_pass_above_earned_never_saves(void) {
   load(5U, 0U, 0U, 0U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   training_start();
   TEST_ASSERT_EQUAL(5U, training_level());
   poll_until(TRAINING_PHASE_ITEM);
@@ -236,7 +236,7 @@ static void test_pass_at_earned_saves_own_slot(void) {
 
   for (mode = RX; mode <= TX; ++mode) {
     load(19U, 30U, 7U, 8U);
-    training_prepare(mode, WPM, MAX_WORD);
+    training_prepare(mode, WPM, MAX_WORD, false);
     training_start();
     pass_session();
     TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
@@ -264,7 +264,7 @@ static void test_fail_preselects_session_level(void) {
 
   for (index = 0U; index < sizeof(levels) / sizeof(levels[0]); ++index) {
     load(19U, 0U, 0U, 0U);
-    training_prepare(RX, WPM, MAX_WORD);
+    training_prepare(RX, WPM, MAX_WORD, false);
     select_level(levels[index]);
     training_start();
     fail_session();
@@ -284,7 +284,7 @@ static void test_save_failure_at_each_operation(void) {
 
   for (operation = 1U; operation <= 8U; ++operation) {
     load(3U, 0U, 0U, 0U);
-    training_prepare(RX, WPM, MAX_WORD);
+    training_prepare(RX, WPM, MAX_WORD, false);
     training_start();
     poll_until(TRAINING_PHASE_ITEM);
     fake_iap_set_fail_operation(operation);
@@ -317,14 +317,14 @@ static void test_save_failure_at_each_operation(void) {
 /* AC-T30 (2): earned 0, and the D-T5 saturation at 65534 and 65535 (A-L5, V-148). */
 static void test_limits_zero_and_top(void) {
   load(0U, TOP, 0U, 0U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   expect_no_reopen();
   TEST_ASSERT(!training_select_step(true));
   TEST_ASSERT(!training_select_step(false));
   TEST_ASSERT_EQUAL(0U, training_selected_level());
   TEST_ASSERT_EQUAL(1U, training_new_shown_level());
 
-  training_prepare(TX, WPM, MAX_WORD);
+  training_prepare(TX, WPM, MAX_WORD, false);
   TEST_ASSERT_EQUAL(TOP, training_selected_level());
   TEST_ASSERT(!training_select_step(true));
   TEST_ASSERT_EQUAL(TOP, training_selected_level());
@@ -362,7 +362,7 @@ static void test_limits_zero_and_top(void) {
 /* A pass at the earned index 65534 advances to 65535 and saves; the selection then stops at 65535. */
 static void test_pass_at_65534(void) {
   load(65534U, 0U, 0U, 0U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   training_start();
   pass_session();
   TEST_ASSERT_EQUAL(TRAINING_OUTCOME_PASS, training_outcome());
@@ -375,17 +375,17 @@ static void test_pass_at_65534(void) {
 /* A new prepare (speed change, other mode, re-entry) always selects the earned level of its own key. */
 static void test_prepare_resets_selection(void) {
   load(19U, 30U, 7U, 8U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   select_level(3U);
-  training_prepare(RX, OTHER_WPM, MAX_WORD);
+  training_prepare(RX, OTHER_WPM, MAX_WORD, false);
   TEST_ASSERT_EQUAL(7U, training_selected_level());
   TEST_ASSERT_EQUAL(7U, training_earned_level());
   TEST_ASSERT(!training_select_step(true));
-  training_prepare(TX, OTHER_WPM, MAX_WORD);
+  training_prepare(TX, OTHER_WPM, MAX_WORD, false);
   TEST_ASSERT_EQUAL(8U, training_selected_level());
-  training_prepare(TX, WPM, MAX_WORD);
+  training_prepare(TX, WPM, MAX_WORD, false);
   TEST_ASSERT_EQUAL(30U, training_selected_level());
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   TEST_ASSERT_EQUAL(19U, training_selected_level());
   TEST_ASSERT_EQUAL(TRAINING_PHASE_SELECT, training_phase());
   TEST_ASSERT(is_eeprom_untouched());
@@ -397,7 +397,7 @@ static void test_prepare_resets_selection(void) {
  */
 static void test_end_no_step_then_reopen_and_idle(void) {
   load(19U, 0U, 0U, 0U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   expect_no_reopen();
   select_level(8U);
   training_start();
@@ -437,7 +437,7 @@ static size_t trace_session(bool is_held, bool is_probed, trace_entry_t* trace) 
   unsigned guard = 0U;
 
   load(4U, 0U, 0U, 0U);
-  training_prepare(RX, WPM, MAX_WORD);
+  training_prepare(RX, WPM, MAX_WORD, false);
   if (is_probed) {
     expect_no_reopen();
   }

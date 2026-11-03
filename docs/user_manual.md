@@ -15,6 +15,8 @@ This version has the menu, the settings, the display controls, the [Free Input](
 - In `Receiving`, the device plays Morse code and you pick the characters with the buttons. In `Sending`, the
   device shows characters and words and you key them. Both modes teach the characters in Koch order, one level at
   a time. Before each session, you choose the level. You can repeat each level up to the level that you reached.
+  Each mode has its own attempt setting: 3 attempts for each item, or unlimited attempts. In both modes, a hold of
+  `next` skips the current item (see [Skip an item](#skip-an-item)).
 - The device makes these sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
   preview of the `Tone` and `Ramp` settings (see [Tone and Ramp preview](#tone-and-ramp-preview)). `Ramp` sets how
   fast each tone starts and stops (see [Ramp setting](#ramp-setting)). The volume knob sets the loudness. With
@@ -152,9 +154,12 @@ CW Trainer
 │   │   ├── TX Eff. Speed
 │   │   ├── Key Type
 │   │   └── Paddle
-│   ├── Show CW Code
+│   ├── Training
+│   │   ├── RX Attempts
+│   │   ├── TX Attempts
+│   │   ├── Max Word Length
+│   │   └── Show CW Code
 │   ├── Prosigns
-│   ├── Max Word Length
 │   ├── Display
 │   │   ├── Backlight
 │   │   └── Contrast
@@ -178,8 +183,8 @@ keys (see [The group keyboard](#the-group-keyboard)). To give a command, hold th
 | --- | --- | --- | --- |
 | `menu/back` | Leaves Free Input. The main menu shows with the cursor on `Free Input`. The text is lost. | Leaves the session. The main menu shows with the cursor on `Receiving`. | Leaves the session. The main menu shows with the cursor on `Sending`. |
 | `prev` | Clears the text. | Undoes one step of the answer. | Does nothing. |
-| `next` | Draws a line under the text. | Does nothing. | Does nothing. |
-| `enter` | No hold action. `enter` keys like the tip contact. | Plays the item again from its start, while the item shows. After the third wrong attempt, plays the answer again. | No hold action. `enter` keys like the tip contact. |
+| `next` | Draws a line under the text. | Skips the item (see [Skip an item](#skip-an-item)). | Skips the item (see [Skip an item](#skip-an-item)). |
+| `enter` | No hold action. `enter` keys like the tip contact. | Plays the item again from its start, while the item shows. After the third wrong attempt or a skip, plays the answer again. | No hold action. `enter` keys like the tip contact. |
 
 How to hold a button:
 
@@ -249,7 +254,7 @@ Notes:
 - Free Input has no timeout. It stays open until you hold `menu/back`.
 - The settings cannot change while Free Input is open. To change a setting, leave Free Input, change the setting,
   and open Free Input again.
-- `RX Speed`, `RX Eff. Speed`, `Show CW Code` and `Max Word Length` have no effect on Free Input.
+- `RX Speed`, `RX Eff. Speed` and the settings in `Settings > Training` have no effect on Free Input.
 
 ### What the screen shows
 
@@ -344,7 +349,7 @@ With `Key Type` = `Straight`, both contacts key, so `Paddle` has no effect.
 ### Prosigns setting
 
 `Settings > Prosigns` sets how Free Input shows the prosigns AR, BT, KN and AS. It is the third item of
-`Settings`, after `Show CW Code`.
+`Settings`, after `Training`.
 
 | `Prosigns` | AR shows as | What shows |
 | --- | --- | --- |
@@ -465,12 +470,13 @@ Rules for the items:
   prosigns come only in character sessions.
 - The first two word sessions have words of 2 characters. The next two have words of 3 characters. The length grows
   by one character every two word sessions.
-- `Max Word Length` sets the longest word: 4 to 8 characters, default 5. The final word sessions always use words of
-  `Max Word Length` characters.
+- `Settings > Training > Max Word Length` sets the longest word: 4 to 8 characters, default 5. The final word
+  sessions always use words of `Max Word Length` characters.
 
 Rules for a pass:
 
-- The score counts only the items that you answer correctly on the first attempt.
+- The score counts only the items that you answer correctly on the first attempt. A retry or a skip never adds to
+  the score. This is also true with unlimited attempts (see [Results and attempts](#results-and-attempts)).
 - To pass a character session, you need 90 % of the items: 45 of 50 characters.
 - To pass a word session, you need 80 % of the words, rounded up: 8 of 10 words, 80 of 100 words. This rule
   applies to every word session, also to the final word sessions.
@@ -648,6 +654,8 @@ setting, and leave `Settings` to save it. Then open the mode again.
 | `TX Speed` | No effect. | The speed of the keyer and the decoder. It also selects the stored level. |
 | `TX Eff. Speed` | No effect. | Shows in the header. It sets the pause limit between the characters of a word (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
 | `Key Type`, `Paddle` | No effect. | The keyer, as in Free Input (see [Key types](#key-types) and [Paddle setting](#paddle-setting)). |
+| `RX Attempts` | The attempts for each item: `3` or `Unlimited` (see [Results and attempts](#results-and-attempts)). | No effect. |
+| `TX Attempts` | No effect. | The attempts for each item: `3` or `Unlimited` (see [Results and attempts](#results-and-attempts)). |
 | `Show CW Code` | No effect. | Shows the dots and dashes that you key (see [Code row](#code-row)). It has no effect on the start screen: the start screen always shows the code of the new character. |
 | `Prosigns` | How BT, SK and AR show in the items, in the keyboard labels and in the level description of the start screen. | How BT, SK and AR show in the items, in the `Wrong:` text and in the level description of the start screen. |
 | `Max Word Length` | The longest word. | The longest word. |
@@ -704,11 +712,13 @@ In Receiving, you listen to an item and pick its characters with the four button
    item plays. Each pick shows at once.
 8. Fill the last slot. The device checks the whole answer at once. If the item still plays, the playback stops.
 9. Read the result in the status line (see [Results and attempts](#results-and-attempts)). After a correct
-   answer, the next item comes after the result. After the third wrong attempt, the answer stays on the screen.
-   Tap `enter` to go on (see [After the third wrong attempt](#after-the-third-wrong-attempt)).
-10. After the last item, the [session end screen](#session-end-screen) shows your result. Press `enter` to see the
+   answer, the next item comes after the result. After a wrong answer, the next attempt comes. With
+   `RX Attempts` = `3`, the third wrong attempt ends the item, and the answer stays on the screen. Tap `enter` to go
+   on (see [After the third wrong attempt](#after-the-third-wrong-attempt)).
+10. To skip an item, hold `next` for about 0.8 s. The answer shows (see [Skip an item](#skip-an-item)).
+11. After the last item, the [session end screen](#session-end-screen) shows your result. Press `enter` to see the
     start screen with the level of the next session. Press `enter` again to start it.
-11. To leave a session, hold `menu/back` for about 0.8 s.
+12. To leave a session, hold `menu/back` for about 0.8 s.
 
 In a Receiving session, a short press is a tap. You must release the button before about 0.8 s. When you release the
 button, the tap acts. The push alone does nothing. A tap of `enter` selects the right group of the keyboard. It
@@ -721,13 +731,13 @@ To hear the item again, hold `enter` for about 0.8 s while the item shows:
   again, release the button.
 - Your picks and the labels stay. A replay is free: it uses no attempt and does not change the score.
 - A hold of `enter` does nothing during the start pause, a result or the blank moment. After the third wrong
-  attempt, a hold of `enter` plays the answer again (see
+  attempt or a skip, a hold of `enter` plays the answer again (see
   [After the third wrong attempt](#after-the-third-wrong-attempt)).
 
 #### After the third wrong attempt
 
-After the third wrong attempt, the device shows the answer and waits for you. Example: item 7 of 50, the answer
-is K:
+With `RX Attempts` = `3`, the third wrong attempt ends the item. Then the device shows the answer and waits for you.
+Example: item 7 of 50, the answer is K:
 
 ```text
 RX 20/15 L12         7/50
@@ -758,6 +768,9 @@ button. A tap of the `next` button does nothing here.
 
 The item counts as wrong. So the time on this screen does not change the score.
 
+After a skip, the same screen shows, with the status `Skipped. The answer is:`. It works in the same way (see
+[Skip an item](#skip-an-item)). With `RX Attempts` = `Unlimited`, the answer shows only after a skip.
+
 #### Key or paddle in Receiving
 
 The tip contact of the key/paddle socket is connected to `enter`. So in Receiving, the dit lever (with
@@ -767,8 +780,8 @@ The tip contact of the key/paddle socket is connected to `enter`. So in Receivin
 - On the session end screen, a closure opens the start screen, like a press of `enter`.
 - In a session, a short closure is a tap of `enter`. It selects the right group.
 - In a session, a closure of about 0.8 s is a hold of `enter`. It plays the item again.
-- After the third wrong attempt, a short closure goes on, like a tap of `enter`. A closure of about 0.8 s plays the
-  answer again.
+- After the third wrong attempt or a skip, a short closure goes on, like a tap of `enter`. A closure of about 0.8 s
+  plays the answer again.
 
 The ring contact does nothing. The paddle gives no sidetone in Receiving.
 
@@ -776,10 +789,10 @@ The ring contact does nothing. The paddle gives no sidetone in Receiving.
 > During Receiving, this acts as a tap of `enter`. So it can select the right group. If that group has two or more
 > characters, the labels change. Hold `prev` to go back. If that group has one character, the device picks it.
 > Hold `prev` to undo the pick. But if the pick fills the last slot, the device checks the answer at once. This
-> uses an attempt, and you cannot undo it. After the third wrong attempt, a plug insertion can go on to the next
-> item, or to the session end screen. Then the answer goes away before you read it. This costs no point, because
-> the item already counts as wrong. On the start screen, a plug insertion can start a session. On the session end
-> screen, it can open the start screen.
+> uses an attempt, and you cannot undo it. After the third wrong attempt or a skip, a plug insertion can go on to
+> the next item, or to the session end screen. Then the answer goes away before you read it. This costs no point,
+> because the item already counts as wrong. On the start screen, a plug insertion can start a session. On the
+> session end screen, it can open the start screen.
 
 #### The group keyboard
 
@@ -872,7 +885,9 @@ In Sending, you read an item and key it. The device decodes each character and c
 
 1. Set the keyer in `Settings > CW`: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone`. Sending uses
    the same keyer as Free Input (see [Key types](#key-types) and [Speeds and pauses](#speeds-and-pauses)).
-2. Set `Show CW Code` in `Settings`. With `On`, the screen shows the dots and dashes that you key.
+2. Set `Show CW Code` and `TX Attempts` in `Settings > Training`. With `Show CW Code` = `On`, the screen shows the
+   dots and dashes that you key. `TX Attempts` sets the attempts for each item (see
+   [Results and attempts](#results-and-attempts)).
 3. Press `menu/back` until the main menu shows. The device saves the changed settings.
 4. Insert the plug of the key or paddle into the key/paddle socket.
 
@@ -893,9 +908,10 @@ In Sending, you read an item and key it. The device decodes each character and c
 6. In a word, a short bar shows under the character that you key next. After each correct character, the bar moves
    to the next character. The status line shows nothing.
 7. After the last correct character, the status line shows `Correct`. Then the next item comes.
-8. After the last item, the [session end screen](#session-end-screen) shows your result. Press `enter` to see the
+8. To skip an item, hold `next` for about 0.8 s (see [Skip an item](#skip-an-item)).
+9. After the last item, the [session end screen](#session-end-screen) shows your result. Press `enter` to see the
    start screen with the level of the next session. Press `enter` again to start it.
-9. To leave a session, hold `menu/back` for about 0.8 s.
+10. To leave a session, hold `menu/back` for about 0.8 s.
 
 Notes:
 
@@ -907,8 +923,8 @@ Notes:
   [Wrong attempts and the retry](#wrong-attempts-and-the-retry)).
 - After the last character of a word, a pause does nothing. You do not have to key a word space at the end of a
   word.
-- In a session, short presses do nothing. `enter` keys like the tip contact, as in Free Input. A hold of `prev` or
-  `next` does nothing.
+- In a session, short presses do nothing. `enter` keys like the tip contact, as in Free Input. A hold of `prev`
+  does nothing. A hold of `next` skips the item.
 
 #### Code row
 
@@ -932,7 +948,8 @@ A longer pause is a wrong attempt, the same as a wrong character:
 - The status line shows `Wrong: pause too long`.
 - The bar stays under the next character. It shows where the pause came.
 - The pause uses an attempt. In the next attempt, key the whole word again from its first character.
-- After the third wrong attempt, the code of the character under the bar shows below the item.
+- If the pause ends the item, the code of the character under the bar shows below the item. This occurs after the
+  third wrong attempt with `TX Attempts` = `3`.
 
 A pause does nothing in these cases:
 
@@ -958,13 +975,15 @@ time, set a lower `TX Eff. Speed`. A lower value gives a longer pause limit.
 
 #### Wrong attempts and the retry
 
-After a wrong attempt 1 or 2:
+After a wrong attempt that does not end the item, a retry comes. With `TX Attempts` = `3`, this is a wrong attempt 1
+or 2. With `TX Attempts` = `Unlimited`, this is every wrong attempt.
 
 1. The status line shows the result for 1.2 s: `Wrong:` and the keyed character, or `Wrong: pause too long`.
    During this time, the bottom row keeps the code that you keyed, so you can read it. After a pause error, the
    bottom row shows the code of the last correct character.
-2. Then the retry starts. The status line shows `Try 2 of 3` or `Try 3 of 3`. The rows below the item are blank,
-   with `Show CW Code` = `On` and with `Off`. In a word, the bar goes back to the first character.
+2. Then the retry starts. The status line shows `Try 2 of 3` or `Try 3 of 3`. With `TX Attempts` = `Unlimited`, it
+   shows `Try` and the number of the attempt, for example `Try 4`. The rows below the item are blank, with
+   `Show CW Code` = `On` and with `Off`. In a word, the bar goes back to the first character.
 3. Key the whole item again from its first character.
 
 Only the status line tells you that this is a retry. The rest of the screen looks like a new item.
@@ -981,21 +1000,98 @@ but the device ignores it.
 
 ### Results and attempts
 
-You have 3 attempts for each item. The status line shows the result of each check. The device makes no sound for a
-result.
+`RX Attempts` sets the attempts in Receiving. `TX Attempts` sets the attempts in Sending. Both are in
+`Settings > Training` (see [Training settings](#training-settings)):
+
+- `3` (default): you have 3 attempts for each item. The third wrong attempt ends the item, and the answer shows.
+- `Unlimited`: each wrong attempt gives a retry. The item comes again until your answer is correct, or until you skip
+  the item (see [Skip an item](#skip-an-item)).
+
+The status line shows the result of each check. The device makes no sound for a result.
 
 | Result | Status line | Time on the screen | Then |
 | --- | --- | --- | --- |
 | Correct | `Correct` | 0.6 s | The blank moment, then the next item. |
-| Wrong, attempt 1 or 2 | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character. |
-| Wrong, attempt 3 | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. The bottom row shows `Next` above `enter`, or `Finish` on the last item. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: until you tap `enter`, with no time limit (see [After the third wrong attempt](#after-the-third-wrong-attempt)). Sending: 2.5 s. | The blank moment, then the next item. |
+| Wrong, a retry comes: attempt 1 or 2 with `3`, every attempt with `Unlimited` | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. With `Unlimited`, it shows `Try 2`, `Try 3` and so on, up to `Try 99`. From attempt 100, it shows `Try 99+`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character. |
+| Wrong, attempt 3 with `3` | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. The bottom row shows `Next` above `enter`, or `Finish` on the last item. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: until you tap `enter`, with no time limit (see [After the third wrong attempt](#after-the-third-wrong-attempt)). Sending: 2.5 s. | The blank moment, then the next item. |
+| Skipped, with each setting | Receiving: `Skipped. The answer is:`. The rest is the same as after attempt 3. Sending: `Skipped`. The dots and dashes of the expected character show below the item. | Receiving: until you tap `enter`. Sending: 2.5 s. | The blank moment, then the next item (see [Skip an item](#skip-an-item)). |
 
 - In Sending, the dots and dashes of the expected character show after the third wrong attempt, also with
   `Show CW Code` = `Off`.
-- An item that you answer correctly on attempt 2 or 3 does not add to the score.
+- An item that you answer correctly on attempt 2 or later does not add to the score. A skipped item does not add to
+  the score. So with `Unlimited`, the score and the pass rules do not change: a level still needs answers that are
+  correct on the first attempt.
 - The blank moment takes 0.5 s in Receiving and 0.3 s in Sending.
-- After the last item, the session end screen shows at once. In Receiving, after the third wrong attempt on the
-  last item, tap `enter`. Then the session end screen shows.
+- After the last item, the session end screen shows at once. In Receiving, after the third wrong attempt or a skip
+  on the last item, tap `enter`. Then the session end screen shows.
+
+### Skip an item
+
+To skip the current item, hold `next` for about 0.8 s. The skip works in both modes, with each value of
+`RX Attempts` and `TX Attempts`. The skip comes while you hold the button.
+
+A hold of `next` skips in these states:
+
+- While the item shows. This is also true before your first answer, and while the item plays in Receiving.
+- During a `Wrong` result, before the retry starts. Then no retry comes.
+
+A hold of `next` does nothing in these states:
+
+- The start pause, a `Correct` result and the blank moment.
+- The answer after the third wrong attempt or after a skip.
+
+On the start screen, a hold of `next` steps the level up (see [Choose a level](#choose-a-level)).
+
+The rules of a skip:
+
+- The skipped item gives no point. This is also true for a skip before your first answer.
+- A skip uses no attempt.
+- With `3` attempts, a skip in attempt 1 or 2 ends the item before attempt 3.
+- The item number in the header changes only at the blank moment, as after the third wrong attempt.
+
+At about 0.8 s of the hold, the skip acts on the item that shows. If you start the hold during a `Correct`
+result or a blank moment, the skip can act on the next item. Hold `next` only while the item that you want to skip
+shows.
+
+#### Skip in Receiving
+
+A tap of `next` is still keyboard key 3. Only a hold of `next` skips. After a skip, the answer screen of
+[After the third wrong attempt](#after-the-third-wrong-attempt) shows, with the status `Skipped. The answer is:`.
+Example: item 7 of 50, the answer is K:
+
+```text
+RX 20/15 L12         7/50
+ Skipped. The answer is:
+
+            K
+            K
+
+_____ _____ ____ ________
+                     Next
+```
+
+- If the item still plays, the playback stops. Then the answer plays one time from its start.
+- Your picks go away. The middle of the screen shows the answer. An open group of the keyboard closes.
+- The bottom row shows only `Next` above `enter`, or `Finish` on the last item.
+- To go on, tap `enter`. There is no time limit. A hold of `enter` plays the answer again.
+- A hold of `menu/back` leaves the session. The other buttons do nothing.
+
+#### Skip in Sending
+
+In a Sending session, a short press of `next` does nothing. Only a hold of `next` skips. The keyer and the sidetone
+continue to work during the hold.
+
+After a skip:
+
+- The status line shows `Skipped` for 2.5 s. Then the blank moment and the next item come. After the last item,
+  the session end screen shows at once.
+- The dots and dashes of the expected character show below the item. They show also with `Show CW Code` = `Off`.
+  In a word, this is the character that you did not key correctly: the next character to key, or the expected
+  character at the position of the wrong character.
+- In a word, the bar does not move. It stays under the expected character.
+- The code row at the bottom does not change. With `Show CW Code` = `On`, it keeps the marks that you keyed.
+- If you key a character at the moment of the skip, the device ignores that character. This is also true for the
+  part that you key after the skip.
 
 ### Session end screen
 
@@ -1116,13 +1212,15 @@ The levels and the settings are in the same memory. A firmware download can keep
 | --- | --- | --- |
 | You cannot leave a session. | In Receiving, a short press of `menu/back` is a keyboard key. In Sending, it does nothing. | Hold `menu/back` for about 0.8 s, until the main menu shows. |
 | A press picks nothing in Receiving. | The device saw a hold. Or a start pause, a result or the blank moment shows. Or the label above the button is blank. | Press and release the button quickly while the item shows. |
-| In Receiving, the answer stays on the screen, and the next item does not come. | After the third wrong attempt, the device waits for you. `Next` or `Finish` shows above `enter`. A tap of `next` does nothing here. | Tap `enter`. |
+| In Receiving, the answer stays on the screen, and the next item does not come. | After the third wrong attempt or a skip, the device waits for you. `Next` or `Finish` shows above `enter`. A tap of `next` does nothing here. | Tap `enter`. |
 | You hear no playback in Receiving. | The volume knob is at its minimum. | Turn up the volume. Hold `enter` for about 0.8 s to play the item again. |
 | The item plays again without a press. | You inserted or removed a plug. A tip closure of about 0.8 s acts as a hold of `enter`. | Nothing. A replay is free. |
 | In Receiving, a character was picked without a press, an attempt was used, or the answer went away after you inserted the plug. | You inserted the plug while Receiving was open. A short tip closure acts as a tap of `enter`. | Insert the plug before you open Receiving. To undo a pick that the device did not check yet, hold `prev`. |
 | In Sending, a tone sounds or a wrong character shows without a keyed element. | You inserted or removed a plug during the session. A mono plug closes the ring contact. | Hold `menu/back` to leave. Insert the plug, then open `Sending` again. |
 | In Sending, a character that you keyed does not count. | You started it during a pause. | Key the character again. |
 | In Sending, many characters are wrong or show as `*`. | Your speed is different from `TX Speed`. The decoder does not adapt. | Set `TX Speed` near your keying speed. |
+| The item comes again after each wrong answer, and the answer never shows. | `RX Attempts` or `TX Attempts` is `Unlimited`. | Hold `next` for about 0.8 s to skip the item. To get 3 attempts, set the setting to `3` in `Settings > Training`. |
+| An item shows `Skipped`, but you did not want to skip it. | You held `next` from the end of the item before. At about 0.8 s of the hold, the skip acts on the item that shows. | Release `next` after a skip. Hold it only while the item that you want to skip shows. |
 | In Sending, `Wrong: pause too long` shows while you key at a normal rhythm. | Your pause between two characters of a word is too long. The limit is 5 units, only 2 units more than the normal pause. | Set a lower `TX Eff. Speed`. A lower value gives a longer pause limit (see [Pause between characters of a word](#pause-between-characters-of-a-word)). |
 | The level is L1, but you trained before. | You changed `RX Speed` or `TX Speed`. Each speed has its own level. | Set the speed back. |
 | A session starts without a press on the start screen. Or the start screen shows without a press on the session end screen. | You inserted the plug while the screen showed. On these screens, a closure of the tip contact acts at once as a press of `enter`. | If a session started, hold `menu/back` for about 0.8 s to leave the session. Your level does not change. Insert the plug before you open the mode. |
@@ -1159,9 +1257,11 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 | Settings > CW | `TX Eff. Speed` | 5 to the current `TX Speed` | 1 | WPM | Same as `TX Speed` (20 WPM) |
 | Settings > CW | `Key Type` | `Straight`, `Iambic A`, `Iambic B` | - | - | `Iambic B` |
 | Settings > CW | `Paddle` | `Normal`, `Reversed` | - | - | `Normal` |
-| Settings | `Show CW Code` | `Off`, `On` | - | - | `On` |
+| Settings > Training | `RX Attempts` | `3`, `Unlimited` | - | - | `3` |
+| Settings > Training | `TX Attempts` | `3`, `Unlimited` | - | - | `3` |
+| Settings > Training | `Max Word Length` | 4 to 8 | 1 | - | 5 |
+| Settings > Training | `Show CW Code` | `Off`, `On` | - | - | `On` |
 | Settings | `Prosigns` | `Punctuation`, `Prosign`, `Both` | - | - | `Both` |
-| Settings | `Max Word Length` | 4 to 8 | 1 | - | 5 |
 | Settings > Display | `Backlight` | `Off`, 1 to 10 | 1 | - | 8 |
 | Settings > Display | `Contrast` | 0 to 63 | 1 | - | 32 |
 
@@ -1172,6 +1272,32 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 while you edit them (see [Tone and Ramp preview](#tone-and-ramp-preview)). The other settings take effect the next
 time you open Free Input, `Receiving` or `Sending`. [Settings for training](#settings-for-training) tells which
 setting affects which training mode.
+
+### Training settings
+
+`Settings > Training` holds the settings of the training sessions. With the default values, the list looks like
+this:
+
+```text
+Settings > Training
+RX Attempts           3
+TX Attempts           3
+Max Word Length       5
+Show CW Code         On
+```
+
+| Setting | What it sets |
+| --- | --- |
+| `RX Attempts` | The attempts for each item in `Receiving`: `3` or `Unlimited` (see [Results and attempts](#results-and-attempts)). |
+| `TX Attempts` | The attempts for each item in `Sending`: `3` or `Unlimited`. |
+| `Max Word Length` | The longest word in both training modes (see [Levels and sessions](#levels-and-sessions)). |
+| `Show CW Code` | The code row in `Sending` (see [Code row](#code-row)). |
+
+- In the edit of `RX Attempts` or `TX Attempts`, `next` goes from `3` to `Unlimited`, and `prev` goes back. The value
+  does not wrap.
+- The `3` is the same number as in the status `Try 2 of 3`.
+- A change applies the next time you open the mode. The edit plays no sound.
+- Free Input does not use these settings.
 
 ### Ramp setting
 
@@ -1232,7 +1358,7 @@ with these two conditions:
 If you change a value and then change it back to the saved value, the device does not save. Nothing on the
 screen shows a save. The main menu shows with the cursor on `Settings`.
 
-These actions do not save: end editing, or go back from `CW` or `Display` to `Settings`.
+These actions do not save: end editing, or go back from `CW`, `Training` or `Display` to `Settings`.
 
 > **Caution:** Leave `Settings` before you switch off the device. If the power stops while you are in
 > `Settings`, the device loses the changes of this visit. At the next start, it uses the values from before the
@@ -1259,7 +1385,9 @@ The device uses the default values in these cases. It shows no message.
 
 A firmware download can keep or delete the saved settings. If the device keeps the settings of an earlier firmware
 version, the settings stay as they were. A setting that the earlier version did not have gets its default value:
-`Prosigns` is `Both`, `Paddle` is `Normal`, and `Ramp` is 6 ms. The device shows no message.
+`Prosigns` is `Both`, `Paddle` is `Normal`, `Ramp` is 6 ms, and `RX Attempts` and `TX Attempts` are `3`. The
+device shows no message. `Max Word Length` and `Show CW Code` keep their saved values in their new place in
+`Settings > Training`.
 
 This version saves the settings in a new format. It writes the new format at the first save, after you change a
 setting. An earlier firmware version cannot read the new format. If you download an earlier firmware version after

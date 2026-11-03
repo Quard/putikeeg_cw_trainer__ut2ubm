@@ -37,6 +37,7 @@ static MEM_XDATA uint8_t tx_eff_wpm;
 static MEM_XDATA uint8_t tx_max_word_len;
 static MEM_XDATA bool tx_is_code_shown;
 static MEM_XDATA uint8_t tx_prosign_style;
+static MEM_XDATA bool tx_is_unlimited;
 
 static MEM_XDATA uint8_t tx_pattern;
 /* D-T15: drop every keyer event up to and including the next CHAR_GAP. */
@@ -56,23 +57,34 @@ static void tx_start_session(void) {
   training_start();
 }
 
+/* The slot of the expected character in RESULT. A skip already removed the rejected character (D-T54 (6)). */
+static uint8_t tx_result_slot(void) {
+  uint8_t slot = training_answer_length();
+
+  if (!training_is_skipped()) {
+    --slot;
+  }
+  return slot;
+}
+
 /* The item in the 8 x 16 font; in a word item, the bar under the character that the user keys next. */
 static void tx_draw_item_line(void) {
   const training_phase_t phase = training_phase();
   const uint8_t length = training_item_length();
-  uint8_t bar_slot = training_answer_length();
+  uint8_t bar_slot;
 
   if ((phase != TRAINING_PHASE_ITEM) && (phase != TRAINING_PHASE_RESULT)) {
     training_screen_clear_rows(TRAINING_SCREEN_ITEM_FIRST_ROW, TRAINING_SCREEN_ITEM_LAST_ROW);
     return;
   }
   training_screen_draw_item_text(training_item_text(), tx_prosign_style);
+  bar_slot = training_answer_length();
   if (phase == TRAINING_PHASE_RESULT) {
     if (training_last_check() == TRAINING_CHECK_CORRECT) {
       return;
     }
     /* A wrong character: the bar stays under it. */
-    --bar_slot;
+    bar_slot = tx_result_slot();
   }
   if (length > 1U) {
     training_screen_draw_mark(bar_slot, length, false);
@@ -84,8 +96,7 @@ static void tx_draw_input(void) {
   training_screen_draw_status(tx_prosign_style);
   training_screen_clear_rows(TX_ANSWER_ROW, TX_ANSWER_ROW);
   if ((training_phase() == TRAINING_PHASE_RESULT) && (training_last_check() == TRAINING_CHECK_FAILED)) {
-    training_screen_draw_code_group(morse_encode(training_item_text()[training_answer_length() - 1U]),
-                                    MORSE_PATTERN_EMPTY);
+    training_screen_draw_code_group(morse_encode(training_item_text()[tx_result_slot()]), MORSE_PATTERN_EMPTY);
   }
   tx_draw_item_line();
 }
@@ -174,9 +185,13 @@ void sending_enter(void) {
     tx_is_code_shown = true;
   }
   tx_prosign_style = (uint8_t)settings_get(SETTINGS_ID_PROSIGN_STYLE);
+  tx_is_unlimited = false;
+  if (settings_get(SETTINGS_ID_TX_UNLIMITED) != 0U) {
+    tx_is_unlimited = true;
+  }
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
   /* The keyer starts with the session, so P3.2 stays enter on the start screen (D-T40). */
-  training_prepare(TRAINING_MODE_SENDING, tx_wpm, tx_max_word_len);
+  training_prepare(TRAINING_MODE_SENDING, tx_wpm, tx_max_word_len, tx_is_unlimited);
 }
 
 void sending_render(void) {
@@ -222,12 +237,31 @@ void sending_poll(void) {
   }
 }
 
-/* Only the start screen and the end screen act (ui-ux.md sections 5.16.4 and 6.9). */
+/*
+ * A long next ends the item (D-T57). A half-keyed character is dropped up to its CHAR_GAP. With an empty pattern the
+ * drop flag stays off, or it would drop the first character of the next item.
+ */
+static void tx_skip_item(void) {
+  if (training_skip() != TRAINING_CHECK_FAILED) {
+    return;
+  }
+  if (tx_pattern != MORSE_PATTERN_EMPTY) {
+    sending_is_dropping = true;
+  }
+  tx_pattern = MORSE_PATTERN_EMPTY;
+  tx_is_word_gap_armed = false;
+  tx_draw_input();
+}
+
+/* The start screen and the end screen act; in a session only the skip acts (ui-ux.md sections 5.16.4, 5.20, 6.9). */
 bool sending_handle(button_event_t event) {
   const training_phase_t phase = training_phase();
   training_select_action_t action;
 
   if ((phase != TRAINING_PHASE_SELECT) && (phase != TRAINING_PHASE_END)) {
+    if (event == (BUTTON_EVENT_NEXT | BUTTON_EVENT_LONG_FLAG)) {
+      tx_skip_item();
+    }
     return false;
   }
   action = training_screen_select_input(event);

@@ -5,7 +5,7 @@
 
 /*
  * Host tests of the session engine (references/internal/training_spec.md sections 5.10 and 11, AC-T16 to AC-T18,
- * AC-T30, AC-T31 and AC-T37).
+ * AC-T30, AC-T31, AC-T37 and AC-T48 to AC-T50).
  */
 
 #include <stdbool.h>
@@ -34,8 +34,12 @@ static void at(uint16_t time) {
   fake_tick_set_now(now);
 }
 
-/* Empty EEPROM, or a record with @p level for (@p mode, @p wpm). Loads it and prepares the engine at t = 1000. */
-static void prepare_at_level(uint8_t mode, uint8_t wpm, uint16_t level, uint8_t max_word_len) {
+/*
+ * Empty EEPROM, or a record with @p level for (@p mode, @p wpm). Loads it and prepares the engine at t = 1000 with
+ * @p has_unlimited_attempts.
+ */
+static void prepare_with_attempts(uint8_t mode, uint8_t wpm, uint16_t level, uint8_t max_word_len,
+                                  bool has_unlimited_attempts) {
   fake_iap_reset();
   if (level != 0U) {
     progress_fixture_write(mode, wpm, level);
@@ -46,7 +50,12 @@ static void prepare_at_level(uint8_t mode, uint8_t wpm, uint16_t level, uint8_t 
   fake_tick_set_advance_per_read(0U);
   rng_seed(0x1234U);
   at(1000U);
-  training_prepare(mode, wpm, max_word_len);
+  training_prepare(mode, wpm, max_word_len, has_unlimited_attempts);
+}
+
+/* As prepare_with_attempts() with 3 attempts. */
+static void prepare_at_level(uint8_t mode, uint8_t wpm, uint16_t level, uint8_t max_word_len) {
+  prepare_with_attempts(mode, wpm, level, max_word_len, false);
 }
 
 /* As prepare_at_level(), then starts a session at the earned level. */
@@ -56,7 +65,7 @@ static void start_at_level(uint8_t mode, uint8_t wpm, uint16_t level, uint8_t ma
 }
 
 static void restart(uint8_t mode, uint8_t wpm, uint8_t max_word_len) {
-  training_prepare(mode, wpm, max_word_len);
+  training_prepare(mode, wpm, max_word_len, false);
   training_start();
 }
 
@@ -651,12 +660,12 @@ static void test_prepare(void) {
   }
   /* An unknown mode acts as RECEIVING: it reads the Receiving level, not the Sending one. */
   prepare_at_level(TX, 20U, 9U, 8U);
-  training_prepare(2U, 20U, 8U);
+  training_prepare(2U, 20U, 8U, false);
   TEST_ASSERT_EQUAL(RX, training_mode());
   TEST_ASSERT_EQUAL(0U, training_earned_level());
   TEST_ASSERT_EQUAL(0U, training_selected_level());
   prepare_at_level(RX, 20U, 9U, 8U);
-  training_prepare(255U, 20U, 8U);
+  training_prepare(255U, 20U, 8U, false);
   TEST_ASSERT_EQUAL(RX, training_mode());
   TEST_ASSERT_EQUAL(9U, training_earned_level());
   TEST_ASSERT_EQUAL(9U, training_selected_level());
@@ -935,7 +944,7 @@ static void test_selection_random_walk(void) {
   for (session = 0U; session < 1200U; ++session) {
     mode = (walk_below(2U) == 0U) ? RX : TX;
     wpm = speeds[walk_below(3U)];
-    training_prepare(mode, wpm, (uint8_t)(2U + walk_below(7U)));
+    training_prepare(mode, wpm, (uint8_t)(2U + walk_below(7U)), false);
     check_selection_invariant();
     earned = training_earned_level();
     TEST_ASSERT_EQUAL(earned, training_selected_level());
@@ -1172,6 +1181,452 @@ static void test_reopen_outside_end(void) {
   TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, reopen_log[1][count - 1U].phase);
 }
 
+/* ---------- Unlimited attempts and the skip (D-T53 to D-T55) ---------- */
+
+/* AC-T48 (1), (2): 300 wrong answers each give WRONG and a RETRY; the counter stops at 255; no point after it. */
+static void check_unlimited_wrong_answers(uint8_t mode) {
+  uint16_t t = 2000U;
+  uint16_t answer;
+  char wrong;
+
+  prepare_with_attempts(mode, 20U, 0U, 5U, true);
+  training_start();
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  wrong = wrong_char_for(training_item_text()[0]);
+  for (answer = 1U; answer <= 300U; ++answer) {
+    at(t);
+    if (!TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong))) {
+      fprintf(stderr, "mode %u answer %u\n", (unsigned)mode, (unsigned)answer);
+    }
+    TEST_ASSERT_EQUAL((answer < TRAINING_WRONG_MAX) ? answer : TRAINING_WRONG_MAX, training_wrong_attempts());
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_last_check());
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_WRONG_MS - 1U)));
+    t = (uint16_t)(t + TRAINING_WRONG_MS);
+    TEST_ASSERT_EQUAL(TRAINING_EVENT_RETRY, poll_at(t));
+    TEST_ASSERT_EQUAL(1U, training_item_number());
+  }
+  at(t);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_add_char(training_item_text()[0]));
+  TEST_ASSERT_EQUAL(0U, training_score());
+  TEST_ASSERT_EQUAL(TRAINING_WRONG_MAX, training_wrong_attempts());
+  TEST_ASSERT(!training_is_skipped());
+}
+
+/* AC-T48 (3): with 3 attempts the third wrong answer gives FAILED, and the counter never passes 3. */
+static void check_three_attempts(uint8_t mode) {
+  uint16_t t = 2000U;
+  uint8_t attempt;
+  char wrong;
+
+  start_at_level(mode, 20U, 0U, 5U);
+  TEST_ASSERT(!training_has_unlimited_attempts());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  wrong = wrong_char_for(training_item_text()[0]);
+  for (attempt = 1U; attempt <= TRAINING_ATTEMPTS; ++attempt) {
+    at(t);
+    TEST_ASSERT_EQUAL((attempt < TRAINING_ATTEMPTS) ? TRAINING_CHECK_WRONG : TRAINING_CHECK_FAILED,
+                      training_add_char(wrong));
+    TEST_ASSERT_EQUAL(attempt, training_wrong_attempts());
+    t = (uint16_t)(t + TRAINING_WRONG_MS);
+    (void)poll_at(t);
+  }
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  TEST_ASSERT_EQUAL(TRAINING_ATTEMPTS, training_wrong_attempts());
+  TEST_ASSERT(!training_is_skipped());
+}
+
+/* Polls in steps of 3 s and skips each item in ITEM until END. */
+static void skip_to_end(void) {
+  uint16_t time = now;
+  unsigned guard = 0U;
+
+  while ((training_phase() != TRAINING_PHASE_END) && (guard < 1000U)) {
+    ++guard;
+    time = (uint16_t)(time + 3000U);
+    if (poll_at(time) == TRAINING_EVENT_ITEM) {
+      TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_skip());
+    }
+  }
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_END, training_phase());
+}
+
+/* AC-T48 (4): the value of training_prepare() stays through training_start() and training_reopen_select(). */
+static void test_unlimited_value_kept(void) {
+  uint8_t mode;
+
+  for (mode = RX; mode <= TX; ++mode) {
+    prepare_with_attempts(mode, 20U, 2U, 8U, true);
+    TEST_ASSERT(training_has_unlimited_attempts());
+    training_start();
+    TEST_ASSERT(training_has_unlimited_attempts());
+    skip_to_end();
+    TEST_ASSERT(training_reopen_select());
+    TEST_ASSERT(training_has_unlimited_attempts());
+    training_start();
+    TEST_ASSERT(training_has_unlimited_attempts());
+    training_stop();
+    TEST_ASSERT(training_has_unlimited_attempts());
+    training_prepare(mode, 20U, 8U, false);
+    TEST_ASSERT(!training_has_unlimited_attempts());
+    training_start();
+    TEST_ASSERT(!training_has_unlimited_attempts());
+  }
+}
+
+static void test_unlimited_attempts(void) {
+  check_unlimited_wrong_answers(RX);
+  check_unlimited_wrong_answers(TX);
+  check_three_attempts(RX);
+  check_three_attempts(TX);
+}
+
+/*
+ * Runs a session: @p first_correct items correct on the first attempt. Each later item n gets, by n % 3: a skip in
+ * ITEM, a wrong answer and a correct retry, or a wrong answer and a skip in RESULT.
+ */
+static training_event_t run_session_with_skips(uint8_t first_correct) {
+  uint8_t number = 0U;
+  uint16_t time = now;
+  training_event_t event = TRAINING_EVENT_NONE;
+  unsigned guard = 0U;
+
+  while ((training_phase() != TRAINING_PHASE_END) && (guard < 10000U)) {
+    const char* item = training_item_text();
+    uint8_t index;
+
+    ++guard;
+    time = (uint16_t)(time + 3000U);
+    event = poll_at(time);
+    if (event == TRAINING_EVENT_RETRY) {
+      for (index = 0U; index < training_item_length(); ++index) {
+        (void)training_add_char(item[index]);
+      }
+    }
+    if (event != TRAINING_EVENT_ITEM) {
+      continue;
+    }
+    ++number;
+    if ((number > first_correct) && ((number % 3U) == 0U)) {
+      TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_skip());
+      continue;
+    }
+    if (number > first_correct) {
+      add_char_checked('*');
+      for (index = 1U; (index < training_item_length()) && (training_phase() == TRAINING_PHASE_ITEM); ++index) {
+        add_char_checked(item[index]);
+      }
+      TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_last_check());
+      if ((number % 3U) == 2U) {
+        TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_skip());
+      }
+      continue;
+    }
+    for (index = 0U; index < training_item_length(); ++index) {
+      add_char_checked(item[index]);
+    }
+  }
+  return event;
+}
+
+typedef struct {
+  uint8_t score;
+  training_outcome_t outcome;
+  uint16_t stored_level;
+  uint16_t selected_level;
+  size_t erase_count;
+  size_t program_count;
+} session_result_t;
+
+/* Runs one session at @p level (earned @p earned) with the attempt setting and the skip script of the session. */
+static session_result_t run_scripted(uint8_t mode, uint16_t earned, uint16_t level, uint8_t first_correct,
+                                     bool has_unlimited_attempts, bool has_skips) {
+  session_result_t result;
+
+  prepare_with_attempts(mode, 20U, earned, 8U, has_unlimited_attempts);
+  while (training_selected_level() > level) {
+    TEST_ASSERT(training_select_step(false));
+  }
+  training_start();
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_END, has_skips ? run_session_with_skips(first_correct) : run_session(first_correct));
+  result.score = training_score();
+  result.outcome = training_outcome();
+  result.stored_level = progress_level(mode, 20U);
+  result.selected_level = training_selected_level();
+  result.erase_count = fake_iap_command_count(CMD_ERASE);
+  result.program_count = fake_iap_command_count(CMD_PROGRAM);
+  return result;
+}
+
+/* AC-T49: the score, outcome, stored level and EEPROM use equal the 3-attempt run for the same first-attempt results.
+ */
+static void check_level_logic(uint8_t mode, uint16_t earned, uint16_t level, uint8_t first_correct,
+                              training_outcome_t outcome) {
+  const session_result_t limited = run_scripted(mode, earned, level, first_correct, false, false);
+  unsigned variant;
+
+  TEST_ASSERT_EQUAL(first_correct, limited.score);
+  TEST_ASSERT_EQUAL(outcome, limited.outcome);
+  for (variant = 0U; variant < 3U; ++variant) {
+    const session_result_t other = run_scripted(mode, earned, level, first_correct, variant != 1U, variant != 0U);
+    if (!TEST_ASSERT_EQUAL(limited.score, other.score)) {
+      fprintf(stderr, "mode %u level %u variant %u\n", (unsigned)mode, (unsigned)level, variant);
+    }
+    TEST_ASSERT_EQUAL(limited.outcome, other.outcome);
+    TEST_ASSERT_EQUAL(limited.stored_level, other.stored_level);
+    TEST_ASSERT_EQUAL(limited.selected_level, other.selected_level);
+    TEST_ASSERT_EQUAL(limited.erase_count, other.erase_count);
+    TEST_ASSERT_EQUAL(limited.program_count, other.program_count);
+  }
+}
+
+static void test_level_logic_unchanged(void) {
+  uint8_t mode;
+
+  for (mode = RX; mode <= TX; ++mode) {
+    check_level_logic(mode, 0U, 0U, 44U, TRAINING_OUTCOME_FAIL);
+    check_level_logic(mode, 0U, 0U, 45U, TRAINING_OUTCOME_PASS);
+    check_level_logic(mode, 2U, 2U, 7U, TRAINING_OUTCOME_FAIL);
+    check_level_logic(mode, 2U, 2U, 8U, TRAINING_OUTCOME_PASS);
+    check_level_logic(mode, 20U, 4U, 45U, TRAINING_OUTCOME_PASS_REPLAY);
+    check_level_logic(mode, 20U, 4U, 44U, TRAINING_OUTCOME_FAIL);
+  }
+}
+
+typedef struct {
+  training_phase_t phase;
+  training_check_t check;
+  bool is_skipped;
+  uint8_t score;
+  uint8_t wrong;
+  uint8_t item_number;
+  uint8_t item_length;
+  uint8_t answer_length;
+  char item[TRAINING_TEXT_SIZE];
+  char answer[TRAINING_TEXT_SIZE];
+  uint16_t selected_level;
+  training_outcome_t outcome;
+} engine_state_t;
+
+static engine_state_t engine_state(void) {
+  engine_state_t state;
+  memset(&state, 0, sizeof(state));
+  state.phase = training_phase();
+  state.check = training_last_check();
+  state.is_skipped = training_is_skipped();
+  state.score = training_score();
+  state.wrong = training_wrong_attempts();
+  state.item_number = training_item_number();
+  state.item_length = training_item_length();
+  state.answer_length = training_answer_length();
+  memcpy(state.item, training_item_text(), TRAINING_TEXT_SIZE);
+  memcpy(state.answer, training_answer_text(), TRAINING_TEXT_SIZE);
+  state.selected_level = training_selected_level();
+  state.outcome = training_outcome();
+  return state;
+}
+
+/* AC-T50 (3): the skip gives IGNORED, changes no accessor and reads no tick. */
+static void check_skip_ignored(const char* where) {
+  const engine_state_t before = engine_state();
+  const size_t reads = fake_tick_read_count();
+  engine_state_t after;
+
+  if (!TEST_ASSERT_EQUAL(TRAINING_CHECK_IGNORED, training_skip())) {
+    fprintf(stderr, "skip in %s\n", where);
+  }
+  after = engine_state();
+  if (!TEST_ASSERT_EQUAL(0, memcmp(&before, &after, sizeof(before)))) {
+    fprintf(stderr, "skip in %s\n", where);
+  }
+  TEST_ASSERT_EQUAL(reads, fake_tick_read_count());
+}
+
+/* AC-T50 (1), (6): a skip at @p time gives FAILED and keeps the answer, the score and the wrong counter. */
+static void check_skip_failed(uint16_t time, uint8_t expected_answer_length) {
+  const engine_state_t before = engine_state();
+  engine_state_t after;
+
+  at(time);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_skip());
+  after = engine_state();
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, after.phase);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, after.check);
+  TEST_ASSERT(after.is_skipped);
+  TEST_ASSERT_EQUAL(before.score, after.score);
+  TEST_ASSERT_EQUAL(before.wrong, after.wrong);
+  TEST_ASSERT_EQUAL(before.item_number, after.item_number);
+  TEST_ASSERT_EQUAL(expected_answer_length, after.answer_length);
+  TEST_ASSERT_EQUAL(0, strncmp(before.answer, after.answer, expected_answer_length));
+  TEST_ASSERT_EQUAL(0U, (uint8_t)after.answer[expected_answer_length]);
+  TEST_ASSERT(after.answer_length < after.item_length);
+}
+
+/* The RESULT of a skip at @p time ends with GAP after TRAINING_FAILED_MS. Returns the tick of the GAP. */
+static uint16_t check_skip_result_ends(uint16_t time) {
+  const uint16_t gap_ms = (training_mode() == TX) ? TRAINING_SENDING_GAP_MS : TRAINING_RECEIVING_GAP_MS;
+  const uint16_t end = (uint16_t)(time + TRAINING_FAILED_MS);
+
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(end - 1U)));
+  TEST_ASSERT(training_is_skipped());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at(end));
+  TEST_ASSERT(training_is_skipped());
+  check_skip_ignored("GAP");
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at((uint16_t)(end + gap_ms)));
+  TEST_ASSERT(!training_is_skipped());
+  return (uint16_t)(end + gap_ms);
+}
+
+/* AC-T50 (1), (2), (4) for @p mode, both attempt settings, at word session 6 (words of 4). */
+static void check_skip_in_session(uint8_t mode, bool has_unlimited_attempts) {
+  const char* item = training_item_text();
+  uint16_t t = 2000U;
+
+  prepare_with_attempts(mode, 20U, 17U, 8U, has_unlimited_attempts);
+  check_skip_ignored("SELECT");
+  training_start();
+  TEST_ASSERT(!training_is_skipped());
+  check_skip_ignored("GAP at start");
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  item = training_item_text();
+  TEST_ASSERT_EQUAL(4U, training_item_length());
+
+  /* ITEM, empty answer. */
+  check_skip_failed((uint16_t)(t + 10U), 0U);
+  check_skip_ignored("RESULT after a skip");
+  t = check_skip_result_ends((uint16_t)(t + 10U));
+
+  /* ITEM, partial answer. */
+  item = training_item_text();
+  at(t);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char(item[0]));
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char(item[1]));
+  check_skip_failed((uint16_t)(t + 20U), 2U);
+  t = check_skip_result_ends((uint16_t)(t + 20U));
+
+  /* RESULT after WRONG: a wrong character. The answer loses it; the new RESULT starts at the skip. */
+  item = training_item_text();
+  at(t);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char(item[0]));
+  if (mode == TX) {
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char('*'));
+    TEST_ASSERT_EQUAL(2U, training_answer_length());
+  } else {
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char('*'));
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char(item[2]));
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(item[3]));
+    TEST_ASSERT_EQUAL(4U, training_answer_length());
+  }
+  TEST_ASSERT_EQUAL(1U, training_wrong_attempts());
+  check_skip_failed((uint16_t)(t + 1000U), (mode == TX) ? 1U : 3U);
+  TEST_ASSERT_EQUAL(1U, training_wrong_attempts());
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_WRONG_MS)));
+  t = check_skip_result_ends((uint16_t)(t + 1000U));
+
+  /* Sending: RESULT after a word space. */
+  if (mode == TX) {
+    item = training_item_text();
+    at(t);
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_PARTIAL, training_add_char(item[0]));
+    TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(TRAINING_CHAR_WORD_SPACE));
+    check_skip_failed((uint16_t)(t + 5U), 1U);
+    TEST_ASSERT_EQUAL((uint8_t)item[0], (uint8_t)training_answer_text()[0]);
+    t = check_skip_result_ends((uint16_t)(t + 5U));
+  }
+
+  /* RESULT after CORRECT. */
+  item = training_item_text();
+  at(t);
+  {
+    uint8_t index;
+    for (index = 0U; index < training_item_length(); ++index) {
+      (void)training_add_char(item[index]);
+    }
+  }
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_CORRECT, training_last_check());
+  check_skip_ignored("RESULT after CORRECT");
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_CORRECT_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at((uint16_t)(t + TRAINING_CORRECT_MS)));
+
+  /* A skip, then the start of a new session clears the flag. */
+  t = (uint16_t)(t + 3000U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  check_skip_failed(t, 0U);
+  training_stop();
+  check_skip_ignored("IDLE");
+  training_prepare(mode, 20U, 8U, has_unlimited_attempts);
+  training_start();
+  TEST_ASSERT(!training_is_skipped());
+}
+
+/* AC-T50 (3), (4): RESULT after FAILED from training_add_char() ignores the skip and has the flag off. */
+static void check_skip_after_failed(uint8_t mode) {
+  uint16_t t;
+
+  start_at_level(mode, 20U, 0U, 5U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
+  check_skip_failed(2100U, 0U);
+  t = check_skip_result_ends(2100U);
+  t = fail_item((uint16_t)(t + 100U));
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(!training_is_skipped());
+  check_skip_ignored("RESULT after FAILED");
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_FAILED_MS - 1U)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, poll_at((uint16_t)(t + TRAINING_FAILED_MS)));
+}
+
+/* AC-T50 (1), (3): a skip on the last item ends with END; the END ignores the skip. */
+static void check_skip_last_item(uint8_t mode, bool has_unlimited_attempts) {
+  prepare_with_attempts(mode, 20U, 2U, 8U, has_unlimited_attempts);
+  training_start();
+  skip_to_end();
+  TEST_ASSERT_EQUAL(10U, training_item_number());
+  TEST_ASSERT_EQUAL(0U, training_score());
+  TEST_ASSERT_EQUAL(TRAINING_OUTCOME_FAIL, training_outcome());
+  check_skip_ignored("END");
+}
+
+/* AC-T50 (5): a hold after a skip stops the RESULT, and a release ends it at the next poll. */
+static void check_skip_hold(uint8_t mode) {
+  uint16_t t = 2100U;
+
+  start_at_level(mode, 20U, 0U, 5U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(2000U));
+  check_skip_failed(t, 0U);
+  training_hold_result(true);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + TRAINING_FAILED_MS)));
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 60000U)));
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_RESULT, training_phase());
+  at((uint16_t)(t + 60001U));
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, training_poll());
+  TEST_ASSERT_EQUAL(0U, training_score());
+
+  /* A skip after a WRONG ends the WRONG delay: the hold of the skip RESULT then acts. */
+  t = (uint16_t)(t + 70000U);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_ITEM, poll_at(t));
+  at(t);
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_WRONG, training_add_char(wrong_char_for(training_item_text()[0])));
+  check_skip_failed((uint16_t)(t + 100U), 0U);
+  training_hold_result(true);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_NONE, poll_at((uint16_t)(t + 30000U)));
+  training_hold_result(false);
+  TEST_ASSERT_EQUAL(TRAINING_EVENT_GAP, training_poll());
+}
+
+static void test_skip(void) {
+  uint8_t mode;
+  unsigned setting;
+
+  for (mode = RX; mode <= TX; ++mode) {
+    for (setting = 0U; setting < 2U; ++setting) {
+      check_skip_in_session(mode, setting != 0U);
+      check_skip_last_item(mode, setting != 0U);
+    }
+    check_skip_after_failed(mode);
+    check_skip_hold(mode);
+  }
+}
+
 int main(void) {
   TEST_RUN(test_flow_receiving);
   TEST_RUN(test_flow_sending_gap);
@@ -1203,5 +1658,9 @@ int main(void) {
   TEST_RUN(test_reopen_preselection);
   TEST_RUN(test_reopen_then_select_and_start);
   TEST_RUN(test_reopen_outside_end);
+  TEST_RUN(test_unlimited_attempts);
+  TEST_RUN(test_unlimited_value_kept);
+  TEST_RUN(test_level_logic_unchanged);
+  TEST_RUN(test_skip);
   return TEST_FINISH();
 }

@@ -67,6 +67,11 @@ static MEM_XDATA uint8_t screen_x;
 static const MEM_CODE char screen_pause_text[] = "pause too long";
 /* Label of a character level; level 0 draws 's' in its blank last cell (ui-ux.md 5.16.3). */
 static const MEM_CODE char screen_new_char_text[] = "New char ";
+static const MEM_CODE char screen_skipped_text[] = "Skipped";
+static const MEM_CODE char screen_answer_is_text[] = ". The answer is:";
+/* Unlimited attempts: the status shows the attempt number up to this value, then "Try 99+" (UX-76). */
+#define SCREEN_TRY_SHOWN_MAX 99U
+static const MEM_CODE char screen_try_cap_text[] = "99+";
 
 void training_screen_compose(void) {
   screen_length = 0U;
@@ -145,6 +150,12 @@ void training_screen_draw_status(uint8_t style) {
   if (training_phase() == TRAINING_PHASE_RESULT) {
     if (check == TRAINING_CHECK_CORRECT) {
       training_screen_append("Correct");
+    } else if (training_is_skipped()) {
+      /* A skip can leave the answer empty, so this branch comes before the last answer character is read. */
+      training_screen_append(screen_skipped_text);
+      if (training_mode() == TRAINING_MODE_RECEIVING) {
+        training_screen_append(screen_answer_is_text);
+      }
     } else if (training_mode() == TRAINING_MODE_SENDING) {
       /* The glyph buffer holds the last answer character until its text replaces it. */
       screen_glyph_text[0] = training_answer_text()[training_answer_length() - 1U];
@@ -155,15 +166,23 @@ void training_screen_draw_status(uint8_t style) {
         (void)morse_format(screen_glyph_text[0], style, screen_glyph_text);
         training_screen_append(screen_glyph_text);
       }
-    } else if (check == TRAINING_CHECK_WRONG) {
-      training_screen_append("Wrong");
     } else {
-      training_screen_append("Wrong. The answer is:");
+      training_screen_append("Wrong");
+      if (check == TRAINING_CHECK_FAILED) {
+        training_screen_append(screen_answer_is_text);
+      }
     }
   } else if ((training_phase() == TRAINING_PHASE_ITEM) && (training_wrong_attempts() != 0U)) {
     training_screen_append("Try ");
-    training_screen_append_u16((uint16_t)(training_wrong_attempts() + 1U));
-    training_screen_append(" of 3");
+    /* With 3 attempts the number is 2 or 3, so only unlimited attempts reach the cap. */
+    if (training_wrong_attempts() < SCREEN_TRY_SHOWN_MAX) {
+      training_screen_append_u16((uint16_t)(training_wrong_attempts() + 1U));
+    } else {
+      training_screen_append(screen_try_cap_text);
+    }
+    if (!training_has_unlimited_attempts()) {
+      training_screen_append(" of 3");
+    }
   }
   training_screen_draw_centered(TRAINING_SCREEN_STATUS_ROW);
 }
