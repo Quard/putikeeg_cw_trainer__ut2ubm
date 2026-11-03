@@ -4,9 +4,9 @@
  */
 
 /*
- * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19, AC-T38, AC-T51, AC-T53;
- * ui-ux.md sections 9.4 and 9.7, V-90 to V-109, V-120, V-170 and V-196 to V-201). The real menu, buttons, engine,
- * keyboard and progress run with a fake player and fake items.
+ * Receiving mode scenarios (references/internal/training_spec.md section 12.2, AC-T19, AC-T38, AC-T51, AC-T53,
+ * AC-T55 (5); ui-ux.md sections 9.4, 9.7 and 9.8, V-90 to V-109, V-120, V-170, V-196 to V-201 and V-212). The real
+ * menu, buttons, engine, keyboard and progress run with a fake player and fake items.
  */
 
 #include "cw/morse.h"
@@ -2763,6 +2763,108 @@ static void test_rx_attempts_read_once_and_cap(void) {
   TEST_ASSERT(text_at(1, 9, "Try 99+"));
 }
 
+/* ---------- TX Char Marker (ui-ux.md section 9.8, V-212 Receiving part, AC-T55 (5)) ---------- */
+
+#define MARKER_FRAME_COUNT 12U
+
+/* The frames of each MARKER(v) run: [0] with Off, [1] with On. */
+static uint8_t marker_frames[2][MARKER_FRAME_COUNT][FB_SIZE];
+static size_t marker_frame_count[2];
+
+/* RX(...) with MARKER(v) of ui-ux.md section 9.8. */
+static void rx_open_marker(uint16_t level, bool is_marker_shown, const char* const* items, size_t count) {
+  size_t index;
+
+  fake_iap_reset();
+  harness_marker(is_marker_shown);
+  if (level != 0U) {
+    progress_fixture_write(PROGRESS_MODE_RECEIVING, 32U, level);
+  }
+  harness_power_on();
+  fake_koch_item_reset();
+  for (index = 0U; index < count; ++index) {
+    fake_koch_item_push(items[index]);
+  }
+  harness_open_mode(0U);
+}
+
+static void marker_frame(unsigned value) {
+  if (TEST_ASSERT(marker_frame_count[value] < MARKER_FRAME_COUNT)) {
+    snapshot(marker_frames[value][marker_frame_count[value]]);
+    ++marker_frame_count[value];
+  }
+}
+
+/* V-101 and the first part of V-199 with MARKER(v); each step stores its frame. */
+static void run_marker_scenarios(unsigned value) {
+  const char* const items[2] = {"KMRS", "UAPT"};
+  uint16_t t;
+
+  marker_frame_count[value] = 0U;
+  rx_open_marker(LEVEL_WORDS_13, value != 0U, items, 1U);
+  harness_run_to(HARNESS_T0 + 1000U);
+  marker_frame(value);
+  pick('K');
+  expect_word_slots("K", 4U);
+  marker_frame(value);
+  pick('M');
+  expect_word_slots("KM", 4U);
+  pick('R');
+  expect_word_slots("KMR", 4U);
+  TEST_ASSERT(status(NULL));
+  marker_frame(value);
+  pick('S');
+  item_expect_reset();
+  item_expect(ITEM_PART_BIG, 36, "K");
+  item_expect(ITEM_PART_BIG, 52, "M");
+  item_expect(ITEM_PART_BIG, 68, "R");
+  item_expect(ITEM_PART_BIG, 84, "S");
+  TEST_ASSERT(item_line_is());
+  TEST_ASSERT(status("Correct"));
+  TEST_ASSERT_EQUAL(1U, training_score());
+  marker_frame(value);
+
+  rx_open_marker(LEVEL_WORDS_13, value != 0U, items, 2U);
+  run_to_item();
+  tap(L_TAP);
+  tap(R_TAP);
+  tap(L_TAP);
+  TEST_ASSERT(keys("A", "I", "K", "L"));
+  marker_frame(value);
+  t = (uint16_t)(harness_now + 100U);
+  pins_at(BUTTON_BIT_NEXT, (uint16_t)(t - HARNESS_T0));
+  harness_run_to((uint16_t)(t + 799U));
+  expect_word_slots("K", 4U);
+  marker_frame(value);
+  harness_run_to((uint16_t)(t + 800U));
+  TEST_ASSERT(is_skip_answer_shown("KMRS", "Next"));
+  TEST_ASSERT(hdr(rx_header(18U, 1U, training_item_count())));
+  marker_frame(value);
+  pins_at(0U, (uint16_t)(t + 1000U - HARNESS_T0));
+  harness_run_to((uint16_t)(t + 1100U));
+  tap(ENTER_EVENT);
+  t = harness_now;
+  TEST_ASSERT(hdr(rx_header(18U, 2U, training_item_count())));
+  harness_run_to((uint16_t)(t + 500U));
+  expect_word_slots("", 4U);
+  marker_frame(value);
+}
+
+/* V-212 (Receiving part), AC-T55 (5): V-101 and V-199 give their results with MARKER(Off), and every frame equals On.
+ */
+static void test_v212_marker_off_receiving(void) {
+  size_t frame;
+
+  run_marker_scenarios(0U);
+  run_marker_scenarios(1U);
+  TEST_ASSERT_EQUAL(marker_frame_count[1], marker_frame_count[0]);
+  for (frame = 0U; frame < marker_frame_count[0]; ++frame) {
+    if (!TEST_ASSERT_EQUAL(0, memcmp(marker_frames[0][frame], marker_frames[1][frame], FB_SIZE))) {
+      fprintf(stderr, "frame %zu\n", frame);
+    }
+  }
+}
+
 int main(void) {
   TEST_RUN(test_v90_start);
   TEST_RUN(test_v91_correct_and_gap);
@@ -2823,5 +2925,6 @@ int main(void) {
   TEST_RUN(test_v201_long_next_outside_skip_states);
   TEST_RUN(test_skip_word_with_and_without_picks);
   TEST_RUN(test_rx_attempts_read_once_and_cap);
+  TEST_RUN(test_v212_marker_off_receiving);
   return TEST_FINISH();
 }

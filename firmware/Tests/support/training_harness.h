@@ -23,6 +23,7 @@
 #include "board/buttons_config.h"
 #include "buttons/buttons.h"
 #include "cw/keyer.h"
+#include "eeprom/eeprom_map.h"
 #include "fake_button_pins.h"
 #include "fake_delay.h"
 #include "fake_iap.h"
@@ -43,6 +44,7 @@
 #include "support/menu_splash.h"
 #include "support/progress_fixture.h"
 #include "support/test_assert.h"
+#include "util/crc8.h"
 
 #define HARNESS_T0 10000U
 #define HARNESS_EVENTS_PER_PASS 4U
@@ -99,6 +101,20 @@ static inline void harness_power_on(void) {
   harness_overlap_count = 0U;
   fake_keyer_set_start_hook(harness_check_overlap);
   fake_player_set_start_hook(harness_check_overlap);
+}
+
+/*
+ * MARKER(v) of ui-ux.md section 9.8: the fake EEPROM gets a valid layout version 4 settings record with the default
+ * values and TX Char Marker On for @p is_marker_shown, Off otherwise. Call it before harness_power_on().
+ */
+static inline void harness_marker(bool is_marker_shown) {
+  static const uint8_t defaults[SETTINGS_RECORD_SIZE - 2U] = {0x43U, 0x57U, 0x04U, 0x58U, 0x02U, 0x20U, 0x20U,
+                                                              0x14U, 0x14U, 0x02U, 0x69U, 0x05U, 0x08U, 0x20U};
+  uint8_t* record = &fake_iap_memory()[EEPROM_MAP_SETTINGS_ADDRESS];
+
+  memcpy(record, defaults, sizeof(defaults));
+  record[SETTINGS_RECORD_SIZE - 2U] = is_marker_shown ? 0x00U : 0x04U;
+  record[SETTINGS_RECORD_SIZE - 1U] = crc8_compute(record, SETTINGS_RECORD_SIZE - 1U);
 }
 
 /* One main-loop pass at harness_now, as main.c runs it. */
