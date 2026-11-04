@@ -6,10 +6,12 @@ This guide tells you how to use the Putikeeg CW Trainer with the UT2UBM firmware
 ## The device
 
 The trainer teaches you Morse code (CW). It has a screen, a speaker, a headphone socket, a volume knob and a socket
-for a paddle or a straight key. It has three modes:
+for a paddle or a straight key. It has these modes:
 
 - `Receiving`: the trainer plays Morse code, and you pick the characters with the buttons.
 - `Sending`: the trainer shows characters and words, and you key them.
+- `Free Training > Callsigns`: the trainer plays or shows 20 callsigns, for example `DL5ABC`. Your level does not
+  change.
 - `Free Input`: you key freely, and the screen shows what you sent.
 
 `Receiving` and `Sending` use the Koch method. You start with two characters at full character speed. Each level
@@ -36,6 +38,7 @@ button. Then the main menu shows:
 CW Trainer
 Receiving           L12
 Sending              L1
+Free Training           >
 Free Input
 Settings                >
 About
@@ -151,6 +154,38 @@ lower `TX Eff. Speed`.
   your level.
 - Each speed has its own level. If you change `RX Speed` or `TX Speed`, the level can change. Set the speed back to
   see your level again.
+
+## Free Training: Callsigns
+
+Practice amateur radio callsigns. A callsign is a real prefix, an area digit and 1 to 3 letters, for example
+`DL5ABC` or `KH6XY`. Free Training never changes your level.
+
+1. Open `Free Training`, then `Callsigns`. The configuration screen shows `Mode`, `Chars` and `Start`.
+2. To change a value, move the highlight with `prev` and `next`, and press `enter`. Then press `prev` or `next`,
+   and press `enter` again.
+   - `Mode`: `RX` to copy callsigns, as in `Receiving`. `TX` to key them, as in `Sending`.
+   - `Chars`: `Learned L<n>` uses the characters of your level `L<n>` in that mode. `Full` uses all letters and
+     digits.
+3. Select `Start` and press `enter`. A session has 20 callsigns. Attempts, the skip and `Show CW Code` work as in
+   `Receiving` and `Sending`.
+4. At the end, the screen shows your score, for example `Score 17/20`. There is no pass and no fail. Press `enter`
+   to go back to the configuration screen, and press `enter` again to start the next session.
+
+A callsign needs a digit. With `Learned` below L25, you know no digit yet. Then a press of `Start` starts no
+session, and the screen shows `No digit learned yet` and `Use Full or reach L25`. Set `Chars` to `Full`, or train
+up to L25.
+
+`Mode` and `Chars` keep their values until you switch off the trainer.
+
+| Screen | Button | Short press | Long press |
+| --- | --- | --- | --- |
+| Configuration screen | `menu/back` | Goes to the `Free Training` list. While you edit a value, ends editing. | Goes to the `Free Training` list. |
+| Configuration screen | `prev`, `next` | Moves the highlight. While you edit a value, changes the value. | Moves the highlight fast. |
+| Configuration screen | `enter` | Starts or ends editing. On `Start`, starts the session. | Same as short press. |
+| Session | All buttons | As in a `Receiving` or a `Sending` session. | As in a session. A long press of `menu/back` goes to the `Free Training` list. |
+| End screen | `menu/back` | Goes to the `Free Training` list. | Same as short press. |
+| End screen | `prev`, `next` | Do nothing. | Do nothing. |
+| End screen | `enter` | Opens the configuration screen. | Same as short press. |
 
 ## Free Input
 

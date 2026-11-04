@@ -13,6 +13,7 @@
  */
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "buttons/buttons.h"
 
@@ -21,6 +22,11 @@
  * the menu.
  */
 void sending_enter(void);
+/**
+ * Free session entry (D-T85). As sending_enter(), then training_set_free(@p char_count) and the session start: enter
+ * disabled, keyer started, flags cleared, training_start(). Phase GAP. Draws nothing.
+ */
+void sending_start_free(uint8_t char_count);
 /** Draws the whole Sending screen for the current state. menu_render() calls it after the clear. */
 void sending_render(void);
 /** Reads at most KEYER_QUEUE_SIZE + 1 keyer events, runs the engine and redraws the rows that change. */

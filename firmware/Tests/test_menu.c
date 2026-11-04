@@ -327,23 +327,18 @@ static bool centered_row_is(int r, const char* text) {
 }
 
 /*
- * Main menu with no stored progress: Receiving and Sending show L1 (ui-ux.md UX-57, V-01). About has no marker
- * (UX-61).
+ * Main menu with no stored progress: Receiving and Sending show L1 (ui-ux.md UX-57, V-01). Free Training and
+ * Settings have the submenu marker, About has none (UX-61, UX-79).
  */
 static bool main_menu_is(int selected) {
-  static const char* const labels[4] = {"Receiving", "Sending", "Free Input", "Settings"};
-  static const char* const levels[3] = {"L1", "L1", NULL};
-  int i;
   bool is_ok = title_is("CW Trainer");
-  for (i = 0; i < 3; ++i) {
-    is_ok = is_ok && list_row_is(i + 1, labels[i], levels[i], i == selected);
-  }
-  is_ok = is_ok && submenu_row_is(4, labels[3], selected == 3);
-  is_ok = is_ok && list_row_is(5, "About", NULL, selected == 4);
-  for (i = 6; i < 8; ++i) {
-    is_ok = is_ok && row_is_blank(i);
-  }
-  return is_ok;
+  is_ok = is_ok && list_row_is(1, "Receiving", "L1", selected == 0);
+  is_ok = is_ok && list_row_is(2, "Sending", "L1", selected == 1);
+  is_ok = is_ok && submenu_row_is(3, "Free Training", selected == 2);
+  is_ok = is_ok && list_row_is(4, "Free Input", NULL, selected == 3);
+  is_ok = is_ok && submenu_row_is(5, "Settings", selected == 4);
+  is_ok = is_ok && list_row_is(6, "About", NULL, selected == 5);
+  return is_ok && row_is_blank(7);
 }
 
 /* The first window of the CW list (ui-ux.md section 5.5). */
@@ -434,9 +429,9 @@ static void test_v02_bad_crc_record(void) {
 static void test_v03_wrap_on_press(void) {
   start_empty();
   send(PREV);
-  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT(probe_sel(6));
   TEST_ASSERT(probe_plain(1));
-  TEST_ASSERT(main_menu_is(4));
+  TEST_ASSERT(main_menu_is(5));
   send(NEXT);
   TEST_ASSERT(probe_sel(1));
   TEST_ASSERT(main_menu_is(0));
@@ -445,16 +440,16 @@ static void test_v03_wrap_on_press(void) {
 static void test_v04_repeat_stops_at_end(void) {
   start_empty();
   run_pins(BUTTON_BIT_NEXT, 1000U);
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
-  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  TEST_ASSERT(probe_sel(6));
   run_pins(0U, 100U);
   /* Repeat events stop at both ends; a press wraps. */
   send_times(REPEAT(NEXT), 3U);
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
-  send_times(REPEAT(PREV), 5U);
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  send_times(REPEAT(PREV), 6U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   send(PREV);
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
   send(NEXT);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
 }
@@ -652,8 +647,8 @@ static void test_v15_save_on_settings_exit(void) {
   send(MENU);
   TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
   TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
-  TEST_ASSERT(main_menu_is(3));
-  TEST_ASSERT(probe_sel(4));
+  TEST_ASSERT(main_menu_is(4));
+  TEST_ASSERT(probe_sel(5));
   (void)power_on(0U);
   TEST_ASSERT_EQUAL(610U, settings_get(SETTINGS_ID_TONE_HZ));
 }
@@ -673,7 +668,7 @@ static void test_v16_no_save_without_change(void) {
   send(MENU);
   send(MENU);
   TEST_ASSERT_EQUAL(0U, eeprom_writes());
-  TEST_ASSERT(main_menu_is(3));
+  TEST_ASSERT(main_menu_is(4));
 }
 
 static void test_v17_menu_leaves_edit_only(void) {
@@ -961,7 +956,7 @@ static void test_edit_every_item_to_limits(void) {
 
 static void test_full_navigation(void) {
   start_empty();
-  send_times(NEXT, 5U);
+  send_times(NEXT, 6U);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   select_settings();
   send(ENTER);
@@ -988,7 +983,7 @@ static void test_full_navigation(void) {
   send(MENU);
   send(MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   menu_handle(MENU);
   TEST_ASSERT(!menu_needs_redraw());
   menu_handle(BUTTON_EVENT_NONE);
@@ -1010,14 +1005,14 @@ static void test_failed_save_shows_not_saved(void) {
   TEST_ASSERT(centered_row_is(3, "Not saved"));
   TEST_ASSERT(probe_button(52, 71));
   send(ENTER);
-  TEST_ASSERT(main_menu_is(3));
+  TEST_ASSERT(main_menu_is(4));
   TEST_ASSERT_EQUAL(610U, settings_get(SETTINGS_ID_TONE_HZ));
   /* The next exit from Settings tries again, also without a new edit. */
   fake_iap_clear_counters();
   send(ENTER);
   send(MENU);
   TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
-  TEST_ASSERT(main_menu_is(3));
+  TEST_ASSERT(main_menu_is(4));
   (void)power_on(0U);
   TEST_ASSERT_EQUAL(610U, settings_get(SETTINGS_ID_TONE_HZ));
 }
@@ -1134,7 +1129,7 @@ static void test_v36_recovery_visit_without_edit(void) {
   open_display();
   send(MENU);
   send(MENU);
-  TEST_ASSERT(main_menu_is(3));
+  TEST_ASSERT(main_menu_is(4));
   TEST_ASSERT_EQUAL(0U, eeprom_writes());
   TEST_ASSERT(!power_on(0U));
   TEST_ASSERT_EQUAL(0U, fake_lcd_contrast_last());
@@ -1214,8 +1209,8 @@ static void test_v74_long_holds_outside_mode_screens(void) {
   start_empty();
   run_pins(BUTTON_BIT_NEXT, 1000U);
   run_pins(0U, 100U);
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
-  TEST_ASSERT(probe_sel(5));
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  TEST_ASSERT(probe_sel(6));
 
   start_empty();
   open_cw();

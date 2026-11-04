@@ -80,7 +80,7 @@ static void send_times(button_event_t event, unsigned count) {
  * menu_subsystem_spec.md section 19.1: CW, Training, Prosigns, Display, Reset Statistics.
  */
 static void go_to_item(uint8_t node, uint8_t index) {
-  send_times(NEXT, 3U - menu_cursor());
+  send_times(NEXT, 4U - menu_cursor()); /* Settings is main menu row 4 (training_spec.md D-T64) */
   send(ENTER);
   if (node == MENU_NODE_CW) {
     send(ENTER);

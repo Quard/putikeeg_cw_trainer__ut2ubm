@@ -33,7 +33,7 @@
 #define PREV BUTTON_EVENT_PREV
 #define ENTER BUTTON_EVENT_ENTER
 #define MENU BUTTON_EVENT_MENU
-#define MAIN_SETTINGS_ROW 3U
+#define MAIN_SETTINGS_ROW 4U /* training_spec.md D-T64 */
 #define SETTINGS_TRAINING_ROW 1U
 #define TRAINING_ITEM_COUNT 4U
 
@@ -108,7 +108,7 @@ static void test_tree(void) {
   const menu_node_t* training = &menu_nodes[MENU_NODE_TRAINING];
   size_t index;
 
-  TEST_ASSERT_EQUAL(5U, MENU_NODE_COUNT);
+  TEST_ASSERT_EQUAL(6U, MENU_NODE_COUNT); /* Free Training is node 5 (training_spec.md 23.6) */
   TEST_ASSERT_EQUAL(5U, settings->item_count);
   for (index = 0U; index < 5U; ++index) {
     TEST_ASSERT_EQUAL(0, strcmp(settings_labels[index], settings->items[index].label));

@@ -10,6 +10,7 @@
 #include "koch/koch.h"
 #include "lcd/lcd_fb.h"
 #include "menu_internal.h"
+#include "modes/free_training.h"
 #include "modes/receiving.h"
 #include "modes/sending.h"
 #include "progress/progress.h"
@@ -197,7 +198,8 @@ static void draw_item_row(const menu_item_t MEM_CODE* item) {
     draw_text(GRID_LAST_COLUMN, ">", label_color);
   } else if ((item->kind == MENU_KIND_VALUE) || (item->kind == MENU_KIND_CHOICE)) {
     draw_value(item, is_edit);
-  } else if ((item->kind == MENU_KIND_MODE) && (item->target != MENU_MODE_FREE_INPUT)) {
+  } else if ((item->kind == MENU_KIND_MODE) && (item->target <= MENU_MODE_SENDING)) {
+    /* Only Receiving and Sending have a level (D-T86). */
     draw_mode_level(item->target);
   }
   if (is_selected) {
@@ -287,6 +289,8 @@ void menu_render(void) {
     receiving_render();
   } else if (menu_current_screen == MENU_SCREEN_SENDING) {
     sending_render();
+  } else if (menu_current_screen == MENU_SCREEN_FREE_TRAINING) {
+    free_training_render();
   } else {
     draw_title(menu_current_item()->label);
     render_row = MESSAGE_ROW;

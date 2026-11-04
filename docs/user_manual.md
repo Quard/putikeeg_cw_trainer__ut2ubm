@@ -1,7 +1,7 @@
 # User manual
 
 This manual is for the custom firmware of the Putikeeg CW Trainer (board `CW_MINI_V2.0D`). It tells you how to use
-the menu, the settings, the Free Input mode and the training modes `Receiving` and `Sending`. The
+the menu, the settings, the Free Input mode, the training modes `Receiving` and `Sending`, and Free Training. The
 [release notes](release_notes.md) list the changes of each version. To find the version of your firmware, see
 [Firmware version](#firmware-version).
 
@@ -17,6 +17,8 @@ This version has the menu, the settings, the display controls, the [Free Input](
   a time. Before each session, you choose the level. You can repeat each level up to the level that you reached.
   Each mode has its own attempt setting: 3 attempts for each item, or unlimited attempts. In both modes, a hold of
   `next` skips the current item (see [Skip an item](#skip-an-item)).
+- In [Free Training](#free-training), the program `Callsigns` gives sessions of 20 callsigns in Receiving or in
+  Sending. Free Training never changes your training levels.
 - The device makes these sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
   preview of the `Tone` and `Ramp` settings (see [Tone and Ramp preview](#tone-and-ramp-preview)). `Ramp` sets how
   fast each tone starts and stops (see [Ramp setting](#ramp-setting)). The volume knob sets the loudness. With
@@ -48,7 +50,8 @@ Notes:
   [The enter button in Free Input](#the-enter-button-in-free-input)).
 - If you insert a plug into the paddle socket while the menu shows, the device can see one `enter`. Then it can
   open an item or start editing. Press `menu/back` to go back. Nothing changes. If it opens `Receiving` or
-  `Sending`, the start screen shows. Press `menu/back` to go back. If it opens Free Input, hold `menu/back` to go
+  `Sending`, the start screen shows. If it opens `Callsigns`, the configuration screen shows. Press `menu/back` to
+  go back. If it opens Free Input, hold `menu/back` to go
   back (see [Hold a button in a mode screen](#hold-a-button-in-a-mode-screen)). On the start screen, a plug
   insertion can start a session (see [Choose a level](#choose-a-level)). On the session end screen, it can open the
   start screen (see [Session end screen](#session-end-screen)). In Receiving, a plug insertion can select the
@@ -137,12 +140,14 @@ screen, before the main menu.
 ## Menu structure
 
 After the [startup screen](#startup-screen), the main menu `CW Trainer` shows. The cursor is on `Receiving`. The
-main menu has five items.
+main menu has six items.
 
 ```text
 CW Trainer
 ├── Receiving           Koch training: listen and pick the characters
 ├── Sending             Koch training: read and key the characters
+├── Free Training
+│   └── Callsigns       listen to or key callsigns, with no level change
 ├── Free Input          key and decode Morse code
 ├── Settings
 │   ├── CW
@@ -199,6 +204,8 @@ Notes:
 - One hold gives one action. A longer hold does nothing more.
 - Only Receiving has a hold of `enter`. In Free Input and in a Sending session, `enter` keys like the tip contact.
 - If you hold `prev` and `next` together in Free Input, the device clears the text and then draws a line.
+- A `Callsigns` session of [Free Training](#free-training) uses the holds of `Receiving` or `Sending`. There, a hold
+  of `menu/back` opens the `Free Training` list, with the cursor on `Callsigns`.
 
 ### Receiving and Sending
 
@@ -626,6 +633,7 @@ In the main menu, `Receiving` and `Sending` show your earned level at the right 
 CW Trainer
 Receiving           L12
 Sending              L1
+Free Training           >
 Free Input
 Settings                >
 About
@@ -634,7 +642,7 @@ About
 - `Receiving` shows the level at the current `RX Speed`. `Sending` shows the level at the current `TX Speed`. The
   effective speeds have no effect.
 - The level changes after a pass at your earned level and after `Reset Statistics`. It can also change after a
-  change of `RX Speed` or `TX Speed`. A replay does not change it.
+  change of `RX Speed` or `TX Speed`. A replay and a [Free Training](#free-training) session do not change it.
 - Each speed has its own level. So after a change of `RX Speed`, `Receiving` can show `L1`, although you trained at
   another speed. Set the speed back, and your level shows again.
 
@@ -1188,6 +1196,7 @@ they show L12 again.
 When the device saves the level:
 
 - The device saves only after a pass at your earned level. It saves before the session end screen shows.
+- A [Free Training](#free-training) session never changes a level and never saves.
 - A pass below your earned level (a replay) does not change the stored level. The device does not save.
 - A failed session, a session that you leave, and a power loss during a session do not change the stored level.
 - If the stored levels are damaged, every level is L1. This is also true at the first start. The device shows no
@@ -1227,6 +1236,236 @@ The levels and the settings are in the same memory. A firmware download can keep
 | `next` does not go above a level. | The selector stops at your earned level. | Pass a session at your earned level. Then the next level is available. |
 | You passed, but your level in the main menu did not change. | You passed below your earned level. A replay does not change the stored level. The end screen showed `Passed`, not `Passed, new level`. | Nothing. To move up, choose your earned level and pass. |
 | All levels are L1. | A reset, a failed save, or a power loss during a save. | Train the levels again. |
+
+## Free Training
+
+Free Training holds training programs that never change your training levels. Each program has a configuration
+screen. On it, you set the program before the session starts. This version has one program: `Callsigns`.
+
+1. In the main menu, select `Free Training` and press `enter`. The `Free Training` list shows:
+
+   ```text
+   Free Training
+   Callsigns
+   ```
+
+2. The cursor is on `Callsigns`, the only item. Press `enter`, or close the tip contact. The configuration screen
+   of `Callsigns` shows.
+
+In the `Free Training` list, `menu/back` opens the main menu with the cursor on `Free Training`. `prev` and `next`
+change nothing, because the list has one item.
+
+### Callsigns
+
+In `Callsigns`, you practice amateur radio callsigns, in Receiving or in Sending. A session has 20 callsigns. The
+callsigns look like real callsigns, but the device makes each one at random. So a callsign can be one that no
+station uses.
+
+#### The configuration screen
+
+At the first opening after a power-on, the screen looks like this. In this example, your Receiving level at the
+current `RX Speed` is L12:
+
+```text
+Callsigns
+Mode                 RX
+Chars       Learned L12
+
+
+
+
+          Start
+```
+
+| Row | Values | Meaning |
+| --- | --- | --- |
+| `Mode` | `RX` (default), `TX` | `RX`: a Receiving session. The device plays each callsign, and you pick its characters with the [group keyboard](#the-group-keyboard). `TX`: a Sending session. The device shows each callsign, and you key it. |
+| `Chars` | `Learned L<n>` (default), `Full` | The characters that the callsigns can use. `Learned L<n>`: the characters that you learned in the mode of `Mode`. `L<n>` is your earned level of that mode at its speed: `RX Speed` for `RX`, `TX Speed` for `TX`. It is the level that the main menu shows next to `Receiving` or `Sending`. `Full`: all letters and all digits. |
+| `Start` | - | Starts a session with the values of `Mode` and `Chars`. |
+
+- With `Learned`, a change of `Mode` also changes the level in the `Chars` row.
+- The learned characters come from the Koch order of [Levels and sessions](#levels-and-sessions). A callsign never
+  contains a prosign.
+- In `RX`, the keyboard holds all characters of `Chars`. With `Full`, it also holds `.`, `,`, `/` and `?`. With
+  `Learned`, it holds those of the four that you learned. A callsign never contains these four characters.
+- The screen makes no sound.
+
+At each opening, the highlight is on `Start`. To change a value:
+
+1. Press `prev` or `next` to move the highlight to `Mode` or `Chars`. `next` moves down: `Mode`, `Chars`, `Start`,
+   then `Mode` again. `prev` moves up. If you hold the button, the highlight stops at `Mode` or `Start`.
+2. Press `enter` to start editing. The highlight covers only the value, and the markers `<` and `>` show which
+   steps are possible, as in [Change a setting](#change-a-setting):
+
+   ```text
+   Chars       Learned L12 >
+   ```
+
+3. Press `prev` or `next` to change the value. Each row has two values, and the value does not wrap.
+4. Press `enter` or `menu/back` to end editing. The value stays. In editing, `menu/back` does not leave the screen.
+
+Buttons on the configuration screen:
+
+| Button | Action |
+| --- | --- |
+| `prev`, `next` | Move the highlight. While you edit a value, they change the value. |
+| `enter` | On `Mode` or `Chars`: starts or ends editing. On `Start`: starts a session. A closure of the tip contact does the same. |
+| `menu/back` | Opens the `Free Training` list, with the cursor on `Callsigns`. While you edit a value, it ends editing. |
+
+Each button acts at the push. A hold of `menu/back` also opens the `Free Training` list. The screen has no timeout.
+
+#### No digit learned yet
+
+A callsign needs a digit. In the Koch order, the first digit is `0`. It comes at L25. With `Learned` below L25,
+`Start` does not start a session. Then the screen shows a message in rows 4 and 5. Example: `Mode` = `TX`, and your
+Sending level is L1:
+
+```text
+Callsigns
+Mode                 TX
+Chars        Learned L1
+
+  No digit learned yet
+  Use Full or reach L25
+
+          Start
+```
+
+To start a session, do one of these steps:
+
+- Set `Chars` to `Full`. With `Full`, a session always starts.
+- Pass the Koch sessions of that mode up to L25 at that speed (see [Koch training](#koch-training)).
+- If your level in the other mode is L25 or higher, set `Mode` to that mode.
+
+The message stays until you change the value of `Mode` or `Chars`, or until you leave the screen. A move of the
+highlight does not remove it. The device makes no sound.
+
+#### The callsigns
+
+Each callsign has three parts:
+
+1. A **prefix** from a fixed list of 100 common real prefixes.
+2. An **area digit**.
+3. A **suffix** of 1 to 3 letters. About 20 % of the suffixes have 1 letter, 40 % have 2 letters, and 40 % have 3
+   letters.
+
+Examples: `DL5ABC`, `K3TA`, `9A2RW`. A prefix with 3 characters holds its own area digit, for example `KH6`. It
+gets no extra digit, for example `KH6XY`. A callsign has 3 to 6 characters. It contains only letters and digits,
+with no `/`.
+
+The prefix list:
+
+```text
+UR  US  UT  UU  UV  UW  UX  UY  UZ  EM
+EN  EO  K   W   N   AA  KB  KH6 KL7 KP4
+KH2 VE  VA  XE  CO  P4  HK  PY  PU  LU
+CE  CX  DL  DK  DJ  DO  SP  SQ  OK  OM
+HA  YO  LZ  YU  9A  S5  E7  Z3  SV  5B
+TA  ER  OE  HB  HB0 I   IK  IZ  IS0 9H
+F   ON  PA  LX  G   M   GM  GW  EI  EA
+EC  EA6 EA8 CT  CT3 OZ  SM  LA  OH  OH0
+TF  ES  YL  LY  4X  A6  UN  VU  BY  HL
+JA  JH  JR  DU  YB  VK  ZL  ZS  CN  D4
+```
+
+The rules with `Chars`:
+
+- With `Full`, each prefix of the list comes with the same chance. The area digit is `0` to `9`, and the suffix
+  letters are `A` to `Z`.
+- With `Learned`, each prefix that comes has only characters that you learned. The area digit is one of the digits
+  that you learned, and the suffix letters are letters that you learned. Example: at L25, the only digit is `0`. A
+  callsign can be `UT0KM` or `IS0AT`.
+- A country with more prefixes in the list comes more often. For example, the list has 12 Ukrainian prefixes and 5
+  prefixes of the United States.
+
+#### The session
+
+Press `enter` on `Start`. The session starts with a pause of 1 s. Then the first callsign comes. The session works
+as a word session of [Receiving](#receiving) or [Sending](#sending). Only the header and the end screen are
+different.
+
+The header shows `Callsigns` in place of the level:
+
+```text
+RX 32/32 Callsigns   1/20
+```
+
+| Field | Example | Meaning |
+| --- | --- | --- |
+| Mode | `RX` | The value of `Mode`. |
+| Speeds | `32/32` | `RX Speed` and `RX Eff. Speed` in `RX`. `TX Speed` and `TX Eff. Speed` in `TX`. |
+| Program | `Callsigns` | The program name. |
+| Item | `1/20` | The number of the current callsign, and the 20 callsigns of the session. |
+
+The rules of Receiving and Sending apply:
+
+- `RX Attempts` sets the attempts in `RX`, and `TX Attempts` in `TX` (see
+  [Results and attempts](#results-and-attempts)).
+- Hold `next` for about 0.8 s to skip a callsign (see [Skip an item](#skip-an-item)).
+- In `RX`, after the third wrong attempt or a skip, the answer stays until you tap `enter` (see
+  [After the third wrong attempt](#after-the-third-wrong-attempt)). Hold `enter` to hear the item again, and hold
+  `prev` to undo one step.
+- In `TX`, each callsign is one word. The pause limit between the characters of a word applies (see
+  [Pause between characters of a word](#pause-between-characters-of-a-word)). `Show CW Code` sets the
+  [code row](#code-row).
+- `Tone`, `Ramp`, the speeds, `Key Type`, `Paddle` and `Prosigns` apply as in Receiving and Sending. The device
+  reads the settings at the start of each session.
+- `Max Word Length` has no effect.
+- The score counts only the callsigns that you answer correctly on the first attempt.
+
+To leave a session, hold `menu/back` for about 0.8 s. The session is lost. The `Free Training` list shows, with
+the cursor on `Callsigns`.
+
+#### The end screen
+
+After callsign 20, the end screen shows your score:
+
+```text
+RX 32/32 Callsigns  20/20
+
+       Score 17/20
+
+
+
+
+           OK
+```
+
+- `Score 17/20` shows the callsigns that you answered correctly on the first attempt, and the 20 callsigns of the
+  session.
+- The screen shows no pass and no fail. Free Training has no levels.
+- The highlight is always on `OK`.
+
+| Button | Action |
+| --- | --- |
+| `enter` | Opens the configuration screen with the same `Mode` and `Chars`. The highlight is on `Start`. No session starts. A closure of the tip contact does the same. |
+| `menu/back` | Opens the `Free Training` list, with the cursor on `Callsigns`. |
+| `prev`, `next` | Do nothing. |
+
+To start the next session, press `enter` on the end screen, and then press `enter` again on `Start`.
+
+- Each button acts at the push. A hold does nothing more than the push.
+- The end screen ignores a button or a contact that you hold from the session. Release it, and then press it again.
+- The screen has no timeout.
+
+#### What Free Training keeps and changes
+
+- **`Mode` and `Chars` stay until power-off.** You can leave `Callsigns` and open it again: `Mode` and `Chars` keep
+  their values. The device does not save them. After a power-on, they are `RX` and `Learned`. `Reset Statistics`
+  does not change them.
+- **Your levels do not change.** Free Training never changes your training levels and never saves. The main menu
+  and the start screens of `Receiving` and `Sending` show the same levels as before. The end screen never shows
+  `Not saved`.
+- **To change a setting,** leave `Callsigns`, go to the main menu, and change the setting in `Settings`. Then open
+  `Free Training > Callsigns` again.
+
+#### Problems in Callsigns
+
+| Problem | Possible cause | What to do |
+| --- | --- | --- |
+| `Start` starts no session, and the screen shows `No digit learned yet`. | `Chars` is `Learned`, and your level in the mode of `Mode` is below L25. | Set `Chars` to `Full`, or reach L25 (see [No digit learned yet](#no-digit-learned-yet)). |
+| `Chars` shows `Learned L1`, but you trained before. | You changed `RX Speed` or `TX Speed`. Each speed has its own level. | Set the speed back. |
+| A session starts without a press on the configuration screen. | You inserted the plug while the screen showed. On this screen, a closure of the tip contact acts as a press of `enter`. | Hold `menu/back` for about 0.8 s to leave the session. Insert the plug before you open `Callsigns`. |
 
 ## Change a setting
 
@@ -1270,8 +1509,8 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 
 `Backlight` and `Contrast` change the display at each step while you edit them. `Tone` and `Ramp` play a preview
 while you edit them (see [Tone and Ramp preview](#tone-and-ramp-preview)). The other settings take effect the next
-time you open Free Input, `Receiving` or `Sending`. [Settings for training](#settings-for-training) tells which
-setting affects which training mode.
+time you open Free Input, `Receiving` or `Sending`, or start a `Callsigns` session.
+[Settings for training](#settings-for-training) tells which setting affects which training mode.
 
 ### Training settings
 
@@ -1396,7 +1635,8 @@ again.
 
 ## Reset Statistics
 
-`Reset Statistics` sets all training levels back to L1: both modes, all speeds. It does not change the settings.
+`Reset Statistics` sets all training levels back to L1: both modes, all speeds. It does not change the settings. It
+does not change `Mode` and `Chars` of [Callsigns](#callsigns).
 
 1. In `Settings`, select `Reset Statistics` and press `enter`.
 2. The dialog `Reset statistics?` shows. The focus is on `No` each time the dialog opens.

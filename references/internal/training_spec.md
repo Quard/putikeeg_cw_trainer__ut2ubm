@@ -16,7 +16,7 @@ Change request D-T45 to D-T47 (start screen with a big level description, split 
 (D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. Change request D-T51 (the CW player early release follows the `Ramp` setting, plan `noble-bubbling-dahl.md`, 2026-10-16): specification published on 2026-10-16, section 17.7. Change request D-T52 to D-T60 (unlimited attempts per mode and a
 long `next` skip, plan `harmonic-doodling-dragonfly.md`, user-approved): specification published on 2026-11-02,
 section 17.8. D7 done, review `approved` on 2026-11-02 (D-T61). T17 and Q8 done. Final review `approved` on
-2026-11-02 (section 22.7, D-T62). W8 ready to start. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
+2026-11-02 (section 22.7, D-T62). W8 ready to start. The release notes wait for the version decision. Change request D-T63 to D-T88 (Free Training and the Callsigns program, plan `fluffy-rolling-gadget.md`, user decisions 2026-11-03): specification published on 2026-11-03, section 23. Gate G1 passed on 2026-11-03: the user approved the prefix list and answered Q-T3 (D-T89, section 20). Gate G2 passed on 2026-11-04: the user approved D8 (`ui-ux.md` 5.21, D-T90). T18 and Q9 done. Final review `approved` on 2026-11-04 (section 23.13, D-T94). W9 ready to start. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -30,6 +30,8 @@ Readers: `c-embedded-developer`, `qa-embedded`,
 | Approved plan `~/.claude/plans/lively-exploring-reef.md` | Level selection: user requirements and user decisions of 2026-10-07 (D-T35), proposed interface. |
 | Approved plan `~/.claude/plans/lucky-seeking-locket.md` | Start screen with a big level description and a split end screen: user decisions of 2026-10-15 (D-T45), proposed layouts. |
 | Approved plan `~/.claude/plans/harmonic-doodling-dragonfly.md` | Unlimited attempts per mode and the long `next` skip: user decisions (D-T52), proposed design. |
+| Approved plan `~/.claude/plans/fluffy-rolling-gadget.md` | Free Training and the Callsigns program: user decisions Q1 to Q16 (D-T63), proposed design. |
+| `GLOSSARY.md` (repository root) | Terms of Free Training and callsigns (section 23). |
 | `references/internal/ui-ux.md` (owner `ui-ux-embedded-designer`) | All that the user sees, hears or presses: layouts, texts, delays, control tables. Section 21 lists every value that this document takes from it. |
 | `references/internal/keyer_spec.md` | Keyer contract. Decision D-T1 of this document revises D-K1 (section 3.1). The keyer timing of section 6.7 stays the reference for the timing extraction. |
 | `references/internal/sidetone_spec.md` | Sidetone contract, envelope, ISR frame. |
@@ -2271,6 +2273,7 @@ tests that the 15.3 changes cover can fail. Q8 Part A updates them. Q8 ends with
 | --- | --- | --- |
 | Q-T1 | The list has 43 entries, the plan says 44. | 43 is correct. The 44 was a counting error. `KOCH_CHAR_COUNT` = 43, final word phase from L = 63 (D-T3). |
 | Q-T2 | Prosigns in random words? | No. BT, SK and AR appear only in character sessions. Words and the word keyboard use the first 40 Koch characters. With fewer learned characters, they use the learned ones (D-T4). |
+| Q-T3 | Prefix list (section 23.2): Russia and Belarus are among the most active entities in contests. Do they go in the list? | No. Russia (`UA` to `UI`, `R`) and Belarus (`EU` to `EW`) stay out. The user approved the list as it is and keeps `UU` (D-T89, 2026-11-03). |
 
 No open question remains for this contract.
 
@@ -2282,6 +2285,9 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 
 Unlimited attempts and the long `next` skip (U-34): resolved by D7, review `approved` (D-T61). T17 Part C can start
 after Part B.
+
+Free Training and the Callsigns program (U-35 to U-42): resolved by D8 (UX-79 to UX-87, `ui-ux.md` 5.21). Gate G2
+passed on 2026-11-04 (D-T90). T18 Part B can start after Part A.
 
 | ID | Item | Resolution | Source in `ui-ux.md` |
 | --- | --- | --- | --- |
@@ -2554,3 +2560,639 @@ expected character." Change it only together with a later change of this code.
 T17 is closed. W8 (`technical-writer`) can start with the scope of section 17.8. The release notes entry waits for the
 version decision of the user (proposal: MINOR). Open, not blocking: the device checks DC-T12 and `ui-ux.md` D-48 to
 D-52, and the editorial note E-1 of D-T61 for `ui-ux.md` V-119. Do not commit `firmware/Tests/tools/__pycache__/`.
+
+## 23. Free Training and the Callsigns program
+
+User decisions 2026-11-03 (grilling session Q1 to Q16, plan `fluffy-rolling-gadget.md`). The terms are those of
+`GLOSSARY.md` in the repository root: Free Training, program, character set, callsign, prefix, area digit, suffix,
+prefix list, learning progress, learned characters, mode. This is a MINOR change (a new function). After the work,
+the coordinator asks the user about the version (AGENTS.md). Proposal: MINOR.
+
+Status: specification published on 2026-11-03. Gate G1 passed on 2026-11-03: the user approved the prefix list of 23.2
+as it is (D-T89). Gate G2 passed on 2026-11-04: the user approved the screen specification of D8 (D-T90). T18 done on
+2026-11-04, and D-T93 rules on its deviations. Q9 done. Final review `approved` on 2026-11-04 (23.13). W9 can
+start.
+
+This section adds to sections 5.10, 5.11, 5.12, 11, 12 and 14 to 17. For a free session, this section wins where
+they differ. For a Koch session (Receiving or Sending from the main menu), nothing in sections 1 to 22 changes.
+
+### 23.1 Decisions
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| D-T63 | User decisions (2026-11-03, plan `fluffy-rolling-gadget.md`, Q1 to Q16). A new menu section, Free Training, holds programs that never change the learning progress. Each program has a configuration screen before the session. The first and only program is Callsigns: sessions of semi-real callsigns in Receiving (RX) or Sending (TX). D-T64 to D-T82 record one agreed behavior each. D-T83 to D-T88 are the architecture of this document. | User decisions. They do not reopen any decision of sections 2 to 22. |
+| D-T64 | Menu placement (Q1). Main menu order: `Receiving`, `Sending`, `Free Training`, `Free Input`, `Settings`, `About`. `Free Training` is a submenu with one item, `Callsigns`. So the main menu index of `Free Input` goes from 2 to 3, of `Settings` from 3 to 4, and of `About` from 4 to 5. Six items fit `MENU_VISIBLE_ROWS` (7), so the main menu gets no `i/n` mark. | User decision. |
+| D-T65 | Configuration rows and memory (Q2, Q3). The configuration screen of Callsigns has the rows `Mode` and `Chars` and a start action. `Mode` has the values RX and TX (default RX). `Chars` has the values Learned and Full (default Learned). The values stay in RAM (`static MEM_XDATA` in `free_training.c`) until a power-off. A leave and a new entry keep them. The C start-up value 0 gives the defaults: RX is `TRAINING_MODE_RECEIVING` (0), and Learned is `false` of `free_training_is_full`. No EEPROM change, no new settings id, no settings layout change. | User decision. Zero values for the defaults need no init code. |
+| D-T66 | Learned (Q4). Learned is the learned characters of the selected mode at the speed of that mode: `koch_learned_count(progress_level(mode, speed))`, `speed` = `RX Speed` for RX and `TX Speed` for TX. This is the earned level, the level that the start screen of Receiving or Sending preselects. The character count of the set is that count, capped at `KOCH_WORD_ALPHABET_MAX` (40), so no prosign is in the set. Full is `KOCH_WORD_ALPHABET_MAX` (40): all 26 letters, all 10 digits, and `.`, `,`, `/`, `?`. The count is read at the start action. | User decision. The cap matters at level indexes 60 and 61, where the learned count is 42 and 43. |
+| D-T67 | No digit learned blocks the start (Q5). If `callsign_is_possible(count)` returns false, the start action does not start a session. The screen shows a message (text and place: D8, U-37). Mode and Chars do not change. With the prefix list of 23.2, the first digit `0` is Koch character index 17. So Learned blocks the start at each level index below 24 (shown L1 to L24). It allows the start from index 24 (shown L25, learned count 18). Full never blocks. | User decision. One function gives the rule, so the screen and the engine cannot disagree. |
+| D-T68 | Callsign shape (Q6, Q7). A callsign is a prefix, then an area digit, then a suffix of 1 to 3 letters. The suffix length has the weights 1:2:2 (1 letter 20 %, 2 letters 40 %, 3 letters 40 %). Each suffix letter is a letter of the character set with equal chance. A callsign holds only the letters A to Z and the digits 0 to 9. It holds no `/` and no portable form. | User decision. |
+| D-T69 | Prefix pick (Q8). If every character of a prefix is in the character set, the prefix is allowed. The prefix is one of the allowed prefixes of the list, each with equal chance. The pick uses the fair pick of D-T84, not `rng_below()`. | User decision. `rng_below(100)` gives 3 of 256 high-byte values to 56 results and 2 of 256 to 44 results. That is a ratio of 3:2, not an equal chance. |
+| D-T70 | Area digit (Q9). The area digit is one of the digits of the character set, each with equal chance. With Full, it is 0 to 9 with equal chance. | User decision. |
+| D-T71 | Own-digit prefixes (Q10). A prefix that holds its own area digit (for example `KH6`) gets no extra digit. The list holds at most 10 such prefixes. Rule of the code table: a prefix of 3 characters holds its own area digit. A prefix of 1 or 2 characters does not. A host test proves that each 3-character entry ends with a digit. | User decision. The length rule needs no flag bit and no mask in the code. A user change of the list that breaks the rule goes to `architector` first. |
+| D-T72 | Length limit (Q11). A callsign has at most 8 characters. With prefixes of at most 3 characters, a callsign has 3 to 6 characters: a 1- or 2-character prefix gives at most 2 + 1 + 3, and a 3-character prefix gives at most 3 + 3. A `_Static_assert` proves `CALLSIGN_LENGTH_MAX <= KOCH_WORD_LEN_MAX`. | User decision. The item buffer (`TRAINING_TEXT_SIZE`, 9 bytes) and the player (`PLAYER_TEXT_MAX`, 8) hold every callsign. |
+| D-T73 | `Max Word Length` does not apply (Q12). The engine takes no word length from it in a free session. The modes still pass their read value to `training_prepare()`, and the engine ignores it for a free session. | User decision. |
+| D-T74 | Session length (Q13). A free session has 20 items: `TRAINING_FREE_ITEMS`. | User decision. |
+| D-T75 | Reuse of the training settings (Q14). A free session follows `RX Attempts` or `TX Attempts` (D-T53, D-T60), the long `next` skip (D-T54 to D-T57) and, in TX, `Show CW Code`. The retry status, the skip status and the answer state are those of a Koch word session. | User decision. The engine and the modes run the same code. |
+| D-T76 | RX keyboard (Q15). RX uses the keyboard of a word session: `keyboard_reset()` with the character count of the set. The keyboard holds every character of the set in keyboard order. If the set holds `.`, `,`, `/` or `?`, the keyboard holds them too. Callsigns never hold these four characters. | User decision. The keyboard code does not change. |
+| D-T77 | TX check (Q15). TX checks each callsign as one word, by the Sending rules: each character at once, the word-space error and the pause limit of D-T30 and D-T31. | User decision. |
+| D-T78 | Speeds and other settings (Q15). RX plays at `RX Speed` and `RX Eff. Speed`. TX keys at `TX Speed` and `TX Eff. Speed`. `Tone`, `Ramp`, `Key Type`, `Paddle` and `Prosigns` apply as in the modes. Each mode reads its settings once at the session start (UX-49). | User decision. |
+| D-T79 | Free outcome (Q16). A free session has no pass and no fail. At the end, the outcome is `TRAINING_OUTCOME_FREE`, and the end screen shows the score (layout: D8, U-40). An `enter` press on the end screen opens the configuration screen with the same Mode and Chars. A `menu/back` press on the configuration screen opens the Free Training list with the cursor on `Callsigns`. | User decision. |
+| D-T80 | No progress write (Q16). Nothing in Free Training calls `progress_advance()`, `progress_save()` or `progress_reset()`. The EEPROM gets no erase and no write. The levels in RAM, the main menu levels and the selected levels of Receiving and Sending do not change. | User decision. Free Training never changes the learning progress (`GLOSSARY.md`). |
+| D-T81 | `Reset Statistics` does not touch Free Training (Q16). It resets the progress record only, as before. Mode and Chars are not statistics and do not change. | User decision. No code change in `stats` or `progress`. |
+| D-T82 | Prefix list (Q8, Q10). The list holds about 100 prefixes. It holds the most active entities on the air (high log counts in big contests). It holds all Ukrainian prefixes (`UR` to `UZ`, `EM` to `EO`). It holds at most 10 prefixes with their own area digit. It holds no prefix of an entity in political dispute. 23.2 gives the list. Gate G1 passed: the user approved the list as it is (D-T89). If D-T71 still holds, a change of the list after G1 changes only the table content and the test reference. | User decision. The user approved the content at G1. The rule and the format are fixed here. |
+| D-T83 | Engine free state (section 23.4). `training_set_free(char_count)` comes right after `training_prepare()`. It sets the free flag and stores the character count. `training_prepare()` clears the flag. With the flag, `training_start()` sets 20 items, and the GAP to ITEM step calls `callsign_make()`. `training_alphabet_count()` returns the stored count. The finish gives `TRAINING_OUTCOME_FREE` with no progress call. All other engine rules do not change. | `training_prepare()` keeps its signature, so no test of section 15.3 changes. The single parameter comes in a register: no new xdata parameter bytes. A Koch mode entry always calls `training_prepare()`, so the free state cannot leak into a Koch session. |
+| D-T84 | Fair pick (section 23.3). `callsign.c` has a static helper that gives 0..n-1 with exactly equal chance. It reads the high byte of `rng_next()` until the byte is below `n * (255 / n)`, then returns the byte modulo n. All picks of the generator use it, the suffix length steps too. `rng_below()` does not change. | `rng_below()` stays as it is, because its values are part of AC-T3 and of the item tests (section 7). The limit is a multiple of n, so each result gets the same count of byte values. The limit is at least 128, so a pick needs at most 2 reads on average. The RNG passes all 65 535 non-zero states, the high byte 0 is among them, and 0 is below every limit. So the loop always ends. 8-bit `DIV AB` and `MUL AB` only: no library helper. |
+| D-T85 | Free Training mode module (section 23.5). `free_training.c` owns the menu screen `MENU_SCREEN_FREE_TRAINING`, the configuration screen, Mode and Chars. Engine phase IDLE is the configuration screen. The start action calls `receiving_start_free()` or `sending_start_free()`. During GAP, ITEM and RESULT, `free_training.c` passes polls and events to the Receiving or Sending code. In END, `free_training.c` handles the events itself. The free flow never uses phase SELECT for input, `training_select_step()`, `training_reopen_select()` or `training_screen_select_input()`. | `menu.c` knows one screen for the program. Receiving and Sending keep their session code and get only one entry function each. A new prepare at each start lets the user change Mode between sessions. The Koch start screen and its selector never show in a free session. |
+| D-T86 | Main menu levels. `draw_item_row()` in `menu_render.c` shows `L<n>` only for `MENU_MODE_RECEIVING` and `MENU_MODE_SENDING`. The test changes from `target != MENU_MODE_FREE_INPUT` to `target <= MENU_MODE_SENDING`, with the existing compile-time check of D-T41 (0 and 1). The `Free Training` row (a submenu) shows `>`. The `Callsigns` row shows no value. | Without this change, the new mode id shows a level that does not exist. |
+| D-T87 | Long `menu/back`. In every state of Callsigns, a long `menu/back` stops the session and opens the Free Training list with the cursor on `Callsigns`. The states are the configuration screen, the start pause, the item, the result, the blank moment and the end screen. `menu.c` does this as for every mode screen (section 12.1, `ui-ux.md` 6.1). If D8 needs another target, the designer reports to `architector` first. | The existing rule and code apply with no change. The user can always leave with one action. |
+| D-T88 | Test seams (section 23.8). The tests use two seams. The session seam is the engine API and the free entries of the modes. The menu seam is `menu_handle()`, `menu_poll()`, `menu_render()` and the LCD frame. The generator has no seam of its own. Its tests run through the session seam, with the real RNG and the real `callsign.c`. | The user decision of the plan. The generator has one caller, the engine. Tests at the session seam prove what the user sees: the items of a session. |
+| D-T89 | User decisions of gate G1 (2026-11-03). (1) The user approved the prefix list of 23.2 as it is: 100 prefixes, 10 with their own area digit, 12 Ukrainian. (2) The list keeps `UU`. (3) Q-T3: Russia (`UA` to `UI`, `R`) and Belarus (`EU` to `EW`) stay out of the list. | User decisions. T18 Part A can start. |
+| D-T90 | Gate G2 (2026-11-04): the user approved the screen specification of D8, `ui-ux.md` section 5.21. Accepted UI values: UX-79 to UX-87, V-207 to V-225, device checks D-53 to D-56, and the contract facts C-1 to C-7 of 5.21.7. (1) `Chars` shows `Learned L<n>`, the shown level of the mode at its speed (U-38, UX-82). (2) A `menu/back` press on the free end screen opens the Free Training list (U-41, UX-86). So `free_training_handle()` returns true for it. (3) The header shows `Callsigns` in columns 9-17 (UX-84). (4) The free end screen shows `Score <c>/20` in row 2 and the `OK` band in row 7, and rows 1 and 3-6 stay blank (UX-85). (5) The configuration screen draws the whole screen at each change. Only the pages whose bytes change get dirty (UX-87). U-35 to U-42 are closed (23.11). | Every value fits D-T63 to D-T89 and FT-1 to FT-10. No interface of 23.3 to 23.6 changes. |
+| D-T91 | The focused `Start` band of the configuration screen. `screen_draw_band()` in `training_screen.c` becomes `void training_screen_draw_band(const char* label)`, declared in `training_screen_internal.h`. The body and the pixels do not change. The start screen and the end screen call it as before. `free_training.c` calls it for `Start` with the focus. Without the focus, it draws `Start` with `training_screen_compose()`, `training_screen_append()` and `training_screen_draw_centered(TRAINING_SCREEN_LAST_ROW)`. | One copy of the band code, so the band of 5.21.2 equals the `Start` band of 5.16.1 by construction. The change costs about 0 B flash. A second copy in `free_training.c` costs about 40 B and can drift from SL-5. |
+| D-T92 | The rows `Mode` and `Chars`. `free_training.c` draws the row band and the edit field of `ui-ux.md` 5.2 and 5.4 itself, with `gfx` and the `training_screen` helpers (C-6). One static helper draws one row: the label, the value right-aligned to column 22, and for the state the band or the edit field with its markers. After inverted text, it sets the gap line y 8r off across the band, as `finish_band()` does in `menu_render.c`. The row helpers of `menu_render.c` stay as they are. Only D-T86 changes that file. The `Learned L<n>` text is built in `training_screen_text`. | The `menu_render.c` helpers are `static` and read the menu state: `render_row`, `render_index`, the menu stack, `menu_item_t` and `settings_get()`. A shared version needs a new interface out of the private menu code and a change in a file with many pixel tests. The own helper costs about 150 B inside the flash estimate of 23.7. The QA golden frames of V-207 to V-225 prove the pixels. |
+| D-T93 | Rulings on the T18 deviations (2026-11-04), before Q9. `architector` read the code and built it again. (1) Accepted: the redraw of the configuration screen. `lcd_fb` sets a page dirty at each byte change and keeps it dirty for the rest of the redraw. So a clear and a redraw of the same pixels makes a page dirty. C-1 of `ui-ux.md` 5.21.7 does not hold for a full redraw. `free_training.c` draws the title only at an opening. A part without the focus writes its final pixels once, as a full row of 25 cells. A focus step clears only the row that loses the focus. A blocked start draws only rows 4 and 5. FT-11 is revised: the binding result is the pixels and the dirty pages of V-207 to V-225, not a full redraw at each change. (2) Accepted: `Start` without the focus is a `MEM_CODE` row of 25 cells, drawn with `training_screen_draw_text()`. `training_screen_draw_centered()` clears the row first and so makes page 7 dirty. The pixels equal the centered text of D-T91. `Start` with the focus uses `training_screen_draw_band()`, as D-T91 says. (3) Accepted: the band of a row comes from `LCD_PIXEL_INVERT` over normal text on a cleared row, then `LCD_PIXEL_OFF` on the gap line. The pixels equal the inverted text on a filled band of `menu_render.c`. Q9 proves it against the frames of 5.21.2. (4) Accepted: the last step of V-214 (a power-on gives RX and Learned) has no host form, because a test process cannot reset the static values. The first entry of a fresh test process is the power-on case. The power cycle itself is a device check. (5) Accepted: `receiving_start_free()` and `sending_start_free()` call `receiving_enter()` and `sending_enter()` in place of a new static helper. The read order, the values and the `training_prepare()` call are the same as 23.5 asks, and the code is smaller. The count waits in `rx_count` and `tx_mark_count`. `rx_draw_item_line()` sets `rx_count` again before it reads it, and the first element of a character sets `tx_mark_count` to 0. (6) Accepted: the generator keeps the family (digits or letters) in bit 7 of its scan index, so it stays at 6 B xdata. Past the list, the prefix scan reads NUL, so a call against the precondition stays in bounds (+12 B). D-T71 has no direct table check, because the table is `static`. The 23.2 table meets D-T71 (checked by `architector` with a script on 2026-11-03), and AC-T55 (4) proves that the code table equals the 23.2 table. (7) Accepted: `free_training.c` includes `lcd/lcd_fb.h` for `LCD_WIDTH` and the `LCD_PIXEL_*` values only. It calls no `lcd_fb_*` function. FT-10 is extended with this include. (8) Memory, measured again by `architector`: flash 29 664 -> 32 223 B (+2559, target +2000, hard limit +2600). xdata 1830 -> 1844 B (+14, target +18). DSEG, OSEG and bit bytes +0. Stack 188 B free. `callsign.c` has 926 B flash: 626 B code and the 300 B table. Its target is 700 B, and the user limit is 1024 B. It has 6 B xdata and no DSEG, OSEG or BSEG bytes. Part A +1013 B (target +800 B). All accepted: each value is below its hard limit and the user limits hold. Only 41 B of flash remain below the hard limit. A later change that passes +2600 B goes to `architector` first. (9) The baseline of 23.7 came from a stale build. The measured baseline of this branch is flash 29 664 B and xdata 1830 B, the final T17 values of D-T62. 23.7 is corrected. | (1) to (3) The vectors are the observable contract, and they pass. The code meets them with fewer dirty pages. (4) A host process has no power cycle. (5) and (6) The behavior and the RNG order equal 23.3 and 23.5. (8) The image uses 32 223 of 61 440 B. No internal RAM changed. |
+| D-T94 | Rulings of the final review (2026-11-04) on the Q9 findings. (1) AC-T55 (2) is corrected. `rng_below(100)` gives the shares 1.172 % and 0.781 %, and both are inside the old bound of 0.75-1.25 %. So that bound does not catch mutant M1. The new rule compares two groups of prefix positions, and the exact model of AC-T55 (4) stays the main proof. (2) Stack: the summed-push bound goes from 75 B to 82 B (+7 B, target +6 B). `architector` measured it again with the QA script on the baseline and the new build. The deepest chain is `menu_handle` -> `free_training_handle` -> `ft_handle_config` -> `ft_start` -> `free_training_render` -> `sending_render` -> `tx_draw_input` -> ... -> `lcd_fb_set_pixel`. The margin is 188 - (82 + 16) = 90 B, above 64 B. Accepted. The developer figure of +1 B was wrong. (3) M17 is an equivalent mutant, so Q9 does not have to kill it. Only a blocked start sets the message flag. Only a value step or an opening clears it. A start that succeeds needs a state with no message, focus on `Start` and no edit mode. So after a session, `ft_open()` on the `enter` path of the end screen changes no state that a test can see. The call stays, because C-7 asks for it, and a later change of the start rule can make it visible. (4) Accepted: `HB` with the area digit 0 gives the same text as `HB0`. The same holds for `OH` and 0, `EA` and 6 or 8, and `CT` and 3. Callsigns are semi-real (`GLOSSARY.md`), and D-T70 gives each digit of the set the same chance. Each such text has the shape of a real callsign. No code change. | (1) A test bound must fail on the mutant that it is for. (2) and (4) are inside the limits. (3) No input sequence can show the mutant. |
+
+### 23.2 Prefix list (approved at gate G1)
+
+Status: approved by the user on 2026-11-03, with no change (D-T89).
+
+Rule (D-T82). The list takes the entities with high log counts in big contests (CQ WW, CQ WPX, IARU HF). It takes all
+12 Ukrainian prefixes and the 10 own-digit prefixes that are most common on the air. Some entities with a large
+amount of activity get more than one prefix: United States 5, Germany 4, England 2, Italy 3, Japan 3, Canada 2,
+Spain 2, Poland 2, Brazil 2. With the equal chance of D-T69, an entity with more prefixes comes more often.
+
+The list leaves out these entities, because they are in political dispute:
+
+- Taiwan (`BV`), Kosovo (`Z6`), Western Sahara (`S0`) and Palestine (`E4`).
+- Northern Cyprus (`1B`), Falkland Islands (`VP8`), Gibraltar (`ZB2`) and Ceuta and Melilla (`EA9`).
+- Chagos and Diego Garcia (`VQ9`), Guantanamo Bay (`KG4`), Spratly Islands (`1S`) and Scarborough Reef (`BS7`).
+- The Sovereign Military Order of Malta (`1A`), which is not a state.
+
+Russia (`UA` to `UI`, `R`) and Belarus (`EU` to `EW`) are among the most active entities in big contests. The list
+leaves them out. This is the user answer to Q-T3 (section 20, D-T89). The list keeps `UU` by the user decision.
+
+The order of the table is the order of the code table. The pick of D-T69 counts in this order, so the test reference
+uses the same order. "Own digit" = the prefix holds its own area digit (D-T71): the callsign is the prefix and the
+suffix, with no extra digit.
+
+| No. | Prefix | Entity | Own digit |
+| ---: | --- | --- | --- |
+| 1 | `UR` | Ukraine | No |
+| 2 | `US` | Ukraine | No |
+| 3 | `UT` | Ukraine | No |
+| 4 | `UU` | Ukraine | No |
+| 5 | `UV` | Ukraine | No |
+| 6 | `UW` | Ukraine | No |
+| 7 | `UX` | Ukraine | No |
+| 8 | `UY` | Ukraine | No |
+| 9 | `UZ` | Ukraine | No |
+| 10 | `EM` | Ukraine | No |
+| 11 | `EN` | Ukraine | No |
+| 12 | `EO` | Ukraine | No |
+| 13 | `K` | United States | No |
+| 14 | `W` | United States | No |
+| 15 | `N` | United States | No |
+| 16 | `AA` | United States | No |
+| 17 | `KB` | United States | No |
+| 18 | `KH6` | Hawaii | Yes |
+| 19 | `KL7` | Alaska | Yes |
+| 20 | `KP4` | Puerto Rico | Yes |
+| 21 | `KH2` | Guam | Yes |
+| 22 | `VE` | Canada | No |
+| 23 | `VA` | Canada | No |
+| 24 | `XE` | Mexico | No |
+| 25 | `CO` | Cuba | No |
+| 26 | `P4` | Aruba | No |
+| 27 | `HK` | Colombia | No |
+| 28 | `PY` | Brazil | No |
+| 29 | `PU` | Brazil | No |
+| 30 | `LU` | Argentina | No |
+| 31 | `CE` | Chile | No |
+| 32 | `CX` | Uruguay | No |
+| 33 | `DL` | Germany | No |
+| 34 | `DK` | Germany | No |
+| 35 | `DJ` | Germany | No |
+| 36 | `DO` | Germany | No |
+| 37 | `SP` | Poland | No |
+| 38 | `SQ` | Poland | No |
+| 39 | `OK` | Czech Republic | No |
+| 40 | `OM` | Slovakia | No |
+| 41 | `HA` | Hungary | No |
+| 42 | `YO` | Romania | No |
+| 43 | `LZ` | Bulgaria | No |
+| 44 | `YU` | Serbia | No |
+| 45 | `9A` | Croatia | No |
+| 46 | `S5` | Slovenia | No |
+| 47 | `E7` | Bosnia and Herzegovina | No |
+| 48 | `Z3` | North Macedonia | No |
+| 49 | `SV` | Greece | No |
+| 50 | `5B` | Cyprus | No |
+| 51 | `TA` | Turkey | No |
+| 52 | `ER` | Moldova | No |
+| 53 | `OE` | Austria | No |
+| 54 | `HB` | Switzerland | No |
+| 55 | `HB0` | Liechtenstein | Yes |
+| 56 | `I` | Italy | No |
+| 57 | `IK` | Italy | No |
+| 58 | `IZ` | Italy | No |
+| 59 | `IS0` | Sardinia | Yes |
+| 60 | `9H` | Malta | No |
+| 61 | `F` | France | No |
+| 62 | `ON` | Belgium | No |
+| 63 | `PA` | Netherlands | No |
+| 64 | `LX` | Luxembourg | No |
+| 65 | `G` | England | No |
+| 66 | `M` | England | No |
+| 67 | `GM` | Scotland | No |
+| 68 | `GW` | Wales | No |
+| 69 | `EI` | Ireland | No |
+| 70 | `EA` | Spain | No |
+| 71 | `EC` | Spain | No |
+| 72 | `EA6` | Balearic Islands | Yes |
+| 73 | `EA8` | Canary Islands | Yes |
+| 74 | `CT` | Portugal | No |
+| 75 | `CT3` | Madeira Islands | Yes |
+| 76 | `OZ` | Denmark | No |
+| 77 | `SM` | Sweden | No |
+| 78 | `LA` | Norway | No |
+| 79 | `OH` | Finland | No |
+| 80 | `OH0` | Aland Islands | Yes |
+| 81 | `TF` | Iceland | No |
+| 82 | `ES` | Estonia | No |
+| 83 | `YL` | Latvia | No |
+| 84 | `LY` | Lithuania | No |
+| 85 | `4X` | Israel | No |
+| 86 | `A6` | United Arab Emirates | No |
+| 87 | `UN` | Kazakhstan | No |
+| 88 | `VU` | India | No |
+| 89 | `BY` | China | No |
+| 90 | `HL` | South Korea | No |
+| 91 | `JA` | Japan | No |
+| 92 | `JH` | Japan | No |
+| 93 | `JR` | Japan | No |
+| 94 | `DU` | Philippines | No |
+| 95 | `YB` | Indonesia | No |
+| 96 | `VK` | Australia | No |
+| 97 | `ZL` | New Zealand | No |
+| 98 | `ZS` | South Africa | No |
+| 99 | `CN` | Morocco | No |
+| 100 | `D4` | Cape Verde | No |
+
+Totals: 100 prefixes, 10 with their own digit, 12 Ukrainian. The longest prefix has 3 characters.
+
+Facts for the tests, from this list and the Koch order of section 5.6:
+
+| Count | Characters of the set | Allowed prefixes | Area digits |
+| ---: | --- | --- | --- |
+| 17 | `KMRSUAPTLOWI.NJEF` | 35 (no digit: not possible) | none |
+| 18 | `KMRSUAPTLOWI.NJEF0` | 36, list below | `0` |
+| 40 | all letters, all digits, `.`, `,`, `/`, `?` | all 100 | `0` to `9` |
+
+The 36 allowed prefixes at count 18, in table order:
+
+```text
+UR US UT UU UW EM EN EO K W N AA PU LU SP OK OM TA ER OE I IK IS0 F ON PA M EI EA SM LA TF ES UN JA JR
+```
+
+`qa-embedded` computes these sets again from the table, so a wrong fact here shows as a test failure, not as a wrong
+oracle.
+
+### 23.3 Callsign generator: `callsign/callsign.h` (new)
+
+Files: `firmware/inc/callsign/callsign.h`, `firmware/src/callsign/callsign.c`. Main loop only. No ISR reads or
+writes its state.
+
+```c
+#include <stdbool.h>
+#include <stdint.h>
+#include "mcu/compiler.h"
+
+#define CALLSIGN_PREFIX_SIZE 3U  /* characters of the longest prefix; a 3-character prefix holds its own area digit (D-T71) */
+#define CALLSIGN_SUFFIX_MAX 3U
+#define CALLSIGN_LENGTH_MIN 3U
+#define CALLSIGN_LENGTH_MAX (CALLSIGN_PREFIX_SIZE + CALLSIGN_SUFFIX_MAX)  /* 6, D-T72 */
+
+/**
+ * True when the first @p char_count Koch characters hold at least one digit, at least one letter and every character
+ * of at least one prefix of the list (D-T67). Uses no RNG.
+ */
+bool callsign_is_possible(uint8_t char_count);
+/**
+ * Writes one callsign from the first @p char_count Koch characters, then a NUL, to @p text (at least
+ * CALLSIGN_LENGTH_MAX + 1 bytes). Returns its length, CALLSIGN_LENGTH_MIN..CALLSIGN_LENGTH_MAX. Uses the RNG in the
+ * order of section 23.3. Call it only when callsign_is_possible(@p char_count) is true.
+ */
+uint8_t callsign_make(uint8_t char_count, char MEM_XDATA* MEM_XDATA text);
+```
+
+Definitions:
+
+- If `koch_index_of(c) < char_count`, the character `c` is in the set. A count above 40 gives the same set as 40 for
+  callsigns, because the Koch characters 40 to 42 are prosigns.
+- The digits of the set are the Koch characters `koch_char(i)`, `i < char_count` and `i < KOCH_CHAR_COUNT`, with a
+  value from `'0'` to `'9'`, in Koch order. The letters of the set are the same with a value from `'A'` to `'Z'`.
+- The prefix list is `static const MEM_CODE char[CALLSIGN_PREFIX_COUNT][CALLSIGN_PREFIX_SIZE]` in the order of 23.2.
+  A prefix of 1 or 2 characters has `'\0'` in the unused bytes. `CALLSIGN_PREFIX_COUNT` is private to
+  `callsign.c`, and a `_Static_assert` proves that it is at most 255.
+- Fair pick of n (D-T84), a static helper: for n = 0, the result is 0 and the RNG does not step. Else
+  `limit = n * (255 / n)` in 8 bits. Read `r = (uint8_t)(rng_next() >> 8)` again until `r < limit`. The result is
+  `r % n`.
+- The k-th allowed item is the item with k allowed items before it, in list order or Koch order.
+
+`callsign_make()` steps, with the RNG order binding (tests can predict each callsign from a seed):
+
+1. Prefix. n = the count of allowed prefixes. k = fair pick of n. Copy the k-th allowed prefix to `text`.
+2. Area digit, only after a prefix of 1 or 2 characters. n = the count of digits of the set. k = fair pick of n.
+   Append the k-th digit.
+3. First suffix letter. n = the count of letters of the set. k = fair pick of n. Append the k-th letter.
+4. Fair pick of 5. A result of 0 ends the suffix (1 letter). Else append a second letter as in step 3.
+5. After a second letter: fair pick of 2. A result of 0 ends the suffix (2 letters). Else append a third letter as in
+   step 3.
+6. Write the NUL. Return the length.
+
+So the suffix length has the chances 1/5, 4/5 x 1/2 = 2/5 and 2/5: exactly 1:2:2 (D-T68).
+
+`callsign_is_possible()`: the count of digits of the set, the count of letters of the set and the count of allowed
+prefixes are all above 0. With the list of 23.2, the result is false for 0 to 17 and true for 18 to 255.
+
+Rules for the code:
+
+- The module includes `koch/koch.h` and `util/rng.h`. It calls `koch_char()`, `koch_index_of()` and `rng_next()`.
+  It does not call `rng_below()`.
+- Memory: at most 6 B xdata for the whole module, parameters included. No `MEM_DATA`, no `MEM_BIT`, no overlay bytes,
+  no `bool` from a compare. One layout fits in 6 B. The count takes 1 B, and the `text` parameter takes 2 B. The
+  write position takes 1 B. Two work values, the loop index and the pick, take 1 B each. The fair pick reads and writes the shared
+  work value, so it needs no parameter that must live across the `rng_next()` call. The step order above needs no
+  byte for the suffix length. Another layout is allowed inside the same limits.
+- Flash: below 1024 B for the module, the 300 B table included (user limit). Target: at most 700 B.
+- Time: about 4,400 loop steps of `koch_index_of()` for the first pass with Full. The estimate at 24 MHz is below 5 ms
+  for each callsign. It runs once per item, in the GAP to ITEM step. Device check DC-T13.
+
+### 23.4 Session engine: free sessions (`modes/training.h`, `modes/training.c`)
+
+Additions to section 5.10:
+
+```c
+#define TRAINING_FREE_ITEMS 20U  /* items of a free session (D-T74) */
+
+#define TRAINING_OUTCOME_FREE 5U /* a free session ended: no pass or fail, no level change, no save (D-T79, D-T80) */
+
+/**
+ * Right after training_prepare(): the next sessions are free sessions (D-T83). Each item is
+ * callsign_make(@p char_count, ...). training_prepare() ends the free state. No phase check.
+ */
+void training_set_free(uint8_t char_count);
+/** True from training_set_free() to the next training_prepare(). */
+bool training_is_free(void);
+```
+
+The comment of `training_alphabet_count()` changes to: "Free session: the count of training_set_free(). Else
+`koch_alphabet_count()` of the session level."
+
+State (section 11.1), two new `static MEM_XDATA` values in `training.c`: the free flag (`bool`, set with plain
+stores) and the character count (`uint8_t`).
+
+Changes of the transitions of section 11.2 for a free session:
+
+| From | Trigger | Actions | To | Event |
+| --- | --- | --- | --- | --- |
+| any | `training_prepare(...)` | As before. Also: free flag off. | SELECT | - |
+| any | `training_set_free(count)` | Free flag on. Store the count. Nothing else changes. | same | - |
+| any | `training_start()`, free | As before, then item count = `TRAINING_FREE_ITEMS`. | GAP | - |
+| GAP | duration passed (poll), free | As before, but `callsign_make(count, item)` in place of `koch_make_item()`. | ITEM | ITEM |
+| RESULT | duration passed, last item, free | Finish: outcome `TRAINING_OUTCOME_FREE`. No `progress_level()` compare, no `progress_advance()`, no `progress_save()`. The selected level does not change. | END | END |
+
+All other rows of 11.2 and all of 11.3 hold with no change: checks, wrong counter, unlimited attempts, skip, hold,
+delays, score and events.
+
+In a free session, these accessors have no meaning, and no screen reads them:
+
+- `training_level()`, `training_shown_level()` and `training_new_shown_level()`.
+- `training_selected_level()` and `training_earned_level()`.
+- `training_learned_count()`, `training_kind()` and `training_pass_threshold()`.
+
+ `training_select_step()` and
+`training_reopen_select()` keep their behavior, and the free flow never calls them (D-T85).
+
+Implementation limits: no change of the signature of any existing function. `training.c` includes
+`callsign/callsign.h`. Target: at most +80 B flash and +2 B xdata.
+
+### 23.5 Free Training mode and the hand-off
+
+New files: `firmware/inc/modes/free_training.h`, `firmware/src/modes/free_training.c`. Main loop only. Only `menu.c`
+calls the functions of `free_training.h`.
+
+```c
+/* free_training.h */
+#include <stdbool.h>
+#include "buttons/buttons.h"
+
+/** Opens the configuration screen of Callsigns with Mode and Chars from RAM (D-T65). training_stop(). Draws nothing. */
+void free_training_enter(void);
+/** Draws the whole screen for the current state. menu_render() calls it after the clear. */
+void free_training_render(void);
+/** In a session (engine phase not IDLE): receiving_poll() or sending_poll() of the session mode. Else nothing. */
+void free_training_poll(void);
+/**
+ * Applies @p event (never a long menu/back, section 23.6). Returns true when the user leaves to the Free Training
+ * list. Configuration screen and end screen: the controls of D8. GAP, ITEM and RESULT: receiving_handle() or
+ * sending_handle().
+ */
+bool free_training_handle(button_event_t event);
+/** Stops a running session with receiving_leave() or sending_leave(). Keeps Mode and Chars. Draws nothing. */
+void free_training_leave(void);
+```
+
+Additions to `modes/receiving.h` and `modes/sending.h`:
+
+```c
+/**
+ * Free session entry (D-T85). As receiving_enter(): rng_seed(tick_now()), the settings read once, the tone. Then
+ * training_prepare(TRAINING_MODE_RECEIVING, ...), training_set_free(@p char_count) and the session start of
+ * rx_start_session(): tap mode on, training_start(), keyboard_reset(training_alphabet_count()). Phase GAP. Draws nothing.
+ */
+void receiving_start_free(uint8_t char_count);
+/**
+ * Free session entry (D-T85). As sending_enter(): rng_seed(tick_now()), the settings read once, the tone. Then
+ * training_prepare(TRAINING_MODE_SENDING, ...), training_set_free(@p char_count) and tx_start_session(): enter
+ * disabled, keyer started, flags cleared, training_start(). Phase GAP. Draws nothing.
+ */
+void sending_start_free(uint8_t char_count);
+```
+
+Rules of the mode files:
+
+- One static helper in each mode file reads the settings and sets the tone. `receiving_enter()` and
+  `receiving_start_free()` both call it (the same in Sending). The read order and the values do not change.
+- `char_count` arrives in a register. It must live across the settings reads, so it goes to xdata at once: a new
+  `static MEM_XDATA` byte, or an existing work value with no nested use in that call. No internal RAM.
+- `receiving_render()`, `receiving_poll()`, `receiving_handle()` and `receiving_leave()` do not change, and the same
+  for Sending. The END event of the poll draws the header and `training_screen_draw_end()`, as before.
+
+Rules of `free_training.c`:
+
+| ID | Rule |
+| --- | --- |
+| FT-1 | State: Mode (`static MEM_XDATA uint8_t free_training_mode`, a `TRAINING_MODE_*` value) and Chars (`static MEM_XDATA bool free_training_is_full`). Plain stores only. Screen state of D8 (C-3): the focus (`Mode`, `Chars` or `Start`), the edit flag and the message flag, in at most 2 B of xdata. Each opening of the configuration screen sets the focus to `Start` and clears the edit flag and the message flag. It keeps Mode and Chars (C-7). The two openings are `free_training_enter()` and the `enter` press on the free end screen (FT-6). |
+| FT-2 | The configuration screen is engine phase IDLE. A session runs in every other phase. No extra flag. |
+| FT-3 | Character count at the start action (D-T66): Full gives `KOCH_WORD_ALPHABET_MAX`. Learned gives `koch_learned_count(progress_level(mode, (uint8_t)settings_get(speed id)))`, capped at `KOCH_WORD_ALPHABET_MAX`. The speed id is `SETTINGS_ID_RX_WPM` for RX and `SETTINGS_ID_TX_WPM` for TX. A compile-time check proves the mode values and the speed ids, as D-T41 does in `menu_render.c`. |
+| FT-4 | Start action (control of D8): compute the count. If `callsign_is_possible(count)` is false: the message of D8, no session (D-T67). Else `receiving_start_free(count)` or `sending_start_free(count)`, then clear rows 0-7 with pixel writes and call `receiving_render()` or `sending_render()`. No `rng_mix()` at the start: the entry already seeds the RNG with the tick of the press. A mix with the same tick gives the state 0 and so the fixed `RNG_SEED_FALLBACK`. |
+| FT-5 | GAP, ITEM and RESULT: each event goes to `receiving_handle()` or `sending_handle()`. In these phases they return false. `free_training_handle()` returns false. |
+| FT-6 | END: `free_training.c` handles the event itself. It never passes an END event to `receiving_handle()`, `sending_handle()` or `training_screen_select_input()`. An `enter` press (whole-event compare, so no repeat): `receiving_leave()` or `sending_leave()`, then the opening of FT-1 and a full draw of the configuration screen (D-T79, C-7). A `menu/back` press: return true, so `menu.c` opens the Free Training list (D-T90 (2)). Every other event: nothing, no redraw. |
+| FT-11 | Every clear of the screen in `free_training.c` uses pixel writes: `training_screen_clear_rows()` or `gfx_fill_rect()` with `LCD_PIXEL_OFF`. It never calls `lcd_fb_clear()`, because that marks every page dirty and breaks UX-87 (C-7). Revised by D-T93 (1). If a redraw changes a byte, the page stays dirty, also when the final byte is the same. So the code writes each part without the focus once, with its final pixels. The pixels and the dirty pages of V-207 to V-225 are binding. |
+| FT-7 | Leave: if the phase is not IDLE, `free_training_leave()` calls `receiving_leave()` or `sending_leave()`. Both stop the player or the keyer, give P3.2 back, turn tap mode off and set IDLE in every phase. |
+| FT-8 | The mode of the session comes from `free_training_mode`. It cannot change during a session. |
+| FT-9 | Button rules across the switches: B-1 to B-6 of section 12.6 hold, with the configuration screen in place of the start screen. The END event turns tap mode off (RX) or stops the keyer and enables `enter` (TX). So `enter` acts at the press on the end screen and on the configuration screen. The press that starts a session gives no event at its release. |
+| FT-10 | Allowed includes of the mode code: `modes/receiving.h`, `modes/sending.h`, `modes/training.h` and `training_screen_internal.h`. Other allowed includes: `callsign/callsign.h`, `koch/koch.h`, `progress/progress.h` and `settings/settings.h`. Also `gfx/gfx.h`, `util/rng.h` and `tick/tick.h`. Added by D-T93 (7): `lcd/lcd_fb.h`, for `LCD_WIDTH` and the `LCD_PIXEL_*` values only, with no call of an `lcd_fb_*` function. |
+
+Shared screen code (`training_screen.c`):
+
+- `training_screen_draw_header()`: if `training_is_free()`, the level field shows `Callsigns` in columns 9-17 (UX-84)
+  in place of `L<level>`. The item field shows `training_shown_item_number()` and `training_item_count()`, as in a
+  session. The SELECT branch is not reached in a free session.
+- `training_screen_draw_end()`: if `training_outcome() == TRAINING_OUTCOME_FREE`, it draws the free end screen of UX-85.
+  Row 2 shows `Score <c>/20` from `training_score()` and `training_item_count()`. Rows 1 and 3-6 stay blank. Row 7
+  shows the `OK` band with the band helper (SL-5).
+- `screen_draw_band()` becomes `training_screen_draw_band()` in `training_screen_internal.h` (D-T91).
+- No other change in `training_screen.c`. Texts are `MEM_CODE` constants or are built in `training_screen_text`
+  (SL-3).
+
+Data of the configuration screen, with no new engine function (C-2): Mode, Chars, the count of FT-3, the shown level
+`koch_shown_level(progress_level(mode, speed))` for `Learned L<n>`, and the result of `callsign_is_possible()`. The
+rows `Mode` and `Chars`: D-T92.
+
+### 23.6 Menu node and mode
+
+| File | Change |
+| --- | --- |
+| `inc/menu/menu.h` | `#define MENU_SCREEN_FREE_TRAINING 9U`. `#define MENU_NODE_FREE_TRAINING 5U`. The file comment and the comment of `menu_handle()` name Free Training: it gets every event except a long `menu/back`. |
+| `src/menu/menu_internal.h` | `#define MENU_MODE_CALLSIGNS 3U`. `MENU_NODE_COUNT` = 6. |
+| `src/menu/menu_tree.c` | Main items in the order of D-T64. The `Free Training` item: `{"Free Training", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_FREE_TRAINING, 0U}`. New items `{"Callsigns", NULL, NULL, MENU_KIND_MODE, MENU_MODE_CALLSIGNS, 0U}`. Node 5: `{"Free Training", <items>, 1, false}`. The list title text is D8 (U-35). |
+| `src/menu/menu.c` | The compile-time check of the mode screen numbers covers `MENU_SCREEN_FREE_TRAINING`. `menu_enter_item()`: `MENU_MODE_CALLSIGNS` shows `MENU_SCREEN_FREE_TRAINING` and calls `free_training_enter()`. `menu_leave_mode()`: `free_training_leave()`. `menu_handle_mode_screen()`: after the long `menu/back` test, `is_leaving = free_training_handle(event)` for this screen. `menu_poll()`: `free_training_poll()` for this screen, with no redraw pending. |
+| `src/menu/menu_render.c` | `menu_render()`: `free_training_render()` for this screen. `draw_item_row()`: D-T86. |
+
+Facts that follow with no extra code:
+
+- The Free Training list is at stack depth 2, and the mode screen opens from it. A leave (long `menu/back`, or a true
+  return of `free_training_handle()`) shows LIST with the Free Training list on top and the cursor on `Callsigns`.
+- A `menu/back` press in the Free Training list opens the main menu with the cursor on `Free Training`. The node has
+  `is_save_on_exit` false, so no settings save.
+- `menu_show_message()` on this screen calls `free_training_leave()` through `menu_leave_mode()`.
+- `MENU_STACK_DEPTH` (3) does not change.
+
+### 23.7 Memory budget
+
+Baseline, corrected by D-T93 (9): flash 29 664 of 61 440 B, xdata 1830 of 3072 B, stack starts at 0x44 with 188 B
+free, OSEG 5 B. These are the final T17 values (D-T62), measured again by T18 on this branch. The first figures of
+this section (29 737 B, 1831 B) came from a stale build.
+
+| Resource | Baseline | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash, `callsign.c` | - | at most 700 B (table 300 B, code 400 B) | below 1024 B (user limit) |
+| Flash, whole change | 29 664 of 61 440 B | Part A at most +800 B. Whole T18 at most +2000 B | +2600 B |
+| xdata, `callsign.c` | - | at most 6 B, parameters included | 6 B (user limit) |
+| xdata, whole change | 1830 of 3072 B | +18 B: callsign 6, engine 2, `free_training.c` 10 (state 4, draw parameters and work values 6) | +24 B |
+| DSEG, OSEG, bit bytes | OSEG 5 B | +0 B | +0 B (user limit: no internal RAM) |
+| Stack | 188 B free | deepest main-loop chain at most +6 B | margin at least 64 B |
+| Timer 0 ISR | keyer 403, player 186, disabled 63 clocks | unchanged: no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+
+Flash estimate: `callsign.c` about 650 B. Engine about +60 B. Mode entries and the settings helpers about +60 B.
+Header and end screen branches about +100 B. `free_training.c` with the configuration screen about +800 B, the row helper of
+D-T92 (about 150 B) included. The band export of D-T91 about 0 B. Menu node, items, texts and dispatch about +100 B.
+Total about +1770 B, inside the +2000 B target.
+
+Final (T18, measured again by `architector`): flash 32 223 B (+2559) and xdata 1844 B (+14). DSEG, OSEG and bit
+bytes do not change. The stack has 188 B free, and the deepest main-loop chain is +1 B (developer figure).
+`callsign.c` has 926 B and 6 B xdata. D-T93 (8) accepts these values.
+
+Stack candidates for T18:
+
+- `menu_handle` -> `menu_handle_mode_screen` -> `free_training_handle` -> `receiving_handle` -> (skip path) ->
+  `rx_draw_input` -> ... One level deeper than the same Receiving chain.
+- `menu_poll` -> `free_training_poll` -> `sending_poll` -> `tx_draw_input` -> `tx_draw_item_line` ->
+  `training_screen_draw_item_text` -> `screen_draw_big_text` -> `gfx_draw_text` -> ...
+- `menu_poll` -> `free_training_poll` -> `receiving_poll` -> `training_poll` -> `callsign_make` -> (pick helper) ->
+  `koch_index_of` or `rng_next`.
+- `menu_handle` -> ... -> `free_training_handle` -> `receiving_start_free` -> `rx_start_session` ->
+  `keyboard_reset` -> ...
+
+T18 reports the 14.2 table before and after each part. It reports the flash and xdata of each new and changed file.
+It reports the `.sym` segments of `callsign.c`, which must have no DSEG, OSEG or BSEG bytes. It also reports the newly
+linked library helpers (none expected) and the deepest chain by name.
+
+### 23.8 Test seams (D-T88)
+
+| Seam | Entry points | Group | Files |
+| --- | --- | --- | --- |
+| Session | Engine API: `training_prepare()`, `training_set_free()`, `training_start()`, `training_poll()`, `training_add_char()`, `training_skip()`, `training_hold_result()` and the accessors. Fake tick, progress fixture, real RNG, real `koch` and `callsign`. | `training_group` | Developer: `test_training_free.c`. QA: `test_qa_training_free*.c`. |
+| Session, through the modes | `receiving_start_free()`, `sending_start_free()` and the existing poll, handle and leave functions, with the helpers of `Tests/support/training_harness.h`. Fake player and fake keyer, real `callsign` and RNG. Prior art: `test_qa_receiving*.c`, `test_qa_sending*.c`. | `menu_group` | QA: `test_qa_receiving_free*.c`, `test_qa_sending_free*.c`. |
+| Menu | `menu_handle()`, `menu_poll()`, `menu_render()`, the LCD frame and the fakes. Prior art: `test_menu_training.c`, `test_qa_menu_training.c`. | `menu_group` | Developer: `test_menu_free_training.c`. QA: `test_qa_menu_free_training*.c`. |
+
+Rules:
+
+- No `test_callsign*.c` and no fake of `callsign_make()` (D-T88). A file name must match an existing pattern of
+  `Tests/CMakeLists.txt`. A name such as `test_free_training.c` matches no module group and builds as an LCD test.
+- `Tests/CMakeLists.txt`: `training_group` and `menu_group` link `src/callsign/callsign.c`. `menu_group` links
+  `src/modes/free_training.c`. Owner: T18.
+- In `menu_group`, `fake_koch_item.c` still gives the Koch items. Free items come from the real `callsign.c`. A free
+  session must never call `koch_make_item()`: `fake_koch_item_count()` does not change during it.
+- The statistics of AC-T55 run at the session seam, so that they prove the items of real sessions.
+- Each statistical test uses fixed seeds, so it is deterministic. The oracle is a reference model in the test, built
+  from 23.2 and 23.3: the list in table order, the fair pick and the RNG order.
+
+### 23.9 Acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| AC-T55 | Generator through the session seam (D-T68 to D-T72, D-T84). (1) For 5 seeds, make at least 10 000 callsigns each with Full. Each callsign starts with a list prefix. A 1- or 2-character prefix has one digit after it, and a 3-character prefix has none. Then come 1 to 3 letters A to Z. Length 3 to 6, with a NUL after the last character. (2) Over all 50 000: suffix lengths 1, 2 and 3 at 18-22 %, 38-42 % and 38-42 %. Each of the 100 prefixes at 0.75-1.25 %, as a range check only. Equal chance (D-T94 (1)): `rng_below(100)` gives 3 of 256 byte values to 56 pick results and 2 of 256 to the other 44. The mean share of the prefixes at the 56 positions, divided by the mean share at the other 44, is 0.9 to 1.1. A fair pick gives about 1.0, and `rng_below()` gives about 1.5. Each area digit at 8.5-11.5 % of the callsigns with a digit. Each letter at 0.75 to 1.25 times 1/26 of the suffix letters. (3) For each count 18 to 40, 2000 callsigns: no character with `koch_index_of() >= count`, and each allowed prefix of that count appears at least once. (4) The reference model predicts every callsign of (1) from the seed. Its table is the 23.2 table, typed from this document. The run reaches all 100 prefixes, and each of the 10 own-digit prefixes appears with letters right after it (D-T71, D-T93 (6)). (5) `callsign_is_possible()` is false for 0 to 17 and true for 18 to 40 and 255. |
+| AC-T56 | Engine free session (D-T73, D-T74, D-T79, D-T80, D-T83), `test_training_free.c`, both modes. (1) `training_set_free(c)` gives `training_is_free()` true and `training_alphabet_count()` c. `training_prepare()` gives false. `training_stop()` and `training_start()` keep the flag. (2) `training_start()` gives 20 items. 20 ITEM events, then END. Each item is a callsign of the count. `max_word_len` 2 and 8 give the same items for the same seed. (3) Checks, retries, unlimited attempts and skips follow AC-T17, AC-T48 and AC-T50 with callsign items. (4) Scores 0, 10 and 20 all give `TRAINING_OUTCOME_FREE`. No IAP erase and no IAP write. The progress record bytes and `progress_level()` of both modes at every speed are unchanged. The selected level is unchanged. (5) A Koch session after a free session (prepare, start) gets Koch items and the Koch item count. |
+| AC-T57 | Receiving free session, through the modes and the menu. (1) After the start, tap mode is on. The keyboard holds the first count Koch characters in keyboard order, and row 7 shows the labels of the whole set. Each item gives one `player_start()` with `RX Speed` and `RX Eff. Speed`. (2) Answers, retries (`RX Attempts` both values), the long `next` skip and the answer state act as in a Koch word session. (3) After item 20, the end screen of D8 with tap mode off. (4) An `enter` press shows the configuration screen with the same Mode and Chars. No player call after the leave. (5) The V-vectors of D8 for RX pass. |
+| AC-T58 | Sending free session, through the modes and the menu. (1) The keyer starts once with `TX Speed`, `TX Eff. Speed`, `Key Type` and `Paddle`. `enter` is disabled in the session. (2) A callsign keyed with normal spaces gives CORRECT. A pause of more than 5 units inside it gives the word-space error (D-T31). (3) `TX Attempts`, the skip and `Show CW Code` act as in a Koch word session. (4) END stops the keyer and enables `enter`. An `enter` press shows the configuration screen. (5) The V-vectors of D8 for TX pass. |
+| AC-T59 | Menu (D-T64, D-T65, D-T67, D-T79, D-T86, D-T87). (1) Main menu order of D-T64. `Free Training` shows `>`. Its list holds `Callsigns` with no value. `Receiving` and `Sending` keep their levels. (2) After power-on: Mode RX, Chars Learned. Changed values stay after a leave and a new entry. (3) Learned with the mode level at index 23 blocks the start and shows the D8 message. At index 24 it starts. Full starts at index 0. RX and TX use the level of their own speed: RX level 30 at `RX Speed` and TX level 0 at `TX Speed` start in RX and block in TX. (4) A `menu/back` press on the configuration screen opens the Free Training list with the cursor on `Callsigns`. (5) A long `menu/back` in the configuration screen, the start pause, ITEM, RESULT, the blank moment and END opens the same list. The player or the keyer stops, tap mode is off and `enter` is enabled. (6) The V-vectors of D8 for the menu and the configuration screen pass (V-207 to V-225). (7) Both openings of the configuration screen (C-7): the focus is on `Start`, edit mode is off, no message shows, and Mode and Chars keep their values. Only the pages of UX-87 get dirty. |
+| AC-T60 | No progress change (D-T80, D-T81). After free sessions in both modes with every outcome path (all correct, all wrong, skips), the fake IAP shows no erase and no write. The main menu levels are bit-identical. `Reset Statistics` then works as AC-T22 and does not change Mode or Chars. |
+| AC-T61 | Change D-T63 to D-T88: memory within 23.7, with the report of 23.7. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. New files start with the SPDX lines. No change in the ISR files `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` and `player.c`. No change in `buttons.c`, `koch.c`, `koch.h`, `koch_item.c`, `keyboard.c`, `rng.c` and `rng.h`. No change in `progress.c`, `progress.h`, `settings`, `eeprom`, `stats` and `firmware/drivers/`. |
+| AC-T62 | Regression. All existing tests pass. Existing tests change only for three reasons. (1) The main menu indexes of D-T64: `Free Input` 3, `Settings` 4, `About` 5. (2) The main menu frame and the vectors that D8 revises. (3) `MENU_NODE_COUNT`. T18 lists each `test_qa_*` test that fails only for one of these reasons, with its reason. |
+
+### 23.10 Tasks
+
+Order: G1 (prefix list, passed on 2026-11-03) -> T18 Part A. D8 done, G2 (screen specification) passed on 2026-11-04
+(D-T90) -> T18 Part B after Part A. Then Q9 Part B, the final review by `architector`, and W9.
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D8 | `ui-ux-embedded-designer` | Done: `ui-ux.md` 5.21, UX-79 to UX-87, approved at G2 on 2026-11-04 (D-T90). Scope: `ui-ux.md`: new UX decisions (from UX-79) for the open items U-35 to U-42 of 23.11. Also the control tables of 6.1 and the feedback rows. Also new and revised V-vectors: new ones from V-207, and the main menu vectors that D-T64 changes. Also device checks from D-53. All inside D-T63 to D-T88 and FT-1 to FT-10. A need outside these limits goes to `architector` first. | - |
+| T18 | `c-embedded-developer` | Part A: `callsign` module, engine free state, `Tests/CMakeLists.txt` group changes, `test_training_free.c` (AC-T55 (5), AC-T56). Part B: mode entries, `free_training.c`, `training_screen.c` free header and end screen, menu wiring, `test_menu_free_training.c` and the developer test changes of AC-T62 (AC-T57 to AC-T62). Scope: 23.10.1. | Part A: G1 (passed). Part B: Part A. D8 and G2 passed (D-T90). |
+| Q9 | `qa-embedded` | Part A: `test_qa_training_free*.c` at the session seam: AC-T55 and AC-T56 with the reference model of 23.8. Part B: update the `test_qa_*` files of AC-T62, then `test_qa_receiving_free*.c`, `test_qa_sending_free*.c` and `test_qa_menu_free_training*.c`: AC-T57 to AC-T62, the fault and mutation cases below. Verdict `approved`, `changes_requested` or `blocked`. | Part A: T18 Part A. Part B: T18 Part B. |
+| W9 | `technical-writer` | `docs/user_manual.md` and `docs/quick_guide.md`. Describe the Free Training menu and the new main menu order. Describe the Callsigns configuration: Mode, Chars, Learned and Full, and the values kept until power-off. Describe the "no digit learned" message and the level that removes it (shown L25 at the speed of the mode). Describe a session of 20 callsigns with the same attempts, skip and `Show CW Code` as the training. Describe the end screen with no pass or fail. Say that Free Training never changes the level. Use the screen texts of `ui-ux.md` 5.21: the value `Learned L<n>`, and the message `No digit learned yet` and `Use Full or reach L25`. `docs/release_notes.md`: one entry after the user decides the version. | `architector` approval of T18 |
+
+#### 23.10.1 Scope of T18
+
+| Part | Area | Files | Content |
+| --- | --- | --- | --- |
+| A | Generator | `inc/callsign/callsign.h`, `src/callsign/callsign.c` | 23.3 with the list of 23.2 as approved at G1. |
+| A | Engine | `inc/modes/training.h`, `src/modes/training.c` | 23.4. |
+| A | Tests | `Tests/CMakeLists.txt`, `test_training_free.c` | 23.8 group changes. AC-T55 (5), AC-T56. |
+| A | Report | - | 23.7 table for Part A, `callsign.c` flash, xdata and segments. |
+| B | Modes | `inc/modes/receiving.h`, `src/modes/receiving.c`, `inc/modes/sending.h`, `src/modes/sending.c` | The free entries and the settings helpers of 23.5. |
+| B | Program | `inc/modes/free_training.h`, `src/modes/free_training.c` | FT-1 to FT-11, D-T92, with the screen of `ui-ux.md` 5.21. |
+| B | Shared screen | `src/modes/training_screen.c`, `src/modes/training_screen_internal.h` | The free header and the free end screen of 23.5. The band export of D-T91. |
+| B | Menu | `inc/menu/menu.h`, `src/menu/menu_internal.h`, `src/menu/menu_tree.c`, `src/menu/menu.c`, `src/menu/menu_render.c` | 23.6. |
+| B | Tests | `test_menu_free_training.c`, the developer files of AC-T62 | AC-T57 to AC-T60 at developer level, the D8 V-vectors. |
+| B | Report | - | AC-T61: the 23.7 table before and after each part, flash and xdata per file, the deepest chain by name, `check_asm.sh`, `pre-commit`. The list of AC-T62. |
+
+Not in T18: a change of the files that AC-T61 protects. T18 does not change `test_qa_*` files (D-T43 (4)). If Part A
+changes an interface of 23.3 or 23.4, Part B stops and reports to `architector`. If the list of G1 breaks D-T71 or
+gives a prefix of more than 3 characters, T18 stops and reports to `architector`.
+
+Exit rule. T18 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
+tests of the AC-T62 list can fail. Q9 Part B updates them. Q9 ends with `test.sh` passing in full.
+
+Q9 fault cases:
+
+| ID | Case |
+| --- | --- |
+| F1 | Learned at the edge: mode level index 23 and 24, at `RX Speed` and `TX Speed` with different values and different levels. |
+| F2 | Level 65535 (learned count 43): the count is 40 and no prosign shows in a callsign or on the keyboard. |
+| F3 | Both modes: a skip on item 20. The end screen score does not count it. |
+| F4 | Both modes: a long `menu/back` in every phase, then a new entry: the configuration screen with the kept values, no session. |
+| F5 | A free session, then Receiving and Sending from the main menu: Koch items, Koch item count, the start screen with the selector, and a pass that saves. |
+| F6 | A Koch session that passes, then a free session: the main menu level after the free session equals the level after the Koch session. |
+| F7 | Unlimited attempts in a free session: 300 wrong answers, then a correct one. No point, and the item count stays 20. |
+| F8 | A random walk of at least 500 free sessions over Mode, Chars and seeds: 20 items each, outcome FREE, no IAP write, every item valid for its count. |
+| F9 | `enter` held from the last RESULT across END: no configuration screen until a new press (B-1). |
+
+Q9 mutation cases:
+
+| ID | Mutant |
+| --- | --- |
+| M1 | The prefix pick uses `rng_below()` in place of the fair pick. |
+| M2 | A 3-character prefix gets an extra digit. |
+| M3 | The suffix weights are 1:1:1, or the third letter pick uses a pick of 5. |
+| M4 | The allowed test uses `<=` in place of `<`. |
+| M5 | Learned is not capped at 40, or TX uses `RX Speed`. |
+| M6 | The free finish calls `progress_advance()` or `progress_save()`. |
+| M7 | `training_prepare()` does not clear the free flag. |
+| M8 | A free session uses `koch_item_count()` or `koch_make_item()`. |
+| M9 | `training_alphabet_count()` ignores the free count. |
+| M10 | The `Callsigns` row shows a level. |
+| M11 | `free_training_enter()` resets Mode or Chars. |
+| M12 | `callsign_is_possible()` does not test the digits. |
+| M13 | An END event goes to `training_screen_select_input()`, so `enter` shows the Koch start screen. |
+| M14 | The area digit comes from all ten digits, also with Learned. |
+| M16 | An opening of the configuration screen calls `lcd_fb_clear()`, so pages 3-6 get dirty. |
+| M17 | The `enter` press on the free end screen keeps the message flag or the focus of the last visit. Equivalent mutant, no kill needed (D-T94 (3)). |
+| M15 | The start calls `rng_mix(tick_now())` after the seed of the same tick, so every session gets the items of `RNG_SEED_FALLBACK`. Test: two sessions that start at different ticks give different first callsigns. |
+
+Q9 checks from D-T93:
+
+| ID | Check |
+| --- | --- |
+| Q-C1 | Check the dirty pages of every step of UX-87 against V-207 to V-225, as the designer corrects them. Include the focus wrap from `Start` to `Mode` and the second blocked start. Include a `Mode` step with Learned and two equal levels, and a value step that clears the message. |
+| Q-C2 | Pixels of the rows `Mode` and `Chars` in browse and edit mode, against the frames of 5.21.2. Check x 0, x 1, x 127 and the gap line y 8r. After a focus step away from a row, no band pixel stays. |
+| Q-C3 | `Start` without the focus gives the same pixels as the centered text of D-T91, and no band pixel stays after the focus leaves it. |
+| Q-C4 | AC-T55 (4) with all 100 prefixes reached and the own-digit cases of D-T71. A call of `callsign_make()` with a count of 0 to 17 stays in bounds under ASan and UBSan. |
+| Q-C5 | TX, first item of a free session: the first DIT draws at x 2, and the cap of 12 marks counts from 0. Before the start, `tx_mark_count` held the character count. RX: the slots and the block of the first item follow the callsign length, although `rx_count` held the character count. |
+| Q-C6 | V-214: the defaults RX and Learned in the first entry of a fresh test process. |
+| Q-C7 | The five `test_qa_*` files of AC-T62: only the menu row shift and the random walk that reaches screen 9 change. The walk covers the free mode screen with its own invariants: no IAP write, and after each leave no player, no keyer, tap mode off and `enter` enabled. |
+| Q-C8 | Koch sessions in both modes: the header, the end screen and both band labels are bit-identical to the baseline goldens after the band export. |
+
+### 23.11 UX items (owner `ui-ux-embedded-designer`, task D8): closed
+
+D8 closed every item inside the limits of 23.1 to 23.6. The user approved the result at gate G2 on 2026-11-04
+(D-T90). The "Closed by" column names the decision of `ui-ux.md`.
+
+| ID | Item | Limits from this document | Closed by |
+| --- | --- | --- | --- |
+| U-35 | Free Training list: title, the `Free Training` row in the main menu, the `Callsigns` row. The main menu vectors that D-T64 changes. | Labels `Free Training` and `Callsigns` (D-T64). The submenu row shows `>`, the mode row shows no value (D-T86). | UX-79 (5.21.1) |
+| U-36 | Configuration screen: layout, title row, the `Mode` and `Chars` rows and the value texts. The focus and the controls that change a value. The start action: which button, at the press. The redraw budget of a value change. | Rows `Mode` (RX, TX) and `Chars` (Learned, Full), defaults RX and Learned (D-T65). Tap mode off, keyer off: `enter` and the tip act at the press (FT-9). `menu/back` press leaves to the Free Training list (D-T79). Long `menu/back` leaves (D-T87). At most 2 B xdata of screen state (FT-1). 25 columns of 5 x 8 cells, ASCII 0x20-0x7E. | UX-80, UX-81, UX-87 (5.21.2, 5.21.6) |
+| U-37 | "No digit learned" message: text, place, how long it shows, and what clears it. | No session starts. Mode and Chars stay (D-T67). | UX-83 (5.21.3) |
+| U-38 | Does `Chars: Learned` show the learned count or the shown level of the mode? | Data of 23.5. The value follows Mode at once. | UX-82: `Learned L<n>` (5.21.2) |
+| U-39 | Session header: the program text in place of `L<level>`, and the item field. | Row 0 layout of `ui-ux.md` 5.11.1. Item field from `training_shown_item_number()` and `training_item_count()` (20). | UX-84 (5.21.4) |
+| U-40 | End screen of a free session: the score text, no pass or fail, the band label. | Score of `training_score()` of 20, no `Not saved` (D-T79, D-T80). Band helper of SL-5. | UX-85 (5.21.5) |
+| U-41 | `menu/back` press on the end screen: the configuration screen or the Free Training list. | FT-6 supports both. | UX-86: the Free Training list (5.21.5) |
+| U-42 | The control tables of 6.1 for the configuration screen and the free end screen, feedback rows, new V-vectors, and device checks. | Session screens and controls in GAP, ITEM and RESULT are those of Receiving and Sending (D-T75 to D-T77). | UX-79 to UX-87, V-207 to V-225, D-53 to D-56 |
+
+### 23.12 Device checks and risks
+
+| ID | Check |
+| --- | --- |
+| DC-T13 | D-T63 to D-T88. RX: a free session at 20/20, 30/30 and 50/50 WPM: the callsigns sound right and no item comes late. TX: key callsigns with a paddle and with a straight key at 20/20: correct callsigns pass, and the normal space inside a callsign gives no word-space error. At 50 WPM in TX, start keying at once at each new item: no keyer queue overflow at the item change (R-T18). If a scope pin is free, record the time of one `callsign_make()` with Full. |
+
+| Risk | Mitigation |
+| --- | --- |
+| R-T18: `callsign_make()` blocks the main loop for some ms at each new item (two passes with `koch_index_of()`). | Estimate below 5 ms at 24 MHz. It runs at the end of the GAP delay. At that time, the user does not key yet. DC-T13. If it is too slow, a 36-byte `MEM_CODE` table of Koch indexes for A-Z and 0-9 removes the inner loop. `architector` decides. |
+| R-T19: with Learned, users below shown L25 cannot start, and they can think that the program is broken. | The message of D8 (U-37). W9 names the level that removes it. Full always starts. |
+| R-T20: the prefix list has a wrong entry or a sensitive entity. | Gate G1 passed: the user approved the list, and Q-T3 keeps Russia and Belarus out (D-T89). A list change after G1 changes only data and the test reference (D-T82). |
+| R-T21: the main menu order changes for existing users and existing tests. | User decision (D-T64). AC-T62 limits the test changes. W9 shows the new order. |
+| R-T22: the RX keyboard holds `.`, `,`, `/` and `?`, which callsigns never use. So some picks need more selects. | User decision (D-T76). No code change. |
+
+### 23.13 Final review of D-T63 to D-T94, task T18 (2026-11-04)
+
+Verdict T18: `approved`. QA verdict (Q9): `approved` (host level).
+
+| Item | Result |
+| --- | --- |
+| `test.sh` | 100 of 100 host tests pass with ASan and UBSan. `check_asm.sh` self-test: 168 of 168. Run again by `architector`. |
+| `build.sh` | Passes. Run again by `architector`. `check_asm.sh` reports no violation. |
+| `pre-commit` | `reuse lint-file` and `clang-format` pass on the 40 changed and new files. Run again by `architector`. |
+| Memory | Flash 29 664 -> 32 223 B (+2559, hard limit +2600). xdata 1830 -> 1844 B (+14, target +18). DSEG, OSEG and bit bytes do not change. Stack starts at 0x44 with 188 B free. Summed-push bound 75 -> 82 B, ISR frame 16 B, margin 90 B. No new library helper: the image links `_divuint`, `_divulong`, `_moduint`, `_mulint` and `_mullong`, as the baseline does. Accepted by D-T93 (8) and D-T94 (2). |
+| Protected files | No change in the ISR files, `buttons.c`, `koch`, `keyboard.c`, `rng`, `progress`, `settings`, `eeprom`, `stats` or `firmware/drivers/` (AC-T61). |
+| Generator | `callsign.c` follows 23.3: the fair pick, the RNG order, the own-digit rule by length, and the cap at 40. 926 B flash, 6 B xdata, no internal RAM. |
+| Engine | `training_set_free()`, `training_is_free()`, 20 items, `callsign_make()` at the GAP to ITEM step, `training_alphabet_count()` from the free count, and `TRAINING_OUTCOME_FREE` with no progress call. `training_prepare()` clears the free state. It matches 23.4. |
+| Modes and screens | The free entries of Receiving and Sending (D-T93 (5)). `free_training.c` matches FT-1 to FT-11 and D-T91 to D-T93. The header shows `Callsigns`, and the free end screen shows only the score and `OK`. |
+| Menu | Main menu order of D-T64, the Free Training node, `MENU_MODE_CALLSIGNS`, the level only on Receiving and Sending (D-T86), and the routing of 23.6. |
+| Tests | AC-T55 to AC-T62 have tests. Developer: `test_training_free.c`, `test_menu_free_training.c` and the row shift of the menu tests. QA: `test_qa_training_free.c`, `test_qa_menu_free_training.c`, `test_qa_receiving_free.c`, `test_qa_sending_free.c`, and five older `test_qa_*` files for the row shift and the walk over screen 9. Mutants M1 to M16 killed. M17 is equivalent (D-T94 (3)). |
+
+Open, not blocking:
+
+- Device checks DC-T13 and `ui-ux.md` D-53 to D-57 stay unverified until the user tests on the device. This
+  includes the real stack depth, the time of `callsign_make()` and the keyer queue at 50 WPM in TX.
+- `ui-ux.md` 5.21.7 C-1 says that a full redraw makes only the changed pages dirty. D-T93 (1) shows that this is not
+  true for `lcd_fb`. A later pass of `ui-ux-embedded-designer` changes the text. The vectors are correct.
+- `menu_subsystem_spec.md` does not show the Free Training node, `MENU_SCREEN_FREE_TRAINING` and
+  `MENU_MODE_CALLSIGNS`. Section 23.6 holds that contract. `architector` adds a pointer in the next edit of that
+  document.
+
+T18 is closed. W9 (`technical-writer`) can start with the scope of 23.10. The release notes entry waits for the
+version decision of the user (proposal: MINOR). Do not commit `firmware/Tests/tools/__pycache__/`.

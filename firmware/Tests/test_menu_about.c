@@ -36,7 +36,7 @@
 #include "support/test_assert.h"
 #include "version.h"
 
-#define ABOUT_INDEX 4U
+#define ABOUT_INDEX 5U
 #define LONG(code) ((button_event_t)((code) | BUTTON_EVENT_LONG_FLAG))
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
 #define FB_SIZE (LCD_PAGE_COUNT * LCD_WIDTH)
@@ -135,11 +135,11 @@ static bool has_no_side_effect(void) {
          (fake_lcd_contrast_count() == contrast_calls) && (fake_backlight_count() == backlight_calls);
 }
 
-/* 17.8 item 1: About is the fifth main menu item. */
+/* 17.8 item 1: About is the sixth main menu item (training_spec.md D-T64). */
 static void test_about_item(void) {
   const menu_node_t MEM_CODE* main_node = &menu_nodes[MENU_NODE_MAIN];
   const menu_item_t MEM_CODE* item = &main_node->items[ABOUT_INDEX];
-  TEST_ASSERT_EQUAL(5U, main_node->item_count);
+  TEST_ASSERT_EQUAL(6U, main_node->item_count);
   TEST_ASSERT(main_node->item_count <= MENU_VISIBLE_ROWS);
   TEST_ASSERT_EQUAL(0, strcmp(item->label, "About"));
   TEST_ASSERT_EQUAL(MENU_KIND_ABOUT, item->kind);
@@ -154,7 +154,7 @@ static void test_v162_about_row(void) {
   start();
   send(BUTTON_EVENT_PREV);
   TEST_ASSERT_EQUAL(ABOUT_INDEX, menu_cursor());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame(5));
   send(BUTTON_EVENT_NEXT);
   TEST_ASSERT_EQUAL(0U, menu_cursor());
   TEST_ASSERT(is_main_frame(0));
@@ -181,14 +181,14 @@ static void test_v164_close_about(void) {
   send(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT_EQUAL(ABOUT_INDEX, menu_cursor());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame(5));
 
   send(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_ABOUT, menu_screen());
   send(BUTTON_EVENT_MENU);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame(5));
 
   send(BUTTON_EVENT_ENTER);
   TEST_ASSERT(is_about_frame());
@@ -196,7 +196,7 @@ static void test_v164_close_about(void) {
   run_pins(BUTTON_BIT_ENTER, 50U);
   run_pins(0U, 50U);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame(5));
   TEST_ASSERT(has_no_side_effect());
 }
 
@@ -256,7 +256,7 @@ static void test_message_over_about(void) {
   send(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT_EQUAL(ABOUT_INDEX, menu_cursor());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame(5));
 }
 
 /* V-166, V-169: no text reaches past column 24; the version row ends in column 24 at most. */

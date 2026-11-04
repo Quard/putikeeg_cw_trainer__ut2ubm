@@ -21,12 +21,20 @@ static const menu_text_t MEM_CODE menu_paddle_texts[2] = {"Normal", "Reversed"};
 static const menu_text_t MEM_CODE menu_prosign_texts[3] = {"Punctuation", "Prosign", "Both"};
 static const menu_text_t MEM_CODE menu_attempt_texts[2] = {"3", "Unlimited"};
 
+/* The label of the main menu item and the title of its list (ui-ux.md section 5.21.1). */
+static const char MEM_CODE menu_text_free_training[] = "Free Training";
+
 static const menu_item_t MEM_CODE menu_main_items[] = {
     {"Receiving", NULL, NULL, MENU_KIND_MODE, MENU_MODE_RECEIVING, 0U},
     {"Sending", NULL, NULL, MENU_KIND_MODE, MENU_MODE_SENDING, 0U},
+    {menu_text_free_training, NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_FREE_TRAINING, 0U},
     {"Free Input", NULL, NULL, MENU_KIND_MODE, MENU_MODE_FREE_INPUT, 0U},
     {"Settings", NULL, NULL, MENU_KIND_SUBMENU, MENU_NODE_SETTINGS, 0U},
     {"About", NULL, NULL, MENU_KIND_ABOUT, 0U, 0U},
+};
+
+static const menu_item_t MEM_CODE menu_free_training_items[] = {
+    {"Callsigns", NULL, NULL, MENU_KIND_MODE, MENU_MODE_CALLSIGNS, 0U},
 };
 
 static const menu_item_t MEM_CODE menu_settings_items[] = {
@@ -67,6 +75,7 @@ const menu_node_t MEM_CODE menu_nodes[MENU_NODE_COUNT] = {
     {"Settings > CW", menu_cw_items, MENU_ITEM_COUNT(menu_cw_items), false},
     {"Settings > Display", menu_display_items, MENU_ITEM_COUNT(menu_display_items), false},
     {"Settings > Training", menu_training_items, MENU_ITEM_COUNT(menu_training_items), false},
+    {menu_text_free_training, menu_free_training_items, MENU_ITEM_COUNT(menu_free_training_items), false},
 };
 
 /* Indexed by MENU_MESSAGE_*. */

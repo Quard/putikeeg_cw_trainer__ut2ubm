@@ -3,6 +3,65 @@
 These notes list the changes of the custom firmware for the Putikeeg CW Trainer (board `CW_MINI_V2.0D`) that a
 user can see, hear or press. The [user manual](user_manual.md) tells you how to use the device.
 
+## Version 0.2.0 (in development)
+
+Version 0.2.0 adds `Free Training` to the main menu. Free Training holds training programs that never change your
+training levels. The first program is `Callsigns`: sessions of 20 callsigns in Receiving or in Sending. Version 0.2.0
+also has all changes of version 0.1.3. It is not released. Work on it continues, and the next changes go into this
+version too.
+
+### Menu: Free Training
+
+- **New main menu order.** The main menu has six items: `Receiving`, `Sending`, `Free Training`, `Free Input`,
+  `Settings` and `About`. `Free Training` is item 3. `Free Input` moved from item 3 to item 4, `Settings` from item 4
+  to item 5, and `About` from item 5 to item 6. The main menu does not scroll.
+- **The `Free Training` list.** `Free Training` shows a `>` marker, because it opens a list. The list has one item:
+  `Callsigns`. It shows no level. `menu/back` in the list opens the main menu with the cursor on `Free Training`.
+
+### Free Training: Callsigns
+
+- **Configuration screen.** `enter` on `Callsigns` opens a screen with the title `Callsigns`. It has the rows
+  `Mode` and `Chars`, and `Start` in the bottom row. At each opening, the highlight is on `Start`. The screen makes
+  no sound.
+- **`Mode`.** `RX` (default) gives a Receiving session: the device plays each callsign, and you pick its characters
+  with the group keyboard. `TX` gives a Sending session: the device shows each callsign, and you key it.
+- **`Chars`.** `Learned L<n>` (default) uses the characters that you learned in the mode of `Mode`. `L<n>` is your
+  earned level of that mode at its speed: `RX Speed` for `RX`, `TX Speed` for `TX`. When you change `Mode`, the
+  level in the row changes too. `Full` uses all letters and all digits.
+- **Change a value.** `prev` and `next` move the highlight to `Mode`, `Chars` or `Start`. A press wraps, and a hold
+  stops at `Mode` or `Start`. `enter` on `Mode` or `Chars` starts editing, as in `Settings`. `prev` and `next`
+  change the value. The value does not wrap. `enter` or `menu/back` ends editing.
+- **Start a session.** Press `enter` on `Start`, or close the tip contact. The session starts with a pause of 1 s.
+- **No digit learned.** A callsign needs a digit. In the Koch order, the first digit `0` comes at L25. With
+  `Learned` below L25, `Start` starts no session. Rows 4 and 5 show `No digit learned yet` and
+  `Use Full or reach L25`. The message stays until you change `Mode` or `Chars`, or leave the screen. With `Full`, a
+  session always starts.
+- **The callsigns.** Each callsign is a prefix, an area digit and a suffix of 1 to 3 letters, for example `DL5ABC`.
+  The prefix comes from a fixed list of 100 common real prefixes, for example `UR`, `K`, `DL`, `JA` and `9A`. Ten
+  prefixes hold their own area digit, for example `KH6`. They get no extra digit, for example `KH6XY`. A callsign
+  has 3 to 6 characters: only letters and digits, with no `/`. About 20 % of the suffixes have 1 letter, 40 % have
+  2 letters, and 40 % have 3 letters. With `Learned`, only the digits and the letters that you learned come, and
+  only the prefixes whose characters you all learned.
+- **20 callsigns.** A session has 20 callsigns. The header shows `Callsigns` in place of the level, for example
+  `RX 32/32 Callsigns   1/20`.
+- **Same rules as the training.** A session works as a word session of Receiving or Sending. `RX Attempts` and
+  `TX Attempts` set the attempts. A hold of `next` skips a callsign. In `RX`, the answer waits for an `enter` tap
+  after the third wrong attempt or a skip. In `TX`, `Show CW Code` and the pause limit between the characters of a
+  word apply. `Max Word Length` has no effect.
+- **End screen.** After callsign 20, the end screen shows only `Score <c>/20` and `OK`. `c` is the number of
+  callsigns that you answered correctly on the first attempt. The screen shows no pass and no fail.
+- **End screen buttons.** `enter`, or a closure of the tip contact, opens the configuration screen with the same
+  `Mode` and `Chars`. The highlight is on `Start`, and no session starts. Press `enter` again to start the next
+  session. `menu/back` opens the `Free Training` list with the cursor on `Callsigns`. `prev` and `next` do nothing.
+- **Leave.** On the configuration screen, press `menu/back`. In a session, hold `menu/back` for about 0.8 s. The
+  `Free Training` list shows, with the cursor on `Callsigns`.
+- **`Mode` and `Chars` stay until power-off.** You can leave `Callsigns` and open it again: `Mode` and `Chars` keep
+  their values. The device does not save them. After a power-on, they are `RX` and `Learned`. `Reset Statistics` does
+  not change them.
+- **Levels do not change.** Free Training never changes your training levels and saves nothing. The main menu and
+  the start screens of `Receiving` and `Sending` show the same levels as before the session.
+- **Same save format.** The device saves the `Settings` values in the same format as version 0.1.3.
+
 ## Version 0.1.3 (in development)
 
 Version 0.1.3 adds the `Settings > Training` list. Each training mode gets its own attempt setting, with 3 attempts

@@ -25,6 +25,7 @@
 #define TRAINING_TEXT_SIZE (KOCH_WORD_LEN_MAX + 1U)
 /* Sending answer character for a word space inside a word (D-T31). No item or decoded character is ' '. */
 #define TRAINING_CHAR_WORD_SPACE ' '
+#define TRAINING_FREE_ITEMS 20U /* items of a free session (D-T74) */
 
 /* Delays in ms, ui-ux.md sections 5.14 and 6.10 (UX-46). -D can set each one for host tests. */
 #ifndef TRAINING_START_MS
@@ -76,6 +77,7 @@ typedef uint8_t training_outcome_t;
 #define TRAINING_OUTCOME_PASS_NOT_SAVED 2U /* the level went up in RAM only */
 #define TRAINING_OUTCOME_PASS_TOP 3U       /* passed at level index 65535; no change, no save (D-T17) */
 #define TRAINING_OUTCOME_PASS_REPLAY 4U    /* passed below the earned level; no change, no save (D-T36) */
+#define TRAINING_OUTCOME_FREE 5U           /* a free session ended: no pass or fail, no level change, no save */
 
 /**
  * Prepares @p mode (unknown gives RECEIVING) at @p wpm with @p max_word_len and selects the earned level. With
@@ -84,6 +86,13 @@ typedef uint8_t training_outcome_t;
  */
 void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max_word_len,
                       MEM_XDATA bool has_unlimited_attempts);
+/**
+ * Right after training_prepare(): the next sessions are free sessions (D-T83). Each item is
+ * callsign_make(@p char_count, ...). training_prepare() ends the free state. No phase check.
+ */
+void training_set_free(uint8_t char_count);
+/** True from training_set_free() to the next training_prepare(). */
+bool training_is_free(void);
 /**
  * Starts a session at training_selected_level() with the values of training_prepare(). Phase GAP, TRAINING_START_MS.
  * No phase check: the modes call it in SELECT only (D-T46).
@@ -135,7 +144,8 @@ uint16_t training_level(void);           /* level index of the session */
 uint16_t training_shown_level(void);     /* koch_shown_level(training_level()) */
 uint16_t training_new_shown_level(void); /* koch_shown_level(training_selected_level()) (D-T36) */
 uint8_t training_learned_count(void);
-uint8_t training_alphabet_count(void);    /* koch_alphabet_count() of the session level */
+/* Free session: the count of training_set_free(). Else koch_alphabet_count() of the session level. */
+uint8_t training_alphabet_count(void);
 uint8_t training_item_number(void);       /* 0 before the first item, then 1..item count */
 uint8_t training_shown_item_number(void); /* header number: GAP gives item number + 1, else the item number */
 uint8_t training_item_count(void);

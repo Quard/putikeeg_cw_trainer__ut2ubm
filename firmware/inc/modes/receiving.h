@@ -13,12 +13,18 @@
  */
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "buttons/buttons.h"
 
 /** Seeds the RNG, reads the settings, sets the tone and prepares the engine (phase SELECT). Tap mode stays off. Draws
  * nothing. */
 void receiving_enter(void);
+/**
+ * Free session entry (D-T85). As receiving_enter(), then training_set_free(@p char_count) and the session start: tap
+ * mode on, training_start(), keyboard_reset(training_alphabet_count()). Phase GAP. Draws nothing.
+ */
+void receiving_start_free(uint8_t char_count);
 /** Draws the whole Receiving screen for the current state. menu_render() calls it after the clear. */
 void receiving_render(void);
 /** Runs the engine and the playback, and redraws the rows that change. */

@@ -7,10 +7,11 @@
 #define MENU_MENU_H
 
 /*
- * Table-driven menu: the startup screen, lists, value edit, the About screen, the Free Input, Receiving and Sending
- * mode screens, the reset-statistics dialog and message screens (references/internal/menu_subsystem_spec.md
- * sections 6 and 17, references/internal/keyer_spec.md section 6.14, references/internal/training_spec.md
- * section 12.1, references/internal/ui-ux.md). Call from the main loop only; not reentrant.
+ * Table-driven menu: the startup screen, lists, value edit, the About screen, the Free Input, Receiving, Sending and
+ * Free Training (Callsigns) mode screens, the reset-statistics dialog and message screens
+ * (references/internal/menu_subsystem_spec.md sections 6 and 17, references/internal/keyer_spec.md section 6.14,
+ * references/internal/training_spec.md sections 12.1 and 23.6, references/internal/ui-ux.md). Call from the main
+ * loop only; not reentrant.
  */
 
 #include <stdbool.h>
@@ -27,12 +28,14 @@
 #define MENU_SCREEN_FREE_INPUT 6U
 #define MENU_SCREEN_RECEIVING 7U
 #define MENU_SCREEN_SENDING 8U
+#define MENU_SCREEN_FREE_TRAINING 9U
 
 #define MENU_NODE_MAIN 0U
 #define MENU_NODE_SETTINGS 1U
 #define MENU_NODE_CW 2U
 #define MENU_NODE_DISPLAY 3U
 #define MENU_NODE_TRAINING 4U
+#define MENU_NODE_FREE_TRAINING 5U
 
 #define MENU_DIALOG_NO 0U
 #define MENU_DIALOG_YES 1U
@@ -60,8 +63,8 @@ void menu_init(void);
 
 /**
  * Applies @p event. A change of a visible item requests a redraw; BUTTON_EVENT_NONE does nothing. Any other event
- * on the startup screen only ends it. Free Input acts only on long events. Receiving and Sending get every event
- * except a long menu/back, which leaves them. The other screens ignore long events.
+ * on the startup screen only ends it. Free Input acts only on long events. Receiving, Sending and Free Training get
+ * every event except a long menu/back, which leaves them. The other screens ignore long events.
  */
 void menu_handle(button_event_t event);
 

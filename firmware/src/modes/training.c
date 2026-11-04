@@ -5,6 +5,7 @@
 
 #include "modes/training.h"
 
+#include "callsign/callsign.h"
 #include "koch/koch.h"
 #include "mcu/compiler.h"
 #include "progress/progress.h"
@@ -21,6 +22,9 @@ static MEM_XDATA uint8_t training_wpm_value;
 static MEM_XDATA uint8_t training_max_word_len;
 static MEM_XDATA uint16_t training_level_value;
 static MEM_XDATA bool training_is_unlimited;
+/* Free session (D-T83): callsigns of the first training_free_count Koch characters, no level change. */
+static MEM_XDATA bool training_is_free_session;
+static MEM_XDATA uint8_t training_free_count;
 /* Selection (D-T36). The earned level has no copy, so it is never stale. */
 static MEM_XDATA uint16_t training_selected;
 /* Counters. */
@@ -68,13 +72,22 @@ void training_prepare(uint8_t mode, MEM_XDATA uint8_t wpm, MEM_XDATA uint8_t max
   training_wpm_value = wpm;
   training_max_word_len = max_word_len;
   training_is_unlimited = has_unlimited_attempts;
+  training_is_free_session = false;
   training_selected = training_earned_level();
   training_phase_value = TRAINING_PHASE_SELECT;
 }
 
+void training_set_free(uint8_t char_count) {
+  training_is_free_session = true;
+  training_free_count = char_count;
+}
+
+bool training_is_free(void) { return training_is_free_session; }
+
 void training_start(void) {
   training_level_value = training_selected;
-  training_item_count_value = koch_item_count(training_level_value);
+  training_item_count_value =
+      training_is_free_session ? (uint8_t)TRAINING_FREE_ITEMS : koch_item_count(training_level_value);
   training_threshold = koch_pass_threshold(koch_kind(training_level_value), training_item_count_value);
   training_item_number_value = 0U;
   training_score_value = 0U;
@@ -120,12 +133,14 @@ bool training_reopen_select(void) {
 
 /*
  * Section 11.4. Only a pass at the earned level changes the store (D-T36). A fail keeps the selection: no step acts
- * during a session, so it still equals the session level.
+ * during a session, so it still equals the session level. A free session never changes the progress (D-T80).
  */
 static void training_finish(void) {
   training_outcome_t outcome = TRAINING_OUTCOME_FAIL;
 
-  if (training_score_value >= training_threshold) {
+  if (training_is_free_session) {
+    outcome = TRAINING_OUTCOME_FREE;
+  } else if (training_score_value >= training_threshold) {
     training_selected = koch_shown_level(training_level_value);
     if (training_level_value != training_earned_level()) {
       outcome = TRAINING_OUTCOME_PASS_REPLAY;
@@ -152,7 +167,11 @@ training_event_t training_poll(void) {
     ++training_item_number_value;
     training_wrong = 0U;
     training_is_skip = false;
-    training_item_len = koch_make_item(training_level_value, training_max_word_len, training_item);
+    if (training_is_free_session) {
+      training_item_len = callsign_make(training_free_count, training_item);
+    } else {
+      training_item_len = koch_make_item(training_level_value, training_max_word_len, training_item);
+    }
     training_clear_answer();
     training_set_phase(TRAINING_PHASE_ITEM, 0U);
     return TRAINING_EVENT_ITEM;
@@ -280,7 +299,9 @@ uint16_t training_new_shown_level(void) { return koch_shown_level(training_selec
 
 uint8_t training_learned_count(void) { return koch_learned_count(training_level_value); }
 
-uint8_t training_alphabet_count(void) { return koch_alphabet_count(training_level_value); }
+uint8_t training_alphabet_count(void) {
+  return training_is_free_session ? training_free_count : koch_alphabet_count(training_level_value);
+}
 
 uint8_t training_item_number(void) { return training_item_number_value; }
 

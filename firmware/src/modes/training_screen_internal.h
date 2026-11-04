@@ -7,8 +7,8 @@
 #define MODES_TRAINING_SCREEN_INTERNAL_H
 
 /*
- * Draw helpers of training_screen.c for receiving.c and sending.c (ui-ux.md sections 5.11 to 5.15). Private to the
- * training modes. A text is composed in training_screen_text and then drawn.
+ * Draw helpers of training_screen.c for receiving.c, sending.c and free_training.c (ui-ux.md sections 5.11 to 5.15
+ * and 5.21). Private to the training modes. A text is composed in training_screen_text and then drawn.
  */
 
 #include <stdbool.h>
@@ -33,6 +33,11 @@ void training_screen_compose(void);
 void training_screen_append(const char* text);
 /** Appends the decimal digits of @p value. */
 void training_screen_append_u16(uint16_t value);
+/**
+ * Draws @p label centered in row TRAINING_SCREEN_LAST_ROW, inverted inside a band one cell wider on each side, y 57-63
+ * (ui-ux.md sections 5.15 and 5.16.1, SL-5). The gap line y 56 stays off across the band.
+ */
+void training_screen_draw_band(const char* label);
 /** Sets every pixel of rows @p first_row to @p last_row off. */
 void training_screen_clear_rows(uint8_t first_row, MEM_XDATA uint8_t last_row);
 /** Clears row @p row and draws training_screen_text centered in it (ui-ux.md section 5.11: (25 - length) / 2). */

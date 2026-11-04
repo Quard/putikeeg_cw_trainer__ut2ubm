@@ -72,6 +72,8 @@ static const MEM_CODE char screen_answer_is_text[] = ". The answer is:";
 /* Unlimited attempts: the status shows the attempt number up to this value, then "Try 99+" (UX-76). */
 #define SCREEN_TRY_SHOWN_MAX 99U
 static const MEM_CODE char screen_try_cap_text[] = "99+";
+/* The program name of a free session takes the place of the level in the header (UX-84). */
+static const MEM_CODE char screen_program_text[] = "Callsigns";
 
 void training_screen_compose(void) {
   screen_length = 0U;
@@ -266,14 +268,20 @@ void training_screen_draw_header(void) {
   training_screen_append_u16(
       settings_get((training_mode() == TRAINING_MODE_RECEIVING) ? SETTINGS_ID_RX_EFF_WPM : SETTINGS_ID_TX_EFF_WPM));
   screen_pad(SCREEN_LEVEL_COLUMN);
-  training_screen_append("L");
+  /* A free session never shows the start screen, so SELECT always has a level. */
   if (training_phase() == TRAINING_PHASE_SELECT) {
+    training_screen_append("L");
     training_screen_append_u16(training_new_shown_level());
     screen_number[0] = '1';
     length = 1U;
     screen_x = koch_item_count(training_selected_level());
   } else {
-    training_screen_append_u16(training_shown_level());
+    if (training_is_free()) {
+      training_screen_append(screen_program_text);
+    } else {
+      training_screen_append("L");
+      training_screen_append_u16(training_shown_level());
+    }
     length = gfx_format_u16(training_shown_item_number(), screen_number);
     screen_x = training_item_count();
   }
@@ -352,7 +360,7 @@ static void screen_draw_level(void) {
  * ui-ux.md sections 5.15 and 5.16.1 (SL-5): @p label centered in row 7, inverted inside a band one cell wider on each
  * side, y 57-63. The gap line y 56 stays off across the band (ui-ux.md UX-2).
  */
-static void screen_draw_band(const char* label) {
+void training_screen_draw_band(const char* label) {
   uint8_t x;
   uint8_t width;
 
@@ -378,7 +386,7 @@ void training_screen_draw_start(void) {
   /* Rows 2-6 can hold the end screen; a step redraws rows 2-4 without a full clear. */
   training_screen_clear_rows(SCREEN_LABEL_ROW, SCREEN_BLANK_ROW);
   screen_draw_level();
-  screen_draw_band("Start");
+  training_screen_draw_band("Start");
 }
 
 /* ui-ux.md section 5.15 (SL-7, D-T42 (3)). */
@@ -399,18 +407,21 @@ void training_screen_draw_end(void) {
   training_screen_append_u16(training_item_count());
   training_screen_draw_centered(SCREEN_END_SCORE_ROW);
 
-  training_screen_compose();
-  if (outcome == TRAINING_OUTCOME_FAIL) {
-    training_screen_append("Not passed, need ");
-    training_screen_append_u16(training_pass_threshold());
-  } else {
-    training_screen_append("Passed");
-    if ((uint8_t)(outcome - TRAINING_OUTCOME_PASS) <= (TRAINING_OUTCOME_PASS_NOT_SAVED - TRAINING_OUTCOME_PASS)) {
-      training_screen_append(", new level");
+  /* A free session has no pass and no fail, so row 3 stays blank (UX-85). */
+  if (outcome != TRAINING_OUTCOME_FREE) {
+    training_screen_compose();
+    if (outcome == TRAINING_OUTCOME_FAIL) {
+      training_screen_append("Not passed, need ");
+      training_screen_append_u16(training_pass_threshold());
+    } else {
+      training_screen_append("Passed");
+      if ((uint8_t)(outcome - TRAINING_OUTCOME_PASS) <= (TRAINING_OUTCOME_PASS_NOT_SAVED - TRAINING_OUTCOME_PASS)) {
+        training_screen_append(", new level");
+      }
     }
+    training_screen_draw_centered(SCREEN_END_RESULT_ROW);
   }
-  training_screen_draw_centered(SCREEN_END_RESULT_ROW);
-  screen_draw_band("OK");
+  training_screen_draw_band("OK");
 }
 
 _Static_assert((TRAINING_OUTCOME_PASS_NOT_SAVED == (TRAINING_OUTCOME_PASS + 1U)),

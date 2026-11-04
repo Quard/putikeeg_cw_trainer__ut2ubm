@@ -6,16 +6,22 @@
 /*
  * QA tests for the menu: random event sequences with state invariants and a check that every visible change sets
  * the redraw flag, full repaint over a garbage framebuffer, and save failures (CMD_FAIL and low supply) during
- * the random walk. The walk includes long events and random keyer events in Free Input.
- * Oracles: menu_subsystem_spec.md sections 4.10, 6.3 and 6.4; keyer_spec.md section 6.14; ui-ux.md 6.1 and 6.6.
+ * the random walk. The walk includes long events, random keyer events in Free Input, and the Callsigns screen of
+ * Free Training. Oracles: menu_subsystem_spec.md sections 4.10, 6.3 and 6.4; keyer_spec.md section 6.14;
+ * ui-ux.md 6.1, 6.6 and 5.21; training_spec.md section 23 (Q-C7).
  */
 #include <string.h>
 
 #include "backlight/backlight.h"
+#include "board/button_pins.h"
 #include "buttons/buttons.h"
+#include "fake_button_pins.h"
+#include "fake_delay.h"
 #include "fake_iap.h"
 #include "fake_keyer.h"
 #include "fake_menu_outputs.h"
+#include "fake_player.h"
+#include "fake_tick.h"
 #include "gfx/gfx.h"
 #include "lcd/lcd.h"
 #include "lcd/lcd_fb.h"
@@ -26,7 +32,10 @@
 #include "support/menu_splash.h"
 #include "support/test_assert.h"
 
+#define CMD_PROGRAM 2U
 #define CMD_ERASE 3U
+#define MAIN_SETTINGS_ROW 4U /* training_spec.md D-T64 */
+#define PROBE_PRESS_MS 40U   /* longer than BUTTONS_DEBOUNCE_MS, shorter than the repeat delay */
 #define FB_SIZE (LCD_PAGE_COUNT * LCD_WIDTH)
 #define REPEAT(code) ((button_event_t)((code) | BUTTON_EVENT_REPEAT_FLAG))
 #define LONG(code) ((button_event_t)((code) | BUTTON_EVENT_LONG_FLAG))
@@ -61,8 +70,53 @@ static void fill_garbage(void) {
   }
 }
 
+/* The button probe runs on its own fake time; the walk itself sends events with menu_handle(). */
+static uint16_t probe_now;
+
+/* The first event of buttons_poll() while @p mask is held for @p duration ms, or BUTTON_EVENT_NONE. */
+static button_event_t probe_hold(uint8_t mask, uint16_t duration) {
+  button_event_t first = BUTTON_EVENT_NONE;
+  uint16_t elapsed;
+  fake_button_pins_set(mask);
+  for (elapsed = 0U; elapsed < duration; ++elapsed) {
+    button_event_t event;
+    probe_now = (uint16_t)(probe_now + 1U);
+    fake_tick_set_now(probe_now);
+    event = buttons_poll();
+    if (first == BUTTON_EVENT_NONE) {
+      first = event;
+    }
+  }
+  return first;
+}
+
+/*
+ * Q-C7: tap mode is off and enter is enabled. With tap mode off, a next press gives its event while the button is
+ * held (tap mode gives it only at the release). With enter enabled, a P3.2 closure gives ENTER.
+ */
+static bool is_tap_off_and_enter_enabled(void) {
+  const button_event_t next_event = probe_hold(BUTTON_BIT_NEXT, PROBE_PRESS_MS);
+  button_event_t enter_event;
+  (void)probe_hold(0U, PROBE_PRESS_MS);
+  enter_event = probe_hold(BUTTON_BIT_ENTER, PROBE_PRESS_MS);
+  (void)probe_hold(0U, PROBE_PRESS_MS);
+  if ((next_event != BUTTON_EVENT_NEXT) || (enter_event != BUTTON_EVENT_ENTER)) {
+    printf("buttons after a leave: next 0x%02X, enter 0x%02X\n", next_event, enter_event);
+    return false;
+  }
+  return true;
+}
+
 static void start_empty(void) {
   fake_keyer_reset();
+  fake_player_reset();
+  fake_tick_reset(1000U);
+  fake_tick_set_advance_per_read(1U);
+  fake_button_pins_reset();
+  fake_delay_reset();
+  buttons_init();
+  fake_tick_set_advance_per_read(0U);
+  probe_now = 2000U;
   fake_iap_reset();
   fake_lcd_contrast_reset();
   fake_backlight_reset();
@@ -137,6 +191,9 @@ static void test_random_walk_invariants(void) {
   size_t free_input_exits = 0U;
   size_t free_input_longs = 0U;
   size_t ignored_longs = 0U;
+  size_t free_events = 0U;
+  size_t free_session_events = 0U;
+  size_t free_leaves = 0U;
   rng_state = 4242U;
   for (walk = 0U; walk < 300U; ++walk) {
     unsigned step;
@@ -153,11 +210,17 @@ static void test_random_walk_invariants(void) {
       const size_t starts_before = fake_keyer_start_count();
       const size_t stops_before = fake_keyer_stop_count();
       const bool is_training_screen = (screen == MENU_SCREEN_RECEIVING) || (screen == MENU_SCREEN_SENDING);
-      const bool is_mode_screen = is_training_screen || (screen == MENU_SCREEN_FREE_INPUT);
-      /* The start screen and the end screen act on short events (ui-ux.md 5.15, 5.16.4, D-T35, D-T45). */
+      const bool is_free_screen = screen == MENU_SCREEN_FREE_TRAINING;
+      const bool is_mode_screen = is_training_screen || is_free_screen || (screen == MENU_SCREEN_FREE_INPUT);
+      /*
+       * The start screen and the end screen act on short events (ui-ux.md 5.15, 5.16.4, D-T35, D-T45). So do the
+       * configuration screen and the free end screen of Callsigns (ui-ux.md 5.21.2, 5.21.5).
+       */
       const training_phase_t phase = training_phase();
       const bool is_selector_screen =
-          is_training_screen && ((phase == TRAINING_PHASE_SELECT) || (phase == TRAINING_PHASE_END));
+          (is_training_screen && ((phase == TRAINING_PHASE_SELECT) || (phase == TRAINING_PHASE_END))) ||
+          (is_free_screen && ((phase == TRAINING_PHASE_IDLE) || (phase == TRAINING_PHASE_END)));
+      const size_t programs_before = fake_iap_command_count(CMD_PROGRAM);
       const uint16_t selected = training_selected_level();
       const menu_item_t MEM_CODE* item = item_under_cursor();
       const size_t stats_before = fake_stats_reset_count();
@@ -192,7 +255,8 @@ static void test_random_walk_invariants(void) {
         if (is_selector_screen) {
           /*
            * A start from the start screen, and the start screen that enter opens on the end screen, draw straight
-           * into the framebuffer.
+           * into the framebuffer. So does each step of the Callsigns configuration screen, and its frame must equal
+           * a whole-screen draw of the new state (ui-ux.md UX-87).
            */
           snapshot(before);
         }
@@ -205,7 +269,7 @@ static void test_random_walk_invariants(void) {
 
       /* UX-24 and ui-ux.md 6.1: a long event outside a mode screen, and a short event in one, change nothing. */
       if ((is_long && !is_mode_screen) || (!is_long && is_mode_screen && !is_selector_screen) ||
-          (is_long && is_training_screen && (code != BUTTON_EVENT_MENU))) {
+          (is_long && (is_training_screen || is_free_screen) && (code != BUTTON_EVENT_MENU))) {
         ++ignored_longs;
         TEST_ASSERT_EQUAL(screen, menu_screen());
         TEST_ASSERT_EQUAL(node, menu_node());
@@ -241,9 +305,14 @@ static void test_random_walk_invariants(void) {
           TEST_ASSERT_EQUAL(selected, training_selected_level());
         }
       }
-      /* Sending starts the keyer with a session, only from its start screen (D-T40, D-T46 (6)). */
+      /*
+       * Sending starts the keyer with a session, only from its start screen (D-T40, D-T46 (6)). A TX Callsigns
+       * session starts it from the configuration screen (AC-T58 (1)).
+       */
       if (((screen != menu_screen()) && (menu_screen() == MENU_SCREEN_FREE_INPUT)) ||
-          ((screen == MENU_SCREEN_SENDING) && (phase == TRAINING_PHASE_SELECT) && (event == BUTTON_EVENT_ENTER))) {
+          ((screen == MENU_SCREEN_SENDING) && (phase == TRAINING_PHASE_SELECT) && (event == BUTTON_EVENT_ENTER)) ||
+          (is_free_screen && (phase == TRAINING_PHASE_IDLE) && (training_phase() == TRAINING_PHASE_GAP) &&
+           (training_mode() == TRAINING_MODE_SENDING))) {
         if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
           ++free_input_entries;
         }
@@ -255,11 +324,31 @@ static void test_random_walk_invariants(void) {
       } else {
         TEST_ASSERT_EQUAL(starts_before, fake_keyer_start_count());
       }
-      /* The keyer runs exactly while Free Input is open or a Sending session runs (D-T40). */
+      /* The keyer runs exactly while Free Input is open or a Sending session runs (D-T40), free sessions too. */
       TEST_ASSERT_EQUAL((menu_screen() == MENU_SCREEN_FREE_INPUT) ||
-                            ((menu_screen() == MENU_SCREEN_SENDING) && (training_phase() >= TRAINING_PHASE_GAP) &&
-                             (training_phase() <= TRAINING_PHASE_RESULT)),
+                            (((menu_screen() == MENU_SCREEN_SENDING) || ((menu_screen() == MENU_SCREEN_FREE_TRAINING) &&
+                                                                         (training_mode() == TRAINING_MODE_SENDING))) &&
+                             (training_phase() >= TRAINING_PHASE_GAP) && (training_phase() <= TRAINING_PHASE_RESULT)),
                         fake_keyer_is_running());
+      /* Q-C7: Free Training never writes the EEPROM. A leave stops the session and gives the buttons back. */
+      if (is_free_screen) {
+        ++free_events;
+        TEST_ASSERT_EQUAL(programs_before, fake_iap_command_count(CMD_PROGRAM));
+        TEST_ASSERT_EQUAL(erases_before, fake_iap_erase_count(0U));
+        if (training_phase() == TRAINING_PHASE_GAP) {
+          ++free_session_events;
+        }
+        if (menu_screen() != MENU_SCREEN_FREE_TRAINING) {
+          ++free_leaves;
+          TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+          TEST_ASSERT_EQUAL(MENU_NODE_FREE_TRAINING, menu_node());
+          TEST_ASSERT_EQUAL(0U, menu_cursor());
+          TEST_ASSERT_EQUAL(TRAINING_PHASE_IDLE, training_phase());
+          TEST_ASSERT(!fake_player_is_running());
+          TEST_ASSERT(!fake_keyer_is_running());
+          TEST_ASSERT(is_tap_off_and_enter_enabled());
+        }
+      }
       if ((menu_screen() == MENU_SCREEN_FREE_INPUT) && ((rng_next() % 2U) == 0U)) {
         feed_free_input();
       }
@@ -267,7 +356,7 @@ static void test_random_walk_invariants(void) {
       TEST_ASSERT((menu_depth >= 1U) && (menu_depth <= MENU_STACK_DEPTH));
       TEST_ASSERT(menu_node() < MENU_NODE_COUNT);
       TEST_ASSERT(menu_cursor() < menu_nodes[menu_node()].item_count);
-      TEST_ASSERT(menu_screen() <= MENU_SCREEN_SENDING);
+      TEST_ASSERT(menu_screen() <= MENU_SCREEN_FREE_TRAINING);
       TEST_ASSERT(menu_screen() != MENU_SCREEN_SPLASH);
       TEST_ASSERT(menu_dialog_choice() <= MENU_DIALOG_YES);
       if (menu_screen() == MENU_SCREEN_EDIT) {
@@ -281,6 +370,9 @@ static void test_random_walk_invariants(void) {
       } else if (menu_screen() == MENU_SCREEN_FREE_INPUT) {
         TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_MODE);
         TEST_ASSERT_EQUAL(MENU_MODE_FREE_INPUT, item_under_cursor()->target);
+      } else if (menu_screen() == MENU_SCREEN_FREE_TRAINING) {
+        TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_MODE);
+        TEST_ASSERT_EQUAL(MENU_MODE_CALLSIGNS, item_under_cursor()->target);
       } else if (menu_screen() == MENU_SCREEN_DIALOG) {
         TEST_ASSERT(item_under_cursor()->kind == MENU_KIND_ACTION);
       }
@@ -313,7 +405,7 @@ static void test_random_walk_invariants(void) {
       }
       if (is_settings_exit) {
         TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-        TEST_ASSERT_EQUAL(3U, menu_cursor());
+        TEST_ASSERT_EQUAL(MAIN_SETTINGS_ROW, menu_cursor());
         if (is_fault) {
           TEST_ASSERT_EQUAL(MENU_SCREEN_MESSAGE, menu_screen());
           TEST_ASSERT_EQUAL(MENU_MESSAGE_NOT_SAVED, menu_message());
@@ -342,6 +434,11 @@ static void test_random_walk_invariants(void) {
   TEST_ASSERT(live_outputs >= 20U);
   TEST_ASSERT(free_input_entries >= 20U);
   TEST_ASSERT(free_input_exits >= 20U);
+  printf("free training events %u, in a session %u, leaves %u\n", (unsigned)free_events, (unsigned)free_session_events,
+         (unsigned)free_leaves);
+  TEST_ASSERT(free_events >= 100U);
+  TEST_ASSERT(free_session_events >= 20U);
+  TEST_ASSERT(free_leaves >= 20U);
   TEST_ASSERT(fake_keyer_is_overflowed() == false);
 }
 

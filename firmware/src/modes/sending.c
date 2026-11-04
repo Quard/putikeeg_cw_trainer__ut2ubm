@@ -44,6 +44,7 @@ static MEM_XDATA uint8_t tx_pattern;
 static MEM_XDATA bool sending_is_dropping;
 /* D-T31: the last event was a CHAR_GAP that gave PARTIAL, so a WORD_GAP now is a word space inside the word. */
 static MEM_XDATA bool tx_is_word_gap_armed;
+/* The code marks of the character in row 7, or the character count of sending_start_free(). */
 static MEM_XDATA uint8_t tx_mark_count;
 static MEM_XDATA uint8_t tx_code_x;
 static MEM_XDATA bool tx_is_dah;
@@ -192,6 +193,13 @@ void sending_enter(void) {
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
   /* The keyer starts with the session, so P3.2 stays enter on the start screen (D-T40). */
   training_prepare(TRAINING_MODE_SENDING, tx_wpm, tx_max_word_len, tx_is_unlimited);
+}
+
+void sending_start_free(uint8_t char_count) {
+  tx_mark_count = char_count;
+  sending_enter();
+  training_set_free(tx_mark_count);
+  tx_start_session();
 }
 
 void sending_render(void) {

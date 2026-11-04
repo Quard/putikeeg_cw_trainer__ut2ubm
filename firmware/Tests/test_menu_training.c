@@ -94,6 +94,7 @@ static void test_mode_items_open_screens(void) {
   TEST_ASSERT_EQUAL(MENU_SCREEN_SENDING, menu_screen());
   harness_event(LONG_EVENT(BUTTON_EVENT_MENU));
   harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_FREE_INPUT, menu_screen());
   TEST_ASSERT_EQUAL(7U, MENU_SCREEN_RECEIVING);
@@ -204,7 +205,9 @@ static void test_random_walk_keyer_and_player_exclusive(void) {
         ++sending_visits;
         TEST_ASSERT(!fake_player_is_running());
       }
-      if ((menu_screen() != MENU_SCREEN_RECEIVING) && (menu_screen() != MENU_SCREEN_SENDING)) {
+      /* A Callsigns session in RX plays on the Free Training screen (training_spec.md D-T85). */
+      if ((menu_screen() != MENU_SCREEN_RECEIVING) && (menu_screen() != MENU_SCREEN_SENDING) &&
+          (menu_screen() != MENU_SCREEN_FREE_TRAINING)) {
         TEST_ASSERT(!fake_player_is_running());
       }
       TEST_ASSERT(!(fake_keyer_is_running() && fake_player_is_running()));
@@ -221,10 +224,12 @@ static void test_random_walk_keyer_and_player_exclusive(void) {
 
 /* ---------- Main menu level (ui-ux.md 5.16.6, D-T41, AC-T34) ---------- */
 
-/* The Free Input and Settings rows have no level (V-01). */
+/* The Free Training, Free Input and Settings rows have no level (V-01, D-T86). */
 static bool other_rows_unchanged(void) {
+  const row_text_t free_training_row[2] = {{0, "Free Training", false}, {24, ">", false}};
   const row_text_t settings_row[2] = {{0, "Settings", false}, {24, ">", false}};
-  return menu_row_is(3, "Free Input", NULL, false) && row_matches(4, HARNESS_NO_BAND, 0, settings_row, 2U);
+  return row_matches(3, HARNESS_NO_BAND, 0, free_training_row, 2U) && menu_row_is(4, "Free Input", NULL, false) &&
+         row_matches(5, HARNESS_NO_BAND, 0, settings_row, 2U);
 }
 
 /* AC-T34: stored levels 0, 11, 65534 and 65535 show L1, L12, L65535 and L65535, right-aligned to column 22. */
@@ -265,6 +270,7 @@ static void test_v149_level_per_speed(void) {
   /* Settings > CW: RX Speed 32 -> 20, TX Speed 20 -> 25. */
   harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_NEXT);
+  harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_ENTER);
   harness_event(BUTTON_EVENT_ENTER);
   harness_event(BUTTON_EVENT_NEXT);
@@ -288,10 +294,10 @@ static void test_v149_level_per_speed(void) {
   harness_event(BUTTON_EVENT_MENU);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-  TEST_ASSERT_EQUAL(3U, menu_cursor());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
   TEST_ASSERT(menu_row_is(1, "Receiving", "L5", false));
   TEST_ASSERT(menu_row_is(2, "Sending", "L65535", false));
-  TEST_ASSERT(menu_row_is(3, "Free Input", NULL, false));
+  TEST_ASSERT(menu_row_is(4, "Free Input", NULL, false));
   TEST_ASSERT_EQUAL(0U, fake_iap_erase_count(EEPROM_MAP_PROGRESS_PAGE));
   TEST_ASSERT_EQUAL(0U, fake_iap_program_count(EEPROM_MAP_PROGRESS_ADDRESS));
 }

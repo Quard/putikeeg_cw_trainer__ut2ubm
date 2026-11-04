@@ -22,7 +22,8 @@ typedef uint8_t training_select_action_t;
 
 /**
  * Draws row 0 (ui-ux.md 5.11.1): mode tag, speeds, shown level, item number and count. In phase SELECT the level
- * and the item count follow the selection, and the item number is 1 (SL-6).
+ * and the item count follow the selection, and the item number is 1 (SL-6). A free session shows `Callsigns` in
+ * place of the level (UX-84).
  */
 void training_screen_draw_header(void);
 /**
@@ -30,7 +31,10 @@ void training_screen_draw_header(void);
  * group in Sending, and the Start band. Does not draw row 0.
  */
 void training_screen_draw_start(void);
-/** Draws rows 1-7 of the session end screen from the engine state (SL-7). Does not draw the start screen (D-T47). */
+/**
+ * Draws rows 1-7 of the session end screen from the engine state (SL-7). The free outcome has no result row (UX-85).
+ * Does not draw the start screen (D-T47).
+ */
 void training_screen_draw_end(void);
 /** In phase SELECT: redraws rows 0-5 for the selected level: the header and the start screen above the band (SL-4). */
 void training_screen_draw_select(void);

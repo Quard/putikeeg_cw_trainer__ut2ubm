@@ -62,6 +62,7 @@ static MEM_XDATA uint8_t rx_label_length;
 /* Work values in xdata, so the calls in the loops need no internal RAM to keep them. */
 static MEM_XDATA uint8_t rx_group;
 static MEM_XDATA uint8_t rx_index;
+/* The item length in rx_draw_item_line(), or the character count of receiving_start_free(). */
 static MEM_XDATA uint8_t rx_count;
 static MEM_XDATA uint8_t rx_code;
 static MEM_XDATA bool rx_is_long;
@@ -200,6 +201,13 @@ void receiving_enter(void) {
   }
   sidetone_set_tone_hz(settings_get(SETTINGS_ID_TONE_HZ));
   training_prepare(TRAINING_MODE_RECEIVING, rx_wpm, rx_max_word_len, rx_is_unlimited);
+}
+
+void receiving_start_free(uint8_t char_count) {
+  rx_count = char_count;
+  receiving_enter();
+  training_set_free(rx_count);
+  rx_start_session();
 }
 
 /* Rows 1-7 of a session. */

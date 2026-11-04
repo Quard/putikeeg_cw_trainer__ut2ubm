@@ -37,7 +37,7 @@
 #include "support/test_assert.h"
 #include "version.h"
 
-#define ABOUT_INDEX 4U
+#define ABOUT_INDEX 5U
 #define FB_SIZE (LCD_PAGE_COUNT * LCD_WIDTH)
 #define VERSION_MAX_LENGTH 17U
 #define GRID_COLUMNS 25U
@@ -195,7 +195,7 @@ static void test_every_event_byte_on_about(void) {
       TEST_ASSERT(is_main_on_about());
       TEST_ASSERT(menu_needs_redraw());
       menu_render();
-      TEST_ASSERT(is_main_frame(4));
+      TEST_ASSERT(is_main_frame((int)ABOUT_INDEX));
     } else {
       TEST_ASSERT_EQUAL(MENU_SCREEN_ABOUT, menu_screen());
       TEST_ASSERT(!menu_needs_redraw());
@@ -216,6 +216,7 @@ static void test_open_about_from_both_directions(void) {
   send(BUTTON_EVENT_NEXT);
   send(BUTTON_EVENT_NEXT);
   send(BUTTON_EVENT_NEXT);
+  send(BUTTON_EVENT_NEXT);
   TEST_ASSERT_EQUAL(ABOUT_INDEX, menu_cursor());
   send(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_SCREEN_ABOUT, menu_screen());
@@ -225,7 +226,7 @@ static void test_open_about_from_both_directions(void) {
   run_pins(BUTTON_BIT_NEXT, 2000U);
   run_pins(0U, 50U);
   TEST_ASSERT(is_main_on_about());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT(is_main_frame((int)ABOUT_INDEX));
   run_pins(BUTTON_BIT_ENTER, 40U);
   run_pins(0U, 40U);
   TEST_ASSERT_EQUAL(MENU_SCREEN_ABOUT, menu_screen());

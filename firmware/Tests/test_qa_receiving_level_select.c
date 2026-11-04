@@ -53,11 +53,12 @@ typedef struct {
   {{(header), (selector), (label), NULL, NULL, NULL, NULL, NULL}, (big), (code), "Start", NO_ROW}
 #define END_SCREEN(header, status_row, score, result) \
   {{(header), (status_row), (score), (result), NULL, NULL, NULL, NULL}, NULL, NULL, "OK", NO_ROW}
-#define MENU_SCREEN(r1, r2, selected)                                                          \
-  {{"CW Trainer", (r1), (r2), "Free Input", "Settings                >", "About", NULL, NULL}, \
-   NULL,                                                                                       \
-   NULL,                                                                                       \
-   NULL,                                                                                       \
+/* Main menu order of training_spec.md D-T64: Free Training is row 3. */
+#define MENU_SCREEN(r1, r2, selected)                                                                                 \
+  {{"CW Trainer", (r1), (r2), "Free Training           >", "Free Input", "Settings                >", "About", NULL}, \
+   NULL,                                                                                                              \
+   NULL,                                                                                                              \
+   NULL,                                                                                                              \
    (selected)}
 
 static void golden_prepare(const golden_t* golden, golden_parts_t* parts) {

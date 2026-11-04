@@ -125,15 +125,16 @@ static inline void frame_list_row(int r, const char* label, const char* value, b
   }
 }
 
-/* MAIN of ui-ux.md section 9.5 with no stored progress: item @p selected (0..4) under the cursor. */
+/* MAIN of ui-ux.md sections 9.5 and 5.21.1 with no stored progress: item @p selected (0..5) under the cursor. */
 static inline void frame_main(int selected) {
   frame_clear();
   frame_title("CW Trainer");
   frame_list_row(1, "Receiving", "L1", false, selected == 0);
   frame_list_row(2, "Sending", "L1", false, selected == 1);
-  frame_list_row(3, "Free Input", NULL, false, selected == 2);
-  frame_list_row(4, "Settings", NULL, true, selected == 3);
-  frame_list_row(5, "About", NULL, false, selected == 4);
+  frame_list_row(3, "Free Training", NULL, true, selected == 2);
+  frame_list_row(4, "Free Input", NULL, false, selected == 3);
+  frame_list_row(5, "Settings", NULL, true, selected == 4);
+  frame_list_row(6, "About", NULL, false, selected == 5);
 }
 
 /* SPLASH(v) of ui-ux.md section 9.5: @p version_text is "v" + the version. */

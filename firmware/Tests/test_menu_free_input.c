@@ -197,6 +197,7 @@ static void open_free_input(void) {
   power_on();
   press(NEXT_PIN);
   press(NEXT_PIN);
+  press(NEXT_PIN);
   press(ENTER_PIN);
 }
 
@@ -238,8 +239,8 @@ static bool probe_sel(int r) {
 static bool is_free_input_screen(void) { return (menu_screen() == MENU_SCREEN_FREE_INPUT) && title_is("Free Input"); }
 
 static bool is_main_menu_on_free_input(void) {
-  return (menu_screen() == MENU_SCREEN_LIST) && (menu_node() == MENU_NODE_MAIN) && (menu_cursor() == 2U) &&
-         title_is("CW Trainer") && probe_sel(3);
+  return (menu_screen() == MENU_SCREEN_LIST) && (menu_node() == MENU_NODE_MAIN) && (menu_cursor() == 3U) &&
+         title_is("CW Trainer") && probe_sel(4);
 }
 
 static bool is_lcd_untouched(const uint8_t* before) {
@@ -282,6 +283,7 @@ static void test_v55_closed_contact_at_start(void) {
 
   reset_eeprom();
   power_on();
+  press(NEXT_PIN);
   press(NEXT_PIN);
   press(NEXT_PIN);
   run(ENTER_PIN, BUTTONS_DEBOUNCE_MS + 5U);
@@ -587,6 +589,7 @@ static void test_v79_keyer_settings(void) {
   TEST_ASSERT(settings_set(SETTINGS_ID_PADDLE_SWAP, 1U));
   TEST_ASSERT(settings_set(SETTINGS_ID_TX_WPM, 25U));
   TEST_ASSERT(settings_set(SETTINGS_ID_TX_EFF_WPM, 15U));
+  press(NEXT_PIN);
   press(NEXT_PIN);
   press(NEXT_PIN);
   press(ENTER_PIN);

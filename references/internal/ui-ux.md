@@ -31,6 +31,8 @@ Status of the content:
     the firmware version.
   - The `Settings > Training` list (section 5.19): the attempt limit of each training mode, `Max Word Length` and
     `Show CW Code`. Unlimited attempts and the skip of an item with a long `next` (section 5.20, UX-74 to UX-78).
+  - The `Free Training` menu and its program `Callsigns` (section 5.21, UX-79 to UX-87): the configuration screen,
+    the session header and the free end screen. A free session never changes the learning progress.
 - Out of scope in this version: statistics other than the training levels, any sound other than the two previews,
   the keyer sidetone (Free Input and Sending) and the CW playback in Receiving. A level above the earned level
   cannot be selected (section 5.16).
@@ -232,8 +234,8 @@ This is the first window of the CW list (8 items, section 5.5). `Paddle` is item
 - Value item: value right-aligned, last character in column 22.
 - Submenu item: `>` in column 24, no value.
 - Mode item: `Receiving` and `Sending` show the earned level `L<n>`, right-aligned, last character in column 22
-  (section 5.16.6, UX-57). `Free Input`, `About` and the action item: label only, no marker. The `>` marker means
-  "opens a list" (UX-61).
+  (section 5.16.6, UX-57). `Free Input`, `Callsigns`, `About` and the action item: label only, no marker. The `>`
+  marker means "opens a list" (UX-61). `Free Training` is a submenu item: it shows `>` (UX-79).
 - Selected row: highlight band over x 0-127. The label, value and marker of that row are inverted.
 - Rows below the last item are blank (all pixels off).
 
@@ -246,6 +248,8 @@ the value changes.
 | --- | --- | --- | --- | --- | --- |
 | Main | `Receiving` | mode, read-only level | `L1` .. `L65535`: the earned level at `RX Speed` (section 5.16.6) | 6 | `L1` |
 | Main | `Sending` | mode, read-only level | `L1` .. `L65535`: the earned level at `TX Speed` (section 5.16.6) | 6 | `L1` |
+| Main | `Free Training` | submenu (section 5.21.1, UX-79) | - | - | - |
+| Free Training | `Callsigns` | mode (section 5.21, UX-79) | - | - | - |
 | Main | `Free Input` | mode | - | - | - |
 | Main | `Settings` | submenu | - | - | - |
 | Main | `About` | info screen (section 5.18) | - | - | - |
@@ -333,9 +337,10 @@ Examples at the limits:
 
 ### 5.5 Scrolling (decision UX-5, UX-72)
 
-Item counts in this version: main 5, Settings 5, CW 8, Training 4, Display 2 (UX-74). Only CW has more than 7
-items, so only CW scrolls (UX-72). The other lists show all items at once, with no `i/n` mark: the main menu and
-Settings use 5 rows, and rows 6 and 7 stay blank. Training uses 4 rows, and rows 5-7 stay blank. The rule applies
+Item counts in this version: main 6, Free Training 1, Settings 5, CW 8, Training 4, Display 2 (UX-74, UX-79). Only
+CW has more than 7 items, so only CW scrolls (UX-72). The other lists show all items at once, with no `i/n` mark: the
+main menu uses 6 rows, and row 7 stays blank. Settings uses 5 rows, and rows 6 and 7 stay blank. Training uses 4
+rows, and rows 5-7 stay blank. Free Training uses row 1, and rows 2-7 stay blank. The rule applies
 to every list with more than 7
 items, also to a later one.
 
@@ -1882,7 +1887,8 @@ interface differs, report it to `architector`.
 #### 5.16.6 Main menu level (UX-57)
 
 `Receiving` and `Sending` show the earned level at the current speed setting: Receiving at `RX Speed`, Sending at
-`TX Speed`. `Free Input`, `Settings` and `About` show nothing new.
+`TX Speed`. `Free Training`, `Free Input`, `Settings` and `About` show no level. The main menu order is that of
+UX-79 (`training_spec.md` D-T64).
 
 ```
     0         1         2
@@ -1890,10 +1896,10 @@ interface differs, report it to `architector`.
 0  |CW Trainer               | title bar, inverted
 1  |Receiving           L12  | selected: highlight x 0-127, 'L12' inverted with the label
 2  |Sending              L1  | 'L1' in columns 21-22, normal video
-3  |Free Input               |
-4  |Settings                >|
-5  |About                    | no marker: it opens a screen, not a list (UX-61)
-6  |                         |
+3  |Free Training           >| submenu: '>' in column 24, no level (UX-79)
+4  |Free Input               |
+5  |Settings                >|
+6  |About                    | no marker: it opens a screen, not a list (UX-61)
 7  |                         |
 ```
 
@@ -2019,7 +2025,8 @@ comes from the layout that the user chose (2026-10-08).
 
 #### 5.18.1 `About` item in the main menu (UX-61)
 
-- The fifth item of the main menu, after `Settings`, in row 5 (section 5.16.6). Label `About`. Kind: info screen.
+- The sixth item of the main menu, after `Settings`, in row 6 (section 5.16.6, UX-79). Label `About`. Kind: info
+  screen.
 - No marker and no value. The `>` marker means "opens a list" (section 5.2). `Free Input`, `Receiving`, `Sending`
   and `Reset Statistics` open a screen and have no marker. `About` also opens a screen.
 - Cursor: `prev` on `Receiving` wraps to `About`. `next` on `About` wraps to `Receiving`. A held `next` stops on
@@ -2358,9 +2365,368 @@ Sources: `training_spec.md` D-T53 to D-T59 (owner `architector`), checked agains
 - E-6. Row 5 after a skip shows one code. `training_screen_draw_code_group()` draws it with an empty second pattern
   (D-T59 (4)).
 
+### 5.21 Free Training and the Callsigns program (decision UX-79 to UX-87)
+
+Purpose: the user practises callsigns in Receiving (RX) or Sending (TX). A free session never changes the learning
+progress. Source: the plan of 2026-11-03 (user decisions Q1 to Q16) and `training_spec.md` section 23 (D-T63 to
+D-T88, FT-1 to FT-10, owner `architector`). This section is task D8. It closes the open items U-35 to U-42 of
+`training_spec.md` section 23.11. The terms are those of `GLOSSARY.md`: Free Training, program, character set,
+callsign, learned characters, mode.
+
+The user decisions that this section takes as fixed:
+
+- Main menu order: `Receiving`, `Sending`, `Free Training`, `Free Input`, `Settings`, `About` (D-T64).
+- Free Training holds one program: `Callsigns`.
+- The configuration screen has the rows `Mode` (RX or TX, default RX) and `Chars` (Learned or Full, default
+  Learned) and a start action. The rows work as the choice rows of Settings. The values stay in RAM until a
+  power-off (D-T65).
+- Learned with no digit learned shows a message and does not start (D-T67).
+- A session has 20 callsigns (D-T74). The end screen shows the score, with no pass and no fail (D-T79).
+- `enter` on the end screen opens the configuration screen. `menu/back` on the configuration screen opens the Free
+  Training list (D-T79). A long `menu/back` opens the Free Training list from every state (D-T87).
+
+Screen flow:
+
+```text
+main menu --enter on 'Free Training'--> Free Training list --enter on 'Callsigns'--> configuration screen
+configuration screen --enter on 'Start'--> start pause -> 20 items (RX or TX session screens) -> free end screen
+free end screen --enter--> configuration screen (same Mode and Chars, focus on 'Start')
+free end screen --menu/back--> Free Training list, cursor on 'Callsigns'
+configuration screen --menu/back--> Free Training list, cursor on 'Callsigns'
+Free Training list --menu/back--> main menu, cursor on 'Free Training'
+every Callsigns state --long menu/back--> Free Training list, cursor on 'Callsigns'
+```
+
+#### 5.21.1 Main menu and the Free Training list (UX-79)
+
+Main menu (section 5.16.6). `Free Training` is the third item, in row 3. It is a submenu, so it shows `>` in column
+24 and no value (D-T86). `Free Input` moves to row 4, `Settings` to row 5 and `About` to row 6. Row 7 stays blank.
+Six items fit the 7 rows, so the main menu does not scroll and shows no `i/n` mark (section 5.5).
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |CW Trainer               | title bar, inverted
+1  |Receiving           L12  |
+2  |Sending              L1  |
+3  |Free Training           >| selected: highlight x 0-127, y 25-31, '>' inverted with the label
+4  |Free Input               |
+5  |Settings                >|
+6  |About                    |
+7  |                         | blank
+```
+
+`enter` on `Free Training` opens the Free Training list with the cursor on `Callsigns`:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Free Training            | title bar, inverted: 13 characters, no i/n mark (1 item)
+1  |Callsigns                | selected: highlight x 0-127, y 9-15. No value, no marker
+2  |                         | blank
+3  |                         | blank
+4  |                         | blank
+5  |                         | blank
+6  |                         | blank
+7  |                         | blank
+```
+
+| Item | Value |
+| --- | --- |
+| Title | `Free Training`, the label of the item that opened the list (section 5.1). |
+| Items | `Callsigns` only. Kind: mode. It opens a screen, so it has no `>` (UX-61). It shows no level (D-T86). |
+| Cursor | The list opens with the cursor on `Callsigns`. A `prev` or `next` press wraps from the item to the same item. So a press or a repeat changes nothing: no redraw, no dirty page. |
+| `enter`, or the paddle tip | The configuration screen of Callsigns (section 5.21.2). |
+| `menu/back` | The main menu, with the cursor on `Free Training`. No EEPROM access. |
+| Long events | Nothing, as in every list (section 6.1). |
+
+A later program goes into this list as a new mode item. With 7 items or more, the scroll rule of section 5.5
+applies.
+
+#### 5.21.2 Configuration screen (UX-80, UX-81, UX-82)
+
+The screen is the first state of the Callsigns mode screen. The engine phase is IDLE (FT-2). No session runs: no
+player, no keyer, no sound. Tap mode is off. The tip of the paddle socket is `enter` (FT-9).
+
+First entry after a power-on. The RX level is L12 at `RX Speed`. The focus is on `Start`:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Callsigns                | title bar, inverted
+1  |Mode                 RX  | 'RX' in columns 21-22
+2  |Chars       Learned L12  | 'Learned L12' in columns 12-22
+3  |                         | blank
+4  |                         | blank: message line 1 (section 5.21.3)
+5  |                         | blank: message line 2
+6  |                         | blank
+7  |          Start          | 'Start' in columns 10-14, band x 47-81, y 57-63
+```
+
+The same screen with the focus on `Mode`. `Start` is plain text:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Callsigns                |
+1  |Mode                 RX  | selected: highlight x 0-127, y 9-15
+2  |Chars       Learned L12  |
+7  |          Start          | 'Start' in columns 10-14, normal video, no band
+```
+
+Mode TX and Chars Full. The focus is on `Chars`:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Callsigns                |
+1  |Mode                 TX  |
+2  |Chars              Full  | selected: highlight x 0-127, y 17-23. 'Full' in columns 19-22
+7  |          Start          | normal video
+```
+
+| Row | Pixels | Content | Rule |
+| --- | --- | --- | --- |
+| 0 | y 0-7 | `Callsigns` | Title bar (section 5.1): the label of the item that opened the screen. Inverted. |
+| 1 | y 8-15 | `Mode` and `RX` or `TX` | Choice row, fw 2. The value ends in column 22 (section 4.3). |
+| 2 | y 16-23 | `Chars` and `Learned L<n>` or `Full` | Choice row, fw 14 (UX-82). The value ends in column 22. |
+| 3 | y 24-31 | Blank | All pixels off. |
+| 4-5 | y 32-47 | The "no digit learned" message, or blank | Section 5.21.3. |
+| 6 | y 48-55 | Blank | All pixels off. |
+| 7 | y 56-63 | `Start` | `Start` in columns 10-14 (x 52-76). With the focus: inverted inside the band x 47-81, y 57-63, and the gap line y 56 off across the band. This is the `Start` band of the training start screen (section 5.16.1). Without the focus: normal video, no band. |
+
+Value texts:
+
+| Row | Label | Values in order | fw | Default |
+| --- | --- | --- | --- | --- |
+| 1 | `Mode` | `RX`, `TX` | 2 | `RX` |
+| 2 | `Chars` | `Learned L<n>`, `Full` | 14 | `Learned L<n>` |
+
+- `RX` = receive and `TX` = send, the abbreviations of UX-3 and of the session header.
+- Fit rule (section 5.3): `Mode` uses 4 of 18 allowed, `Chars` 5 of 6 allowed.
+- `Learned L<n>`: `n` is the shown level of the mode of row 1 at the speed of that mode (UX-82). It has 10 to 14
+  characters: `Learned L1` to `Learned L65535`.
+
+Focus (UX-80):
+
+- The focus is on one of three places: `Mode`, `Chars` or `Start`. There is exactly one highlight band (UX-2).
+- On `Mode` or `Chars`, the band covers the whole row (x 0-127), as a list row in browse mode (section 5.2).
+- On `Start`, the band covers only the button (x 47-81), as on the training start screen.
+- At each opening of the screen, the focus is on `Start` and edit mode is off. The openings are the entry from the
+  Free Training list, the `enter` press on the free end screen, and a new entry after a long `menu/back`.
+- `next` moves the focus down: `Mode`, `Chars`, `Start`, then back to `Mode`. `prev` moves it up. A press wraps. A
+  repeat stops at `Mode` or `Start` and does not wrap (UX-13).
+
+Value controls (UX-81). These are the controls of a choice row in Settings (sections 5.4 and 6.1):
+
+- `enter` on `Mode` or `Chars` starts edit mode. The band shrinks to the value field, and the markers `<` and `>`
+  show the possible steps (UX-4).
+- In edit mode, `prev` gives the previous value and `next` the next value. A step stops at the first and the last
+  value. It does not wrap (UX-13). The new value is in RAM at once (D-T65).
+- `enter` or `menu/back` ends edit mode and keeps the value. A `menu/back` press in edit mode does not leave the
+  screen.
+- If `Chars` is Learned, a Mode step also changes the level in `Learned L<n>`, in the same redraw.
+
+Edit mode of `Mode` (fw 2: `<` in column 19, value in columns 21-22, `>` in column 24, band x 96-127):
+
+```
+    0         1         2
+    0123456789012345678901234
+1  |Mode                 RX >|   RX, the first value: only '>'
+1  |Mode               < TX  |   TX, the last value: only '<'
+```
+
+Edit mode of `Chars` (fw 14: `<` in column 7, value in columns 9-22, `>` in column 24, band x 36-127). The label
+`Chars` (columns 0-4) stays in normal video. Column 5 is the blank column between the label and the band:
+
+```
+    0         1         2
+    0123456789012345678901234
+2  |Chars       Learned L12 >|   Learned, the first value: only '>'
+2  |Chars  <           Full  |   Full, the last value: only '<'
+2  |Chars    Learned L65535 >|   the widest value: columns 9-22
+```
+
+Start action (UX-81):
+
+- `enter` (or the tip) with the focus on `Start` acts at the press. It computes the character count of FT-3.
+- If `callsign_is_possible()` returns true, the session starts (FT-4): the screen of section 5.21.4 shows, and the
+  start pause runs (`TRAINING_START_MS`, 1000 ms).
+- If it returns false, no session starts. The message of section 5.21.3 shows. The focus stays on `Start`.
+- The `enter` press that opens the screen gives one event only. So it opens the screen and does not start a
+  session. The press that starts a session gives no event at its release (FT-9).
+
+#### 5.21.3 "No digit learned" message (UX-83)
+
+A start with Learned and no digit in the learned characters shows two lines in rows 4 and 5. Mode TX, TX level L1:
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |Callsigns                |
+1  |Mode                 TX  |
+2  |Chars        Learned L1  |
+3  |                         |
+4  |  No digit learned yet   | 20 cells, column 2
+5  |  Use Full or reach L25  | 21 cells, column 2
+6  |                         |
+7  |          Start          | the focus stays on Start: band x 47-81
+```
+
+| Item | Value |
+| --- | --- |
+| Text | Row 4: `No digit learned yet`. Row 5: `Use Full or reach L25`. Normal video, centered: start column = floor((25 - length) / 2). |
+| When it shows | If `callsign_is_possible()` is false, an `enter` press (or a tip closure) on `Start` shows it (D-T67). Only Learned can give this result. |
+| How long | No time limit. The device has no timeout (section 6.1). |
+| What clears it | A value step of `Mode` or `Chars` (the reason of the message can change), or any exit from the screen. A focus move and the start or end of edit mode keep it. A second blocked start keeps it and redraws nothing. |
+| After a clear | A new blocked start shows it again. |
+| State | One flag in the screen state of FT-1. Each opening of the screen clears it. |
+
+- The text names the two ways out. `Full` is a value on the same screen. `L25` is the level that removes the block.
+- `L25` is fixed text. It is true for the Koch order of `training_spec.md` section 5.6 and the check of D-T67: level
+  index 23 (L24) blocks, and index 24 (L25) starts. A change of the Koch order or of `callsign_is_possible()` must
+  update the text. V-225 proves it.
+- The level of the message is the level at the speed of the mode, the level that row 2 shows. So the user compares
+  `L1` in row 2 with `L25` in row 5.
+- No sound. The two lines are the only feedback.
+
+#### 5.21.4 Session screens and header (UX-84)
+
+From the start action to the end screen, the screens are those of a Receiving or Sending word session. Sections
+5.11 to 5.14 and 5.20 apply (D-T75 to D-T77). Only the header and the end screen differ.
+
+Header (section 5.11.1). The level field shows the program name `Callsigns` in place of `L<level>`. The item field
+shows `<i>/20`.
+
+```
+    0123456789012345678901234
+0  |RX 32/32 Callsigns   1/20|   the start pause and item 1 at the default RX speeds
+0  |TX 20/20 Callsigns  12/20|   item 12 at the default TX speeds
+0  |TX 5/5   Callsigns  20/20|   the speed field is 3 cells wide, the name stays in column 9
+```
+
+| Field | Cells | Text |
+| --- | --- | --- |
+| Mode tag | 0-1 | `RX` or `TX`, the Mode of the session (FT-8). |
+| Speed | from column 3, 3 to 5 cells | As in section 5.11.1: `RX Speed`/`RX Eff. Speed` or `TX Speed`/`TX Eff. Speed`. |
+| Program | columns 9-17 | `Callsigns`, 9 cells. Fixed for the whole session. |
+| Item | right-aligned, last character in column 24, 4 or 5 cells | `<i>/20`, from `training_shown_item_number()` and `training_item_count()`. The "next item" rule of section 5.11.1 applies: the start pause shows `1/20`. |
+
+- At least 2 blank cells (columns 18-19) stay between the program name and the item field. With `1/20` to `9/20`,
+  3 cells stay blank.
+- The longest header is `RX 50/50 Callsigns  20/20`: 25 cells.
+- The tag, the speeds and the program name do not change in a session.
+- The session start draws rows 0-7 (FT-4). Page 0 changes from the title `Callsigns` to the header.
+
+Session body: the rules of Receiving and Sending apply with no change. In short:
+
+- RX: the group keyboard with the character set of `Chars` (D-T76), slots for the callsign (3 to 6 characters), the
+  replay, the undo, the answer state with `Next` or `Finish`, and the skip.
+- TX: the callsign in the item line, the bar under the next character, the word-space error and the pause limit of
+  a word (UX-52), `Show CW Code`, and the skip.
+- The retry status follows `RX Attempts` or `TX Attempts` (section 5.20.1).
+- `Max Word Length` does not apply (D-T73).
+
+#### 5.21.5 Free end screen (UX-85, UX-86)
+
+After item 20, the free end screen shows. Its frame is that of the session end screen (section 5.15, UX-68): the
+header in row 0, the score in row 2, `OK` in row 7. It has no pass and no fail text (D-T79).
+
+```
+    0         1         2
+    0123456789012345678901234
+0  |RX 32/32 Callsigns  20/20| header of the session that ended
+1  |                         | blank: a free session never saves, so never 'Not saved'
+2  |       Score 17/20       | column 7
+3  |                         | blank: no pass or fail text
+4  |                         | blank
+5  |                         | blank
+6  |                         | blank
+7  |           OK            | 'OK' in columns 11-12, band x 52-71, y 57-63, always focused
+```
+
+| Row | Text | Rule |
+| --- | --- | --- |
+| 0 | Header | The header of the session that ended, with `20/20` (section 5.21.4). It does not change on the end screen. |
+| 1 | Blank | A free session never writes the progress (D-T80), so `Not saved` never shows. |
+| 2 | `Score <c>/20` | `c` = items correct on the first attempt, `training_score()`. 10 or 11 cells, start column 7. |
+| 3-6 | Blank | All pixels off. Row 3 holds no result text. |
+| 7 | `OK` | The `OK` band of section 5.15: text columns 11-12 (x 57-66), band cells 10-13 (x 52-71, y 57-63), gap line y 56 off across the band. Always focused. The only highlight. |
+
+Examples: `Score 0/20` (10 cells), `Score 9/20` (10 cells), `Score 20/20` (11 cells). All start in column 7.
+
+Controls of the free end screen (UX-86). Tap mode is off and the keyer is off (FT-9), so every event acts at the
+press:
+
+| Event | Effect |
+| --- | --- |
+| `enter` press, or a paddle tip closure | The configuration screen with the same Mode and Chars, focus on `Start`, no message (section 5.21.2). No session starts. |
+| `menu/back` press | The Free Training list, with the cursor on `Callsigns`. No EEPROM access. |
+| `prev` or `next`, press or repeat | Nothing. |
+| Long `menu/back` | Nothing. The press of the same hold already opened the Free Training list. |
+| Long `prev`, long `next` | Nothing. |
+| Long `enter` | No event (tap mode is off). |
+| Ring (P5.5) | Nothing. |
+
+"Nothing" means: no state change, no redraw, no dirty page, no sound (section 6.1).
+
+- A held `enter` or tip gives one event per press (section 6.2). So a contact held across the session end opens
+  nothing. A held contact never runs through the end screen and the configuration screen to a new session (FT-9,
+  `training_spec.md` F9).
+- The two buttons have the same meaning as on the session end screen of Koch training (UX-69). `enter` means "again"
+  and opens the screen before the session. `menu/back` means "leave" and opens the list that holds the program.
+
+#### 5.21.6 Redraw budget (UX-87)
+
+An opening of the configuration screen draws the whole screen. A step inside the screen can draw only the rows that
+it changes. The frame after a step must be equal to a whole-screen draw of the new state. The byte rule of UX-70
+makes dirty only the pages whose bytes change. No screen code marks a page dirty by hand.
+
+| Step | Pages whose bytes change |
+| --- | --- |
+| Open from the Free Training list | 0, 1, 2 and 7 |
+| Open from the free end screen (`enter`) | 0, 1, 2 and 7. Pages 3-6 are blank on both screens. |
+| Focus step `Mode` - `Chars` | 1 and 2 |
+| Focus step `Chars` - `Start` | 2 and 7 |
+| Focus step `Start` - `Mode` (a wrap) | 1 and 7 |
+| Start or end of edit mode | The page of the row: 1 or 2 |
+| `Mode` step | 1. If `Chars` is Learned and the two levels differ, also 2. If the message shows, also 4 and 5. |
+| `Chars` step | 2. If the message shows, also 4 and 5. |
+| Blocked start, no message yet | 4 and 5 |
+| Blocked start, message already shown | None |
+| Step at a limit, or a press with no effect | None |
+| Session start | The pages whose bytes change, at most 0-7 |
+
+- A step on this screen changes at most 4 pages (a `Mode` step with Learned and the message). A focus step changes
+  2 pages. So a step is fast also during the 80 ms repeat (UX-16). D-56 measures it.
+- The level of `Learned L<n>` comes from the progress image in RAM. The draw needs no EEPROM access (UX-57).
+
+#### 5.21.7 Contract facts that this section assumes
+
+Source: `training_spec.md` section 23 (owner `architector`), read on 2026-11-03.
+
+- C-1. `free_training_render()` draws the whole screen for the current state after the clear of `menu_render()`.
+  A step inside the screen can redraw only the changed rows (section 5.21.6). The framebuffer marks a page dirty
+  only at a byte change (`lcd_fb.h`). So UX-87 needs no page list.
+- C-2. The data of row 2 is `koch_shown_level(progress_level(mode, speed))`, with the speed of the mode of row 1
+  (section 23.5). The start action computes the count of FT-3 and calls `callsign_is_possible()`.
+- C-3. The screen state fits FT-1: the focus (3 values), the edit flag and the message flag. One byte holds all of
+  them, two bytes are allowed.
+- C-4. `menu.c` handles a long `menu/back` before `free_training_handle()` (section 23.6). So a hold of `menu/back`
+  in edit mode first ends edit mode at the press, then leaves to the Free Training list at 800 ms (D-T87).
+- C-5. `training_screen_draw_header()` and `training_screen_draw_end()` draw the free header and the free end screen
+  when `training_is_free()` or `TRAINING_OUTCOME_FREE` holds (section 23.5). The `Start` band without the focus is
+  plain centered text in row 7, with no band.
+- C-6. The edit field of section 5.4 is drawn by `menu_render.c` for the lists only. `free_training.c` draws the same
+  pixels with the `gfx` and `training_screen` helpers (FT-10). The pixels of section 5.4 are binding. The code that
+  draws them is the choice of `c-embedded-developer`.
+- C-7. Two paths open the configuration screen: `free_training_enter()` and the `enter` press on the free end screen
+  (FT-6). Both set the focus to `Start` and clear the edit flag and the message flag. Neither changes Mode or Chars.
+  Both clear rows 0-7 with pixel writes. `lcd_fb_clear()` marks every page dirty, so it breaks UX-87.
+
 ## 6. Control mapping
 
-### 6.1 Per state (decision plan + UX-9, UX-23, UX-24, UX-59, UX-62, UX-64, UX-69)
+### 6.1 Per state (decision plan + UX-9, UX-23, UX-24, UX-59, UX-62, UX-64, UX-69, UX-80, UX-81, UX-86)
 
 `press` = a debounced press event. `repeat` = an auto-repeat event (prev and next only, section 6.2). `long` = a
 long-press event (`menu/back`, `prev` and `next`, and `enter` in tap mode only, section 6.6). Tap mode is on only in
@@ -2371,7 +2737,7 @@ Short presses and repeats:
 
 | State | `prev` press | `next` press | `prev`/`next` repeat | `enter` | `menu/back` |
 | --- | --- | --- | --- | --- | --- |
-| List, browse | Cursor up. Wraps from first to last. In CW the window follows the cursor (section 5.5). | Cursor down. Wraps from last to first. In CW the window follows the cursor. | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending or Free Input). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. Info screen: open the `About` screen (section 5.18). | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. |
+| List, browse | Cursor up. Wraps from first to last. In CW the window follows the cursor (section 5.5). | Cursor down. Wraps from last to first. In CW the window follows the cursor. | Same as press, but stops at the first/last item (no wrap) | Mode: open the mode screen (Receiving, Sending, Free Input or Callsigns). Submenu: open the list, cursor on its first item. Value/choice: enter edit mode. Action: open the dialog. Info screen: open the `About` screen (section 5.18). | Main menu: nothing (no redraw). Settings list: go to the main menu with the cursor on `Settings`. Save under the rule in section 7 (UX-15). CW or Display list: go to Settings with the cursor on `CW` or `Display`. No save. Free Training list: go to the main menu with the cursor on `Free Training`. No save. |
 | List, edit | Decrease the value by one step, or the previous choice. Stops at the limit. Applies at once. | Increase, or the next choice. Stops at the limit. Applies at once. | Same as press, stops at the limit | Leave edit mode, keep the value. Cursor stays on the row. | Leave edit mode, keep the value (same as `enter`). Does not leave the list. |
 | Placeholder (no screen uses it in this version) | nothing | nothing | nothing | nothing | nothing |
 | Free Input | nothing | nothing | nothing | No event. The keyer owns P3.2: the `enter` button keys like the tip contact (section 6.7). | nothing |
@@ -2381,6 +2747,10 @@ Short presses and repeats:
 | Sending: all states but the end screen | nothing | nothing | nothing | No event. The keyer owns P3.2 (section 5.13.4). | nothing |
 | Training start screen (both modes, section 5.16.4) | Selected level down by one. Stops at L1. | Selected level up by one. Stops at the earned level. | Same as press, stops at the limit (no wrap) | Start a session at the selected level, at the press. The paddle tip does the same. | Main menu, cursor on the mode item, at the press. |
 | Session end screen (both modes, section 5.15, UX-69) | nothing | nothing | nothing | Open the start screen at the preselected level, at the press. No session starts. The paddle tip does the same. | Main menu, cursor on the mode item, at the press. |
+| Callsigns configuration screen, browse (section 5.21.2, UX-80, UX-81) | Focus up: `Start`, `Chars`, `Mode`, then a wrap to `Start`. | Focus down: `Mode`, `Chars`, `Start`, then a wrap to `Mode`. | Same as press, but stops at `Mode` or `Start` (no wrap) | At the press. On `Mode` or `Chars`: edit mode. On `Start`: a session starts, or the message of section 5.21.3 shows. The paddle tip does the same. | The Free Training list, cursor on `Callsigns`, at the press. |
+| Callsigns configuration screen, edit | The previous value. Stops at the first value. Applies at once. | The next value. Stops at the last value. Applies at once. | Same as press, stops at the limit | End edit mode, keep the value. The focus stays on the row. | End edit mode, keep the value (same as `enter`). The screen stays. |
+| Callsigns session (RX or TX), all states but the end screen (section 5.21.4) | As Receiving or Sending in the same state. | As Receiving or Sending | As Receiving or Sending | As Receiving or Sending | As Receiving or Sending |
+| Free end screen (section 5.21.5, UX-86) | nothing | nothing | nothing | The configuration screen with the same Mode and Chars, focus on `Start`, at the press. No session starts. The paddle tip does the same. | The Free Training list, cursor on `Callsigns`, at the press. |
 | Dialog | Focus `No` (no wrap) | Focus `Yes` (no wrap) | Same as press | Activate the focused button. `No`: back to Settings. `Yes`: reset statistics, show the message screen. | Same as `No`. |
 | Message | nothing | nothing | nothing | `Statistics reset`: back to Settings, cursor on `Reset Statistics`. `Display Defaults`: the main menu, cursor on `Receiving`. | Same as `enter`. |
 | Startup screen (section 5.17) | End the startup screen. Nothing else. | Same as `prev`. | Same as a press: end the startup screen, nothing else. | End the startup screen, at the press. Nothing else. The paddle tip does the same. | Same as `enter`. |
@@ -2400,6 +2770,10 @@ Long presses:
 | Sending: all states but the end screen | Stop the keyer. Drop the session. Main menu, cursor on `Sending` (section 6.9). | no event (the keyer owns P3.2) | nothing | Item and a `Wrong` result with attempts left: skip the item, result `Skipped` (section 5.20, UX-77, UX-78). Start pause, `Correct`, the failed or skipped result, blank moment: nothing. |
 | Training start screen (both modes) | Nothing: the press of the same hold already opened the main menu. | no event (tap mode off) | nothing (the repeats of the hold act) | nothing (the repeats of the hold act) |
 | Session end screen (both modes) | Nothing: the press of the same hold already opened the main menu. | no event (tap mode off) | nothing | nothing |
+| Callsigns configuration screen, browse | Nothing: the press of the same hold already opened the Free Training list. | no event (tap mode off) | nothing (the repeats of the hold act) | nothing (the repeats of the hold act) |
+| Callsigns configuration screen, edit | The press of the same hold ends edit mode. At 800 ms: the Free Training list, cursor on `Callsigns` (D-T87). | no event (tap mode off) | nothing (the repeats of the hold act) | nothing (the repeats of the hold act) |
+| Callsigns session (RX or TX), all states but the end screen | Stop the player (RX) or the keyer (TX). Drop the session. The Free Training list, cursor on `Callsigns` (D-T87). No EEPROM access. | As Receiving or Sending in the same state | As Receiving or Sending in the same state | As Receiving or Sending in the same state: the skip in Item and in a `Wrong` result |
+| Free end screen | Nothing: the press of the same hold already opened the Free Training list. | no event (tap mode off) | nothing | nothing |
 | Startup screen | End the startup screen. Nothing else. In practice, the press of the same hold already ended it. | no event (tap mode off) | Same as long `menu/back`. | Same as long `menu/back`. |
 | About | nothing | no event (tap mode off) | nothing | nothing |
 
@@ -2434,7 +2808,8 @@ Other rules:
 - Long presses act only in the mode screens (section 6.6). Lists, edit mode, the dialog and the message screen keep
   their short-press behaviour without a change.
 - Short presses act in the mode screens only in Receiving (the keyboard, UX-43), on the training start screen (UX-55)
-  and on the session end screen. The end screen uses only `enter` and `menu/back` (UX-69). Free Input and the session
+  and on the session end screen. The end screen uses only `enter` and `menu/back` (UX-69). Callsigns adds two such
+  screens: the configuration screen (UX-80, UX-81) and the free end screen (UX-86). Free Input and the session
   states of Sending ignore them (UX-24).
 
 ### 6.2 Button timing (decision UX-12)
@@ -2904,6 +3279,11 @@ with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one ma
 | L1 code gap | 9 px (3 mark gaps) between the code of K and the code of M. Group w = 44, x 42-85 | Section 5.16.3, UX-67. |
 | Start screen step | Dirty: exactly the pages whose bytes change, inside pages 0-5. Never page 5 in Receiving, never pages 6-7. End screen to start screen: the pages whose bytes change. No page is marked dirty by hand | Section 5.16.4, UX-70, `training_spec.md` D-T49. |
 | Main menu level | `L<n>` right-aligned to column 22 on the `Receiving` and `Sending` rows | Section 5.16.6. |
+| `TRAINING_FREE_ITEMS` | 20 | Items of a free session (`training_spec.md` D-T74). Header item field `<i>/20`. |
+| Free header | `Callsigns` in columns 9-17 in place of the level. Item `<i>/20` right-aligned to column 24 | Section 5.21.4, UX-84. |
+| Configuration screen | Row 0: title `Callsigns`. Row 1: `Mode` (fw 2). Row 2: `Chars` (fw 14). Rows 3 and 6: blank. Rows 4-5: message or blank. Row 7: `Start`, band x 47-81 with the focus, plain text without it | Section 5.21.2, UX-80. |
+| Blocked start message | `No digit learned yet` (row 4, column 2). `Use Full or reach L25` (row 5, column 2) | Section 5.21.3, UX-83. |
+| Free end screen | Row 0: header with `20/20`. Row 2: `Score <c>/20`, column 7. Row 7: `OK`. Rows 1 and 3-6: blank | Section 5.21.5, UX-85. |
 
 ## 7. Feedback
 
@@ -2958,6 +3338,14 @@ with the `+/- 2 ms` tolerance of section 6.2. A visible change can lag by one ma
 | Power-on | The startup screen: `Putikeeg`, `CW Trainer` in the large font, `mod by UT2UBM` and the version. After 5 s, the main menu. No sound. | UX-58, UX-59 |
 | Button during the startup screen | The main menu at once (or the `Display Defaults` message on a recovery start). The button has no other effect. | UX-59, UX-60 |
 | `About` | The `About` screen with the name, the mod, the version and the link. `enter` or `menu/back` goes back to the main menu with the cursor on `About`. | UX-61, UX-62 |
+| `Free Training` in the main menu | Row 3 with `>`. `enter` opens a list with one item, `Callsigns`. | UX-79 |
+| Callsigns configuration screen | The title `Callsigns`, the rows `Mode` and `Chars` with their values, and `Start`. The focus is on `Start` at each opening. No sound. | UX-80 |
+| Focus step on the configuration screen | The band moves between the `Mode` row, the `Chars` row and the `Start` button. | UX-80 |
+| `Mode` or `Chars` edit | The band shrinks to the value field, with `<` and `>`. A step changes the value at once. With Learned, a Mode step also changes the level in `Learned L<n>`. Nothing sounds. | UX-81, UX-82 |
+| Blocked start | `No digit learned yet` and `Use Full or reach L25` in rows 4 and 5. No session, no sound. A value step of `Mode` or `Chars` clears the two lines. | UX-83 |
+| Free session | The Receiving or Sending session screens, with `Callsigns` in place of the level and `<i>/20` in the header. | UX-84 |
+| Free session end | `Score <c>/20` and a focused `OK`. No pass or fail text, no `Not saved`. The levels do not change. | UX-85 |
+| `enter` or the tip on the free end screen | The configuration screen with the same values and the focus on `Start`. A second `enter` starts the next session. | UX-86 |
 | Response time | Target: the change is visible within 100 ms after the press event (unverified, D-6). A redraw can be slower than 80 ms during auto-repeat. Then the screen skips an intermediate value, but no step is lost. The value advances once per event, and the last value shows within 100 ms after release. | UX-16 |
 
 ## 8. Start-up, faults and recovery
@@ -2994,6 +3382,9 @@ means: the main menu after the startup screen.
 | F-25 | `prev`, `next`, `enter` or the paddle tip is held closed at power-on (for example a key that is closed in the socket). | The startup screen for the full 5 s, then the main menu. The held contact does not skip the screen. | The held button gives no event until it is released and pressed again (section 6.2). | Release the button or open the key. The next press acts as usual. |
 | F-26 | First power-on after the update from firmware 0.1.x: a valid record of layout version 1 or 2 (`menu_subsystem_spec.md` section 5.1). | The main menu, no message. All earlier settings stay. `Ramp` shows `6 ms`. The tone edges are a little shorter than the fixed 8 ms of the earlier firmware. | The record loads. `Ramp` takes its default. Nothing is written at start-up. The first save after an edit step writes layout version 3 with all current values. | None needed. The user can set another value in Settings > CW. The release notes say this (`technical-writer`). |
 | F-27 | First power-on after the update from firmware 0.1.2 or earlier: a valid record of layout version 1, 2 or 3 (`menu_subsystem_spec.md`). | The main menu, no message. All earlier settings stay. `Max Word Length` and `Show CW Code` show their stored values in `Settings > Training`. `RX Attempts` and `TX Attempts` show `3`. The sessions work as before. | The record loads. The two attempt settings take their default. Nothing is written at start-up. The first save after an edit step writes layout version 4 with all current values. | None needed. The user can choose `Unlimited` in Settings > Training. The release notes say where the two moved items are (`technical-writer`). |
+| F-28 | Power-off with Mode TX or Chars Full. | After power-on, the configuration screen shows `RX` and `Learned`. | Mode and Chars are in RAM only (`training_spec.md` D-T65). The EEPROM holds nothing of them. | The user sets the values again. The user manual says this (`technical-writer`). |
+| F-29 | A plug is inserted or removed on the configuration screen or on the free end screen. | Maybe one `enter` press. On `Mode` or `Chars`: edit mode starts or ends. On `Start`: a session starts, or the message of UX-83 shows. On the free end screen: the configuration screen opens. | Tap mode and the keyer are off there, so a tip closure is an `enter` press (`training_spec.md` FT-9). | Edit mode: press `enter` again. A session that started by accident: a long `menu/back` drops it. No level changes (D-T80). The manual says: insert the plug before you open Callsigns. |
+| F-30 | Power loss during a free session. | After power-on, the main menu. The session is gone. Mode and Chars show their defaults (F-28). | A free session writes nothing (`training_spec.md` D-T80). | Open Callsigns again. |
 
 Decision UX-17: F-1 and F-2 are silent. Reasons: the user can see and fix every value in Settings. A message on
 first power-on is noise. A corruption needs a power loss inside a 6 ms window. Rejected: a one-time
@@ -3070,10 +3461,10 @@ button event instead, because the result is the same (UX-59). Section 9.5 tests 
 
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
-| V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`, `TEXT(1,21,"L1",inv)`. `TEXT(2,0,"Sending")`, `TEXT(2,21,"L1")` (UX-57), `TEXT(3,0,"Free Input")`, `TEXT(4,0,"Settings")` and `TEXT(4,24,">")`. `TEXT(5,0,"About")`, and cell (5,24) is blank (UX-61). Rows 6-7 have all pixels off. No EEPROM erase or write. |
+| V-01 | Power-on, empty EEPROM. | `TITLE`, `TEXT(0,0,"CW Trainer",inv)`. `SEL(1)`, `TEXT(1,0,"Receiving",inv)`, `TEXT(1,21,"L1",inv)`. `TEXT(2,0,"Sending")`, `TEXT(2,21,"L1")` (UX-57), `TEXT(3,0,"Free Training")` and `TEXT(3,24,">")`, with no level in row 3 (UX-79). `TEXT(4,0,"Free Input")`, `TEXT(5,0,"Settings")` and `TEXT(5,24,">")`. `TEXT(6,0,"About")`, and cell (6,24) is blank (UX-61). Row 7 has all pixels off. No EEPROM erase or write. |
 | V-02 | Power-on with a record that has a bad CRC. Open Settings > CW, Settings > Training and Settings > Display. | No message screen. CW shows `600 Hz`, `6 ms`, `32 WPM`, `32 WPM`, `20 WPM`, `20 WPM`, `Iambic B`, `Normal`. Settings shows `Both`. Training shows `3`, `3`, `5`, `On` (UX-74). Display shows `8`, `32`. |
-| V-03 | Main menu: press prev, then press next. | After prev: `SEL(5)` on `About`, `PLAIN(1)`. After next: `SEL(1)`. |
-| V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `About` (`SEL(5)`). It does not wrap to `Receiving`. |
+| V-03 | Main menu: press prev, then press next. | After prev: `SEL(6)` on `About` (UX-79), `PLAIN(1)`. After next: `SEL(1)`. |
+| V-04 | Main menu: hold next for 1000 ms. | Cursor stops on `About` (`SEL(6)`, UX-79). It does not wrap to `Receiving`. |
 | V-05 | Enter Settings. Enter CW. Press menu/back. | Title `Settings`, `SEL(1)` on `CW`. Then title `Settings > CW`, `SEL(1)` on `Tone`. Then title `Settings`, `SEL(1)` on `CW`. No EEPROM access. |
 | V-06 | CW: enter on Tone. Next. Prev. Prev. Enter. | `EDIT(1,7)`, `TEXT(1,14,"<",inv)`, `TEXT(1,24,">",inv)`, `TEXT(1,0,"Tone")` normal video. Values 610, 600, 590 Hz in turn. After enter: `SEL(1)`, `TEXT(1,17,"590 Hz",inv)`. |
 | V-07 | Tone at 1000 Hz in edit mode. Press next. Tone at 400 Hz. Press prev. | At 1000: cell (1,24) is blank inside the band, `<` shown. Next changes nothing. At 400: cell (1,14) blank inside the band, `>` shown. Prev changes nothing. |
@@ -3084,7 +3475,7 @@ button event instead, because the result is the same (UX-59). Section 9.5 tests 
 | V-12 | Edit Show CW Code (`On`). Prev. Prev. | `On`: only `<`. `Off`: only `>`. The second prev changes nothing. |
 | V-13 | Edit Backlight from 8 down to 0, then up to 10. | Shown values `7` .. `1`, `Off`, then `1` .. `10`. The fake backlight receives each level at once. `Off`: only `>`. `10`: only `<`. |
 | V-14 | Edit Contrast to 0, then to 63. | The fake LCD receives each contrast value at once. Limits 0 and 63 hold. |
-| V-15 | Change Tone 600 -> 610. Menu/back x3 (leave edit, leave CW, leave Settings). | Exactly one erase of page 0 and one record write, at the last menu/back only. Main menu, `SEL(4)` on `Settings`. The reloaded record gives Tone 610 Hz. |
+| V-15 | Change Tone 600 -> 610. Menu/back x3 (leave edit, leave CW, leave Settings). | Exactly one erase of page 0 and one record write, at the last menu/back only. Main menu, `SEL(5)` on `Settings` (UX-79). The reloaded record gives Tone 610 Hz. |
 | V-16 | Open Settings, change nothing, go back to the main menu. Then change Tone 600 -> 610 -> 600 and go back. | No EEPROM erase or write in both cases. |
 | V-17 | Edit Tone 600 -> 620. Press menu/back once. | Still on `Settings > CW`, `SEL(1)`, `620 Hz`. No EEPROM access. |
 | V-18 | Main menu: press menu/back. | Framebuffer unchanged, no dirty page. |
@@ -3180,8 +3571,8 @@ These tests use a fake keyer event source and the probes of section 9. Notation:
 | V-68 | `FI`. Key 7 lines `L25(A)` to `L25(G)`. `LONG(next)`. `KEY("H")`. | After the delimiter: rows 1-6 show `B` to `G`, `LINE(7)`. After `H`: rows 1-5 show `C` to `G`, `LINE(6)`, `TEXT(7,0,"H")`. |
 | V-69 | `FI`. DIT. `LONG(next)`. DAH, CHAR_GAP. | `LINE(1)`, then `TEXT(2,0,"A")`: the delimiter keeps the character in progress. |
 | V-70 | `FI`. `KEY("AB")`. Press prev, next, menu/back. P3.2 low 100 ms, then high. Hold prev for 600 ms, release. Hold next for 600 ms, release. | No redraw, no dirty page from the buttons, still Free Input. The keyer is not stopped. P3.2 gives no ENTER event. |
-| V-71 | `FI`. `KEY("AB")`. `LONG(menu)`. Press enter. | After the long press: main menu, `SEL(3)` on `Free Input`. The keyer stops once. The menu `enter` is on. After enter: Free Input with `BLANK(1)`..`BLANK(7)`: the text is gone. |
-| V-72 | `FI`. P3.2 low. `LONG(menu)` while P3.2 stays low. Keep P3.2 low 2 s more, release, then press enter. | Main menu, `SEL(3)`. No ENTER event while P3.2 stays low. One ENTER after the new press. |
+| V-71 | `FI`. `KEY("AB")`. `LONG(menu)`. Press enter. | After the long press: main menu, `SEL(4)` on `Free Input` (UX-79). The keyer stops once. The menu `enter` is on. After enter: Free Input with `BLANK(1)`..`BLANK(7)`: the text is gone. |
+| V-72 | `FI`. P3.2 low. `LONG(menu)` while P3.2 stays low. Keep P3.2 low 2 s more, release, then press enter. | Main menu, `SEL(4)` (UX-79). No ENTER event while P3.2 stays low. One ENTER after the new press. |
 | V-73 | `FI`. Hold menu/back with its debounced state pressed for 790 ms after its press event (the pin opens 770 ms after the press event), release. Then a debounced hold of 810 ms (the pin opens 790 ms after the press event). Then `FI` and hold it for 5 s. | 790 ms: still Free Input. 810 ms: the main menu shows at 800 ms (+/- 2 ms). 5 s: one exit only. The menu gets no event during the rest of the hold and after the release. |
 | V-74 | Lists with long holds: main menu, hold menu/back 2 s. Settings > CW, hold menu/back 2 s. Main menu, hold next 1000 ms. Tone edit at 600 Hz, hold next 1000 ms. Dialog, hold next 1000 ms. | Main menu: no change (as V-18). CW: Settings with `SEL(1)` on `CW`, no second step. Main menu: as V-04. Tone: 690 Hz, as V-08. Dialog: focus `Yes`, nothing else. |
 | V-75 | `buttons` only: hold prev. At 800 ms after the press event, the long event and a repeat are due in the same poll. | The first poll gives the long event of prev. The next poll gives the repeat. |
@@ -3201,7 +3592,7 @@ tests agree with AC-P14 to AC-P20 of `keyer_spec.md` section 17.7.
 | --- | --- | --- |
 | V-80 | Power-on, empty EEPROM. Open Settings. Then prev. Then next. Then next, next. | Title `Settings`. `SEL(1)` with `TEXT(1,0,"CW",inv)` and `TEXT(1,24,">",inv)`. `TEXT(2,0,"Training")`, `TEXT(2,24,">")`. `TEXT(3,0,"Prosigns")`, `TEXT(3,19,"Both")`. `TEXT(4,0,"Display")`, `TEXT(4,24,">")`. `TEXT(5,0,"Reset Statistics")`. `BLANK(6)`, `BLANK(7)`. After prev: `SEL(5)` (wrap from the first to the last item). After next: `SEL(1)`. After next, next: `SEL(3)` with `TEXT(3,0,"Prosigns",inv)` and `TEXT(3,19,"Both",inv)`. (AC-P14, UX-74) |
 | V-81 | Settings, cursor on `Prosigns`. Enter. Prev. Prev. Prev. Next. Next. Next. Enter. | After enter: `EDIT(3,11)`, `TEXT(3,0,"Prosigns")` in normal video, `TEXT(3,19,"Both",inv)`, `TEXT(3,10,"<",inv)`, cell (3,24) blank inside the band. First prev: `TEXT(3,16,"Prosign",inv)`, `<` in (3,10), `>` in (3,24). Second prev: `TEXT(3,12,"Punctuation",inv)` (all 11 characters), cell (3,10) blank inside the band, `>` in (3,24). Third prev changes nothing. Next, next: `Prosign`, then `Both` with the markers above. The third next changes nothing. After enter: `SEL(3)`, `TEXT(3,19,"Both",inv)`. (AC-P15) |
-| V-82 | Settings: edit `Prosigns` to `Punctuation` (enter, prev, prev, enter). Menu/back. Re-init from the fake EEPROM. Open Settings. Repeat with `Prosign` (enter, next, enter) and with `Both` (enter, next, enter). Then change `Both` -> `Prosign` -> `Both` and leave Settings. | Each of the first three exits: exactly one erase and one record write, at the menu/back from Settings. Main menu, `SEL(4)`. After each re-init: `TEXT(3,12,"Punctuation")`, then `TEXT(3,16,"Prosign")`, then `TEXT(3,19,"Both")`. The stored record has layout version 2 and flags bits 2-3 = 0, 1, then 2. The last exit: no EEPROM erase or write (UX-15). (AC-P15) |
+| V-82 | Settings: edit `Prosigns` to `Punctuation` (enter, prev, prev, enter). Menu/back. Re-init from the fake EEPROM. Open Settings. Repeat with `Prosign` (enter, next, enter) and with `Both` (enter, next, enter). Then change `Both` -> `Prosign` -> `Both` and leave Settings. | Each of the first three exits: exactly one erase and one record write, at the menu/back from Settings. Main menu, `SEL(5)` (UX-79). After each re-init: `TEXT(3,12,"Punctuation")`, then `TEXT(3,16,"Prosign")`, then `TEXT(3,19,"Both")`. The stored record has layout version 2 and flags bits 2-3 = 0, 1, then 2. The last exit: no EEPROM erase or write (UX-15). (AC-P15) |
 | V-83 | The fake EEPROM holds the version 1 record `43 57 01 58 02 20 20 14 14 02 03 05 08 20 78` (`Paddle` = `Reversed`). Power-on. Open Settings, then CW. Go back to the main menu without an edit step. Then open Settings > CW, change Tone 600 -> 610 and leave Settings. Re-init from the fake EEPROM. | No message screen (F-14). Settings shows `On`, `Both`, `5`. CW shows `Reversed` and the other default values. First exit: no EEPROM erase or write. Second exit: one save. The stored record has layout version 3, flags byte `0x6B` (Ramp 6 ms in bits 4-7, the plan layout of `menu_subsystem_spec.md` section 5.1) and Tone 610 Hz. After re-init: `Reversed`, `Both`, `610 Hz`, `6 ms`. (AC-P9, AC-P10 from the user's view) |
 | V-84 | For each value: a record with `Prosigns` = that value (empty EEPROM for `Both`). `FI`. AR, BT, KN, AS, SK with no word gap. | `Punctuation`: `TEXT(1,0,"+=(&<SK>")`. `Prosign`: `TEXT(1,0,"<AR><BT><KN><AS><SK>")`. `Both`: `TEXT(1,0,"<AR/+><BT/=><KN/(><AS/&><")` and `TEXT(2,0,"SK>")`. Every other cell of rows 1-7 is blank. (AC-P18) |
 | V-85 | For each value as V-84. `FI`. AR, one WORD_GAP, BT, one WORD_GAP, KN, one WORD_GAP, AS, one WORD_GAP, SK. Then a new `FI` with `Both`: `KEY("A")`, AR, one WORD_GAP, `KEY("K")`. | `Punctuation`: `TEXT(1,0,"+ = ( & <SK>")`. `Prosign`: `TEXT(1,0,"<AR> <BT> <KN> <AS> <SK>")`, cell (1,24) blank. `Both`: `TEXT(1,0,"<AR/+> <BT/=> <KN/(> <AS/")` and `TEXT(2,0,"&> <SK>")`. Last case: `TEXT(1,0,"A<AR/+> K")`: a word gap after a prosign text adds one blank cell. (AC-P20) |
@@ -3369,18 +3760,18 @@ Probes:
 | ID | Setup / action | Expected result |
 | --- | --- | --- |
 | V-152 | Power-on, empty EEPROM. No button event. Poll up to t = 4999. | `SPLASH("v0.1.0")`: `v0.1.0` from (92, 56). The menu reports the startup screen. No sidetone call, no keyer start, no EEPROM erase or write. After the first flush, no page is dirty up to t = 4999. |
-| V-153 | Continue V-152. Poll at t = 5000. Then poll up to t = 8000. | At t = 5000: `MAIN(1)`. Pages 0-5 and 7 change and are dirty. Page 6 is blank on both screens, so it is not dirty. After that, no change and no dirty page. |
+| V-153 | Continue V-152. Poll at t = 5000. Then poll up to t = 8000. | At t = 5000: `MAIN(1)`. All pages 0-7 change and are dirty: `About` is in row 6 (UX-79). After that, no change and no dirty page. |
 | V-154 | Power-on. At t = 500, one press event of `menu/back`. Repeat the test with `prev`, `next` and `enter`. | Each run: `MAIN(1)` at t = 500. No item opens, no edit mode, no cursor move, no EEPROM access, no sidetone call. At t = 5000 nothing changes and no page is dirty. |
 | V-155 | Power-on. At t = 500, send one repeat event of `next` as the first event. Repeat the test with a repeat of `prev`, and with the long event of `menu/back`, `prev` and `next`. | Each run: the same as V-154. The event ends the startup screen and does nothing else. |
 | V-156 | Power-on. P3.2 (paddle tip) low from t = 500 for 50 ms. | One `enter` press event. `MAIN(1)`. Receiving does not open. |
-| V-157 | Power-on. Hold `next` from t = 500 (press event) for 1000 ms. | At t = 500: `MAIN(1)`. The repeats of the hold move the cursor after the skip (UX-59): `SEL(2)` at t = 900, and the cursor stops on `About` (`MAIN(5)`), as V-04. The long event at t = 1300 changes nothing. |
+| V-157 | Power-on. Hold `next` from t = 500 (press event) for 1000 ms. | At t = 500: `MAIN(1)`. The repeats of the hold move the cursor after the skip (UX-59): `SEL(2)` at t = 900, and the cursor stops on `About` (`MAIN(6)`, UX-79), as V-04. The long event at t = 1300 changes nothing. |
 | V-158 | Power-on. Hold `prev` from t = 500 (press event) for 1000 ms. | `MAIN(1)` from t = 500 to the end. The repeats do not wrap (section 6.3). No page is dirty after t = 500. |
 | V-159 | P3.2 low from `buttons_init()`, P0.2 high. Keep P3.2 low for 6000 ms, then release. Then press `enter`. | `SPLASH("v0.1.0")` up to t = 4999. `MAIN(1)` at t = 5000. Nothing opens while P3.2 stays low or at the release. The new press opens the Receiving start screen. |
 | V-160 | Recovery start as V-33. Release P0.2 at t = 300. Press `enter` at t = 1000. Press `enter` again. Repeat the test with `next` and with `menu/back` as the first press. | Up to t = 999: `SPLASH("v0.1.0")`. The release gives no event. First press: the `Display Defaults` message of V-33. It stays open. Second press: `MAIN(1)`. |
 | V-161 | Recovery start as V-33. Release P0.2 at t = 300. No other button event. | `SPLASH("v0.1.0")` up to t = 4999. At t = 5000 the `Display Defaults` message of V-33. It stays open at t = 15000. |
-| V-162 | Main menu (`MAIN(1)`). Press prev. | `MAIN(5)`: `TEXT(5,0,"About",inv)`. Cell (5,24) is inside the band and has no `>` (UX-61). |
+| V-162 | Main menu (`MAIN(1)`). Press prev. | `MAIN(6)` (UX-79): `TEXT(6,0,"About",inv)`. Cell (6,24) is inside the band and has no `>` (UX-61). |
 | V-163 | Main menu, cursor on `About`. Press `enter`. | `ABOUT("0.1.0")`. No sidetone call, no keyer start, no EEPROM access. |
-| V-164 | Open `About` as V-163. Press `enter`. Open it again and press `menu/back`. Open it again and close P3.2 for 50 ms. | Each time: `MAIN(5)` with the cursor on `About`. No EEPROM access. |
+| V-164 | Open `About` as V-163. Press `enter`. Open it again and press `menu/back`. Open it again and close P3.2 for 50 ms. | Each time: `MAIN(6)` with the cursor on `About` (UX-79). No EEPROM access. |
 | V-165 | Open `About`. Press prev. Press next. Hold next for 1000 ms. Long `menu/back`, long `prev`, long `next`. | After each event: the framebuffer is unchanged, no page is dirty, the `About` screen stays open, no sidetone call. |
 | V-166 | Check the version macro. | `FIRMWARE_VERSION` is `"0.1.0"`. `SPLASH` uses `v0.1.0` from column 18 (x 92). `ABOUT` row 3 is `Version 0.1.0`, columns 0-12. |
 | V-167 | Test build with `FIRMWARE_VERSION` = `10.12.3`, then with the 17-character `12345.12345.12345`. | `10.12.3`: `TEXT5(82, 56, "v10.12.3")`, `TEXT(3,0,"Version 10.12.3")`. 17 characters: `TEXT5(32, 56, "v12345.12345.12345")`, and `About` row 3 ends in column 24. No ink at x 0, 1 or 127. |
@@ -3454,6 +3845,61 @@ These tests use the probes of sections 9, 9.2 and 9.4. The setting ids are the n
 | V-205 | Run 1: `TX("KM", chars, 50 items)`. Items 1-49 correct. In item 50, hold `next` from u for 1000 ms. Run 2: `UNL(TX)` with the same steps. | Both runs: at u + 800, header `50/50`, `SKIPTX`, row 5 shows the code of the item. At u + 3300: the end screen at once, with no blank moment: `TEXT(2,7,"Score 49/50")`, `OKBTN`. The keyer stops once. (UX-78) |
 | V-206 | Render the Training list with both values, in browse mode and in edit mode. Render `SKIPRX` with `Next` and with `Finish`. Render `SKIPTX` with the widest code (`,`: `MARKS` in x 42-84). Render `Try 99+` and `Try 10`. | No text goes past column 24. `RX Attempts` and `TX Attempts` keep the fit rule `len(label) <= 20 - fw` (11 <= 11). The label ink ends at x 55, and the band starts at x 61. Only ASCII 0x20-0x7E. `Unlimited` fits the menu value text buffer (12 bytes, D-P7). (UX-74 to UX-78) |
 
+### 9.8 Free Training and Callsigns tests (section 5.21)
+
+These tests use the probes of sections 9, 9.2 and 9.4 and the fakes of `training_spec.md` section 23.8. Free items
+come from the real `callsign.c`. A test that checks the item text reads it from `training_item_text()` or from the
+reference model of `training_spec.md` section 23.8.
+
+UX-79 moves `Free Input`, `Settings` and `About` down by one row. So V-01, V-03, V-04, V-15, V-71, V-72, V-82,
+V-153, V-157, V-162 and V-164 now give the new rows (`training_spec.md` AC-T62 (2)). Their other checks do not change.
+
+Notation:
+
+- `FTL`: power-on with an empty fake EEPROM. Press `next` twice (`MAIN(3)`), then `enter`. The Free Training list
+  shows.
+- `CFG`: `FTL`, then `enter`. The configuration screen shows.
+- `EARN(m, i)`, `TIP(t, d)`, `LONG(X)`, `HDR(s)`, `STATUS(s)`, `BODYOFF(a, b)`, `STARTBTN`, `OKBTN`, `KEYS` and
+  `PLOG`: as in sections 9.2 and 9.4. `EARN` comes before the power-on of `FTL`.
+- `FTLIST`: `TITLE`, `TEXT(0,0,"Free Training",inv)`, and the cells (0,13) to (0,24) are blank inside the title bar.
+  `SEL(1)`, `TEXT(1,0,"Callsigns",inv)`, the cells (1,9) to (1,24) are blank inside the band. `BODYOFF(2,7)`.
+- `CROW(r, l, v, s)`: `TEXT(r,0,l)` and `TEXT(r, 23 - len(v), v)`. If `s` is true, both are inverted. Every other
+  cell of row r is blank. `s` true: `SEL(r)`. `s` false: `PLAIN(r)`.
+- `CFGV(m, c, f)`: `TITLE`, `TEXT(0,0,"Callsigns",inv)`, and the cells (0,9) to (0,24) are blank inside the title
+  bar. `CROW(1,"Mode",m, f = MODE)`, `CROW(2,"Chars",c, f = CHARS)`, `BODYOFF(3,6)`. If `f` = `START`: `STARTBTN`.
+  Else `STARTTXT`.
+- `STARTTXT`: `TEXT(7,10,"Start")` in normal video. All other pixels of row 7 are off.
+- `NODIGIT`: `TEXT(4,2,"No digit learned yet")` and `TEXT(5,2,"Use Full or reach L25")`, normal video. Every other
+  cell of rows 4 and 5 is blank. With `NODIGIT`, `CFGV` checks `BODYOFF(3,3)` and `BODYOFF(6,6)` in place of
+  `BODYOFF(3,6)`.
+- `DIRTY(p, ...)`: after the step, the dirty mask holds exactly the pages `p, ...`. `DIRTY()`: no page is dirty.
+- `NOIAP`: no IAP erase and no IAP write. The progress record bytes do not change.
+- `MODE TX`: on the configuration screen with the focus on `Start`: `next`, `enter`, `next`, `enter`, `next`,
+  `next`. The focus is on `Start` again. `CHARS FULL`: `prev`, `enter`, `next`, `enter`, `next`. The focus is on
+  `Start` again. A vector that uses them adds no focus step after them.
+
+| ID | Setup / action | Expected result |
+| --- | --- | --- |
+| V-207 | `FTL`. Then `prev`, `next`, `next` held for 1000 ms. Then `menu/back`. | After `enter` on `Free Training`: `FTLIST`. `prev`, `next` and the hold: no change, `DIRTY()`. After `menu/back`: `MAIN(3)` with `TEXT(3,0,"Free Training",inv)` and `TEXT(3,24,">",inv)`. No EEPROM access. (UX-79) |
+| V-208 | `CFG`, as the first entry of the test process. | `CFGV("RX","Learned L1",START)`: the start-up values of Mode and Chars (D-T65). The step from `FTLIST` gives `DIRTY(0,1,2,7)`. Engine phase IDLE. No player call, no keyer start, no sidetone call, no EEPROM access. Tap mode off. (UX-80, UX-87) |
+| V-209 | `CFG`. `next`, `next`, `next`. Then `prev`, `prev`, `prev`. | `next`: `CFGV("RX","Learned L1",MODE)`, `DIRTY(1,7)`. `next`: `CHARS`, `DIRTY(1,2)`. `next`: `START`, `DIRTY(2,7)`. `prev`: `CHARS`, `DIRTY(2,7)`. `prev`: `MODE`, `DIRTY(1,2)`. `prev`: `START` (a wrap), `DIRTY(1,7)`. (UX-80) |
+| V-210 | `CFG`. `next` (focus `Mode`). Hold `next` from t = 0 for 1000 ms. Release. Hold `prev` from t = 2000 for 1000 ms. | At 0: `CHARS`. At 400: `START`. The repeats from 480 and the long event at 800: no change, `DIRTY()`. At 2000: `CHARS`. At 2400: `MODE`. The later repeats: no change, no wrap. (UX-80, UX-13) |
+| V-211 | `CFG`. `next` (focus `Mode`). `enter`. `prev`. `next`. `next`. `enter`. | After `enter`: `EDIT(1,2)`, `TEXT(1,0,"Mode")` in normal video, `TEXT(1,21,"RX",inv)`, cell (1,19) blank inside the band, `TEXT(1,24,">",inv)`, `DIRTY(1)`. `prev`: no change, `DIRTY()`. `next`: `TEXT(1,21,"TX",inv)`, `TEXT(1,19,"<",inv)`, cell (1,24) blank inside the band. Row 2 stays `Learned L1` (the TX level is index 0), `DIRTY(1)`. Second `next`: `DIRTY()`. `enter`: `CROW(1,"Mode","TX",true)`, `DIRTY(1)`. (UX-81) |
+| V-212 | `EARN(RX, 30)`, TX index 0 at `TX Speed`. `CFG`. `next`, `enter`, `next`, `prev`, `menu/back`. | Before the edit: `CROW(2,"Chars","Learned L31",false)`. After `next` in edit mode: `TEXT(1,21,"TX",inv)` and `CROW(2,"Chars","Learned L1",false)` in the same frame, `DIRTY(1,2)`. After `prev`: `RX` and `Learned L31`, `DIRTY(1,2)`. After `menu/back`: `CROW(1,"Mode","RX",true)`, the configuration screen stays. No EEPROM access. (UX-81, UX-82) |
+| V-213 | `CFG`. `prev` (focus `Chars`). `enter`. `next`. `next`. `prev`. `next`. `enter`. Then `MODE TX`. | After `enter`: `EDIT(2,14)` (band x 36-127), `TEXT(2,0,"Chars")` in normal video, `TEXT(2,13,"Learned L1",inv)`, cell (2,7) blank inside the band, `TEXT(2,24,">",inv)`. `next`: `TEXT(2,19,"Full",inv)`, `TEXT(2,7,"<",inv)`, cell (2,24) blank inside the band, `DIRTY(2)`. Second `next`: `DIRTY()`. `prev`: `Learned L1`. `next`, `enter`: `CROW(2,"Chars","Full",true)`. `MODE TX`: row 2 stays `Full`. The Mode step gives `DIRTY(1)`. (UX-81, UX-82) |
+| V-214 | `CFG`. `MODE TX`, `CHARS FULL` (the focus is on `Start`). `menu/back`. `enter`. `LONG(menu/back)`. `enter`. | After `menu/back`: `FTLIST`. After `enter`: `CFGV("TX","Full",START)`. The long `menu/back` leaves at the press: `FTLIST`. The long event changes nothing. After `enter`: `CFGV("TX","Full",START)`. No EEPROM erase or write in the whole test. A host power-on keeps the C variables, so the reset at a power-off is device check D-57. V-208 checks the start-up values. (D-T65, UX-80) |
+| V-215 | `CFG` (RX index 0). `enter`. `enter`. `next`. `enter`. `next`. `enter`. `next`, `next` (focus `Start`). `enter`. | First `enter`: `CFGV("RX","Learned L1",START)` with `NODIGIT`, `DIRTY(4,5)`. Engine phase IDLE. No player call, no keyer start. Tap mode off. Second `enter`: `DIRTY()`. `next`, edit mode start: `NODIGIT` stays. `next` (TX): `BODYOFF(4,5)`, row 2 stays `Learned L1`, `DIRTY(1,4,5)`. `enter`, focus steps, then `enter` on `Start`: `NODIGIT` again (TX index 0 blocks too). (UX-83) |
+| V-216 | `CFG`. `CHARS FULL` (the focus is on `Start`). `enter` at t = 0. | At 0: `HDR("RX 32/32 Callsigns   1/20")`, `STATUS()`, `BODYOFF(2,5)`, `KEYS` of the whole set of 40 characters. Tap mode on. At 1000: the first item. One `player_start()` at 32/32 WPM with the item text. The item line shows one slot per character of the callsign (3 to 6), with the block on the first slot. The header stays `1/20`. (UX-84, D-T76) |
+| V-217 | `EARN(RX, 24)`. `CFG`. `enter`. New run: `EARN(RX, 23)`. `CFG`. `enter`. | First run: `CROW(2,"Chars","Learned L25",false)` before the press. The session starts: `HDR("RX 32/32 Callsigns   1/20")`, `KEYS` of the whole set of 18 characters. Second run: `Learned L24`, then `NODIGIT`, no session. (UX-82, UX-83, D-T67) |
+| V-218 | `CFG`. `MODE TX`, `CHARS FULL` (the focus is on `Start`). `enter` at t = 0. Answer items 1 to 11. New run: `TX Speed` 5 and `TX Eff. Speed` 5, the same start. New run: `RX Speed` 50, `RX Eff. Speed` 50, Mode RX, Full, answer all 20 items. | First run: `HDR("TX 20/20 Callsigns   1/20")`. The keyer starts once with the TX settings. `enter` is disabled. Row 7 is off. At item 12: `HDR("TX 20/20 Callsigns  12/20")`. Second run: `HDR("TX 5/5   Callsigns   1/20")`. Third run, item 20: `HDR("RX 50/50 Callsigns  20/20")`. (UX-84) |
+| V-219 | `CFG`, `CHARS FULL` (the focus is on `Start`), `enter`. RX: answer items 1 to 17 right on the first attempt. Answer items 18 to 20 wrong once, then right. New runs: all 20 items wrong 3 times (`RX Attempts` = `3`), and all 20 right. | After the last check: `HDR("RX 32/32 Callsigns  20/20")`, `STATUS()`, `TEXT(2,7,"Score 17/20")`, `BODYOFF(3,6)`, `OKBTN`. Tap mode off. `NOIAP`. The other runs: `TEXT(2,7,"Score 0/20")` and `TEXT(2,7,"Score 20/20")`. No run shows `Not saved`, `Passed` or `Not passed`. (UX-85, D-T79, D-T80) |
+| V-220 | End screen of V-219. Run 1: `prev`, `next`, `next` held for 1000 ms, `prev` held for 1000 ms, P5.5 low for 100 ms. Then `enter`. Run 2: `menu/back`. Run 3: `menu/back` held for 1000 ms. Run 4: `TIP(t, 100)`. | Run 1: the first events change nothing, `DIRTY()`. `enter`: `CFGV("RX","Full",START)`, `DIRTY(0,1,2,7)`. Engine phase IDLE. No player call after the press. Run 2: `FTLIST`. Run 3: `FTLIST` at the press. The long event changes nothing. Run 4: as `enter` in run 1. (UX-86) |
+| V-221 | `CFG`, `CHARS FULL`. A long `menu/back` in each state, each in a new run. The states: the configuration screen in browse mode and in edit mode, and the start pause. Also Item (RX playing, TX keying), a `Wrong` result, the RX answer state and the TX failed result. Also the blank moment and the free end screen. After each: `enter`. | Browse mode and the end screen: `FTLIST` at the press. Edit mode: edit mode ends at the press, `FTLIST` at 800 ms. The session states: `FTLIST` at the long event. RX: `stop()` in `PLOG`, tap mode off. TX: the keyer stops once, `enter` enabled. No EEPROM access. After `enter`: `CFGV("RX","Full",START)`. No session. (D-T87, UX-80) |
+| V-222 | TX free session as V-218, all items correct. P3.2 low from 100 ms before the last CHAR_GAP. Keep it low for 2 s after the end screen shows. Release. Press `enter`. Press `enter` again. | The held contact opens nothing: the end screen stays. First press: `CFGV("TX","Full",START)`, no session. Second press: a session starts, `HDR("TX 20/20 Callsigns   1/20")`. (UX-86, `training_spec.md` FT-9 and F9) |
+| V-223 | `EARN(RX, 30)`, `EARN(TX, 5)`. Free sessions in both modes, with Learned and with Full. Cover all correct, all wrong and skips. Then go back to the main menu. Then `Reset Statistics` `Yes`, `OK`, and `CFG` again. | After the sessions: `MAIN(3)` with `TEXT(1,20,"L31")`, `TEXT(2,21,"L6")`. Row 3 shows no level. `NOIAP`. After the reset: `TEXT(1,21,"L1")`, `TEXT(2,21,"L1")`. The configuration screen shows the Mode and Chars of before the reset. (D-T80, D-T81, UX-79) |
+| V-224 | Render every screen of section 5.21 with the longest texts: `EARN(RX, 65534)` for `Learned L65535`, the header at 50/50 WPM with `20/20`, `Score 20/20`, the message, and the `Chars` edit with `Learned L65535`. | `TEXT(2,9,"Learned L65535")`. In edit mode: `EDIT(2,14)`. `TEXT(2,0,"Chars")` in normal video uses only cells 0-4 (x 2-26), and the pixels of x 27-35 in y 16-23 are off. No string reaches past column 24. Only ASCII 0x20-0x7E. (V-32) |
+| V-225 | For each mode `m` (RX, TX): `EARN(m, 23)` and `EARN(m, 24)` in two runs. `CFG` with Mode `m`, then `enter` on `Start`. New run: index 0 with `CHARS FULL`. New run: RX index 30 and TX index 0. | Index 23: `Learned L24`, `NODIGIT`. Index 24: `Learned L25`, a session starts. Full at index 0: a session starts. RX index 30 starts in RX and blocks in TX. So `L25` in `NODIGIT` is the shown level of the first index that starts. (UX-83, D-T67, `training_spec.md` AC-T59 (3)) |
+
 ## 10. Durable decisions
 
 | ID | Decision | Reason | Rejected alternatives |
@@ -3514,11 +3960,11 @@ These tests use the probes of sections 9, 9.2 and 9.4. The setting ids are the n
 | UX-54 | UX-65 moves the selector line to row 1. UX-66 replaces the description line of row 5: a label in row 2 and the description in the 8 x 16 font. The selector rules stay: the text, the markers, the centering. Selector line `<  L<s> of <e>  >` in row 4, centered with the markers, `c = floor((19 - len) / 2)`. `<` only when `prev` can step, `>` only when `next` can step, as the edit markers (UX-4). Normal video, no band. Description in row 5: `K and M` (L1), `New char <text>` (character levels, full `Prosigns` text), `Words of <len>` (word levels and the final word phase). | User decisions 2026-10-07: the selector style and short words. The markers show the possible directions and the limits with no extra pixels. `of <e>` shows the earned level, so a replay never looks like a lost level. The final phase needs no own text: the header shows the item count. One text per level kind keeps the code and the strings small. | A highlight band on the selector (two bands on one screen, UX-2). Markers at fixed columns 2 and 22 (far from a short number). `Final words of 8` or `11 words of 8` for the final phase (new strings, the count is in the header). The short label text of the keyboard for a prosign (`<AR>` in `Both`): the item line shows the full text, and the description names the same character. |
 | UX-55 | UX-69 replaces the end screen part of this decision: the end screen has no selector, `prev` and `next` do nothing there, and `enter` or the tip opens the start screen. UX-70 replaces the page budget: a step dirties only the pages whose bytes change, inside pages 0-5. The start screen part stays. Selector controls on the start screen and the end screen, both modes: `prev` and `next` press and repeat step by one, stop at L1 and at the earned level, no wrap. `enter` or the tip starts a session at the selected level. A `menu/back` press opens the main menu, cursor on the mode item. Long events do nothing. Tap mode is off on both screens (Receiving turns it on at the session start, off when the end screen shows). A step redraws pages 0, 4 and 5 on the start screen and pages 4 and 5 on the end screen. A press at a limit redraws nothing. | User decision 2026-10-07: press and auto-repeat both act. Repeats need tap mode off. All buttons then act at the press, as in the lists. The limits match the value edit (UX-13). The page budget keeps a step fast during the 80 ms repeat. | Long `prev`/`next` = step of 10 (the fallback of the plan, only if the repeat costs too much flash). Wrap from L1 to the earned level (a surprise at a limit, UX-13). Tap mode on the end screen (no repeats). A long `menu/back` to leave (the screen holds no work to lose). |
 | UX-56 | UX-68 replaces rows 4-5 (the selector and the description) and the `Start` button of this decision: rows 4-6 are blank, and the button is `OK`. UX-69: `enter` opens the start screen, not the session. The rows 0-3, the preselect rule and the replay rule stay. Session end screen with the selector (section 5.15). Row 1 `Not saved` after a failed save. Row 2 score. Row 3 `Passed, new level` (the earned level went up), `Passed` (a replay pass, or a pass at index 65535), or `Not passed, need t`. Rows 4-5 the selector, preselected: pass = session level + 1, fail = session level. Row 7 `Start` (replaces `Next`). The header keeps the session that ended. A replay pass never changes the store. | User decision 2026-10-07: the same selector as the start screen, the preselect rule and the replay rule. The selector shows the next level, so the rows `New level L13` and `Repeat level L12` only repeated its number. Row 3 keeps the reward of a pass that advanced. `Not saved` goes to the status line of the frame. One button text for both screens saves a string, and `Start` is right for every selected level. The header still names the level that the score belongs to. | Keep `New level L<n>` and add the selector in rows 5-6 (a full screen and the same number twice). `Not saved` in row 6, next to the button. `Passed (replay)` or `Passed, level kept` (a new string, and `of <e>` already shows that the earned level stays). The header follows the selection (the score then has no level). `Next` on the end screen. |
-| UX-57 | Main menu: `Receiving` and `Sending` show the earned level `L<n>` at the current `RX Speed` or `TX Speed`, right-aligned to column 22, inverted with the selected row like any value. `Free Input` and `Settings` show nothing new. Read at each row draw from the progress image in RAM. | User decision 2026-10-07. Column 22 is the value column of every list (section 4.3), so the level reads as the value of the row. The band shows the selected row as a whole. The draw needs no EEPROM access (D-T9). | A level after the label in column 10 (a new column rule). The level of the effective speed (the progress key uses the character speed). A level in normal video inside the band (a hole in the highlight). |
+| UX-57 | UX-79 adds the `Free Training` row with `>` and no level. Main menu: `Receiving` and `Sending` show the earned level `L<n>` at the current `RX Speed` or `TX Speed`, right-aligned to column 22, inverted with the selected row like any value. `Free Input` and `Settings` show nothing new. Read at each row draw from the progress image in RAM. | User decision 2026-10-07. Column 22 is the value column of every list (section 4.3), so the level reads as the value of the row. The band shows the selected row as a whole. The draw needs no EEPROM access (D-T9). | A level after the label in column 10 (a new column rule). The level of the effective speed (the progress key uses the character speed). A level in normal video inside the band (a hole in the highlight). |
 | UX-58 | Startup screen layout (section 5.17.1). No title bar, normal video. `Putikeeg` 5 x 8 at (82, 8), row 1, right-aligned to column 23. `CW Trainer` 8 x 16 at (7, 16), pages 2 and 3. `mod by UT2UBM` 5 x 8 at (7, 32), row 4, column 1. `v` + version 5 x 8 at (122 - 5n, 56), row 7, right-aligned to column 23. Pages 0, 5 and 6 blank. Drawn once. | Follows the mockup of the user. The 8 x 16 line fills whole pages, as the item line does. Columns 1 and 23 give the same 7 px margin on both sides. The version sits at the bottom, apart from the name. | Text at columns 0 and 24 (margins of 2 px: the text sits at the edge of the glass, and the mockup shows blank cells at both edges). `Putikeeg` in row 0 (no top margin). 8 x 16 line at y 15 (crosses a page edge). A title bar (the screen is not a menu). |
 | UX-59 | Startup screen time and skip (section 5.17.2). `MENU_SPLASH_MS` = 5000 ms from `menu_init()`. The first button event of any kind (press, repeat or long, any of the four buttons, also the tip) ends it and does nothing else. The later events of the same hold act on the next screen. A button held at power-on does not skip it. | User decisions: any button skips (plan), and 5 s (2026-10-08, it replaces the 2 s of the plan). The skip never changes a setting or opens an item. A held `next` that scrolls the main menu after 400 ms is a normal list hold. | Swallow the whole press up to the release (needs a new buttons function and flash for a rare case). Skip on `enter` only (the user asked for any button). A countdown or progress bar (redraws and noise for 5 s). 2 s (the value of the plan, replaced by the user on 2026-10-08). |
 | UX-60 | Display recovery start order (section 5.17.3): the startup screen, then the `Display Defaults` message, then the main menu. The press that skips the startup screen does not close the message. | The defaults apply before the first frame, so the startup screen shows that the screen works. The message stays until the user closes it. One start sequence for every start. | Message first, then the startup screen (5 s of delay after `OK`). No startup screen on a recovery start (two sequences, no version). |
-| UX-61 | `About` is the fifth main menu item, after `Settings`, in row 5. No marker, no value. Kind: info screen. | `>` means "opens a list". Items that open a screen have no marker. Five items fit with no scroll. | `>` on `About` (promises a list). A `...` suffix (not used anywhere else). |
+| UX-61 | UX-79 makes `About` the sixth main menu item, in row 6. Six items also fit with no scroll. `About` is the fifth main menu item, after `Settings`, in row 5. No marker, no value. Kind: info screen. | `>` means "opens a list". Items that open a screen have no marker. Five items fit with no scroll. | `>` on `About` (promises a list). A `...` suffix (not used anywhere else). |
 | UX-62 | `About` screen (section 5.18). Title `About`. Rows 1-3: the name, the mod and `Version ` + version. Row 4 blank. Rows 5-7: the link in three parts. All text is left-aligned in column 0, in normal video. No band and no `OK`. `enter` or `menu/back` goes to the main menu with the cursor on `About`. `prev`, `next`, repeats and long events do nothing. | User layout. The link needs three rows, and one left edge keeps it readable as one text. Closing with `enter` or `menu/back` matches the message screen. | Centered text (the link parts lose their common edge). An `OK` button (no free row). A hyphen at the link breaks (changes the link). |
 | UX-63 | Version text (section 5.17.4): `FIRMWARE_VERSION` is digits and dots, at most 17 characters. The startup screen shows `v` + version right-aligned to column 23. `About` shows `Version ` + version from column 0. A longer version stops the build. | 17 characters keep `Version ` + version inside 25 columns. A cut text is a defect. A build check finds it before the device does. | No limit (a cut on the glass). A run-time cut or a short form (hides the real version). |
 | UX-64 | UX-78 adds the same answer state after a skip, with the status `Skipped. The answer is:`. UX-71 replaces the 8 ms fall of this decision with the `Ramp` time. User decision 2026-10-15 (sections 5.12.2, 5.14, 6.8). Receiving answer state: after the third wrong attempt, the screen shows `Wrong. The answer is:` and the answer, and the answer plays once. Then the state waits with no time limit. An `enter` tap (or a short tip closure) continues: a running playback stops (8 ms fall), then the blank moment and the next item, or the end screen after the last item. The tap also acts while the answer plays. A long `enter` (or a tip closure of 800 ms) plays the answer again from its start, with no screen change. The other taps, long `prev` and long `next` do nothing. Long `menu/back` exits. Row 7: only the `enter` field shows text, `Next` (x 107), or `Finish` (x 97) on the last item, right-aligned as every `enter` label. The other three fields are blank. The key bars stay. The blank moment puts the labels of the whole set back. Sending keeps the 2500 ms answer delay (`TRAINING_FAILED_MS`). Refines UX-44, UX-46 and UX-51. Engine side: `training_spec.md` D-T44. | A fixed delay after the playback gave the user too little time to read the answer and to compare it with what they picked. On every other screen (menu, start screen, end screen), `enter` accepts and goes on. It is also the paddle tip, so a user who answers with the paddle continues without moving the hand. A long `enter` already replays in Item, so tap = go on and hold = listen again is one pair on one button. `next` is a keyboard run in Receiving and a cursor key in the menu, and never accepts. The blank fields follow the empty-run rule: no text, and a tap does nothing. The text above `enter` names the result of the tap. Sending has no button input in a session (the tip is the keyer), so it keeps the timed answer. | `next` continues (it never accepts on other screens). Keep the 2500 ms delay (too short to study the answer). Keep the keyboard labels in the answer state (they promise picks that do nothing). Wait for a key in Sending too (the tip keys elements, so it cannot accept). |
@@ -3530,6 +3976,15 @@ These tests use the probes of sections 9, 9.2 and 9.4. The setting ids are the n
 | UX-76 | Sections 5.14, 5.20.1. With `Unlimited`, every wrong check gives the `Wrong` result (1200 ms) and the retry. The retry status is `Try <N>`: `N` = the wrong attempts + 1, from 2 to 99, then `Try 99+` from attempt 100. Centered: column 10 for 5 cells, column 9 for 6 and 7 cells. With `3`, the status stays `Try 2 of 3` and `Try 3 of 3`. Refines UX-46 and UX-52. | The retry cue of UX-52 stays: only the status tells a retry from a fresh item. `of 3` has no meaning with no limit, so it goes. The number shows the user how hard the item is. Two digits are enough, and `99+` is true for every larger count. The cap is far below the engine stop at 255, so the screen never shows a wrong count. | `Try 2 of -` or `Try 2 of *` (a dash or a star reads as a CW character, UX-27). `Retry` with no number (the user loses the count). A cap at 255 with `Try 255` (3 digits for no gain, and the text stays at 255 after the counter stops). A cap at 9 with `Try 9+` (too low: a long word can need 10 attempts). |
 | UX-77 | User decision (plan 2026-11-02, sections 5.20.2, 6.1, 6.6, 6.8, 6.9). A long `next` skips the current item in Receiving and in Sending, with every attempt setting. It acts in Item and in a `Wrong` result with attempts left. It does nothing in the start pause, a `Correct` result and the blank moment. It also does nothing in the answer state, the failed result, the start screen and the end screen. The state at the long event decides. Receiving: tap mode gives only the long event, so the hold never selects run 2. Sending: the session ignores the press and repeat events of `next`, as every short press (UX-24). The skip gives no point and uses no attempt. Accepted risk: a hold that starts in the `Correct` result or the blank moment and reaches 800 ms in the next item skips that item (D-52). This decision replaces "long `next` does nothing" in UX-43, UX-45, UX-51 and section 6.6. | A long `next` is the "go on" gesture of the device: it draws the delimiter in Free Input, and here it goes on to the next item. Both modes had no use for a long `next`, and the 800 ms hold protects against a slip (UX-23). The skip also acts in a `Wrong` result. The user often gives up just after a wrong answer, and the 1200 ms delay is longer than the hold. After a result that ends the item, a skip has nothing to end. | Long `prev` (it undoes a pick in Receiving). Long `enter` (it replays in Receiving, and it is the keyer in Sending). A short `next` press (it selects run 2 in Receiving). A `Skip?` question (slow, and the loss is one point). A guard that drops a hold from before the item (tap mode gives no press time for a hold). Skip only in Item (it drops a hold that the user starts in the `Wrong` result). |
 | UX-78 | Sections 5.14, 5.20.3, 5.20.4. The skip result. Receiving: the answer state of UX-64 with the status `Skipped. The answer is:` (23 cells, column 1). It shows the correct item with no marks and `Next` or `Finish` above `enter`. The answer plays once from its start, and the state waits for an `enter` tap. Sending: the status `Skipped` (7 cells, column 9) for `TRAINING_FAILED_MS` (2500 ms) from the skip. The bar does not move. Row 5 shows the code of the character under the bar (in a character item, the item), for every `Show CW Code` value. Row 7 does not change. A character in progress is dropped. | The user did not answer wrong and often did not answer at all. `Skipped` names what the user did and shows that the long press acted. Receiving keeps `The answer is:` of UX-64, so the two failed states read alike and share the code. Sending keeps the form of its failed result: a short status and one code in row 5. The character under the bar is where the user stopped, as in the pause error rule of UX-52. One code fits the row, and the rest of a word does not. | `Wrong. The answer is:` after a skip (it judges an answer that does not exist). `Skipped: <item>` in the status (it repeats the item line). The code of the rest of the word (up to about 40 marks, more than 128 px). The code of the first character of the item (the user keyed it already in many cases). Clear row 7 at the skip (the user loses what they keyed). Move the bar after a skip in a `Wrong` result (the bar leaves the error position). |
+| UX-79 | User decision (plan 2026-11-03, `training_spec.md` D-T64, D-T86, sections 5.16.6, 5.21.1). Main menu order: `Receiving`, `Sending`, `Free Training`, `Free Input`, `Settings`, `About` in rows 1-6. Row 7 is blank, and there is no `i/n` mark. `Free Training` is a submenu with `>` and no level. Its list has the title `Free Training` and one mode item, `Callsigns`, with no marker and no level. `menu/back` in the list opens the main menu with the cursor on `Free Training`. | The `>` marker means "opens a list" (UX-61). The program name is the item label, so a later program is one more row. Six items fit the 7 rows with no scroll. | `Callsigns` in the main menu (no room for later programs, user decision). A level on `Callsigns` (a free session has no level, D-T86). A path title such as `CW Trainer > Free Training` (26 characters do not fit, and the path rule is for Settings). |
+| UX-80 | Configuration screen layout and focus (U-36, section 5.21.2). Title `Callsigns`. Row 1 `Mode`, row 2 `Chars`. Rows 3-6 blank, or the message in rows 4-5. Row 7 `Start` with the band of the training start screen (x 47-81). The focus has three places: `Mode`, `Chars` and `Start`. There is one band. `prev` and `next` move the focus. A press wraps, a repeat does not. Each opening puts the focus on `Start` with edit mode off. | The most frequent task is a new session with the kept values. From the end screen, it takes `enter` and `enter`. The values change rarely and are one press away: `next` wraps to `Mode`, and `prev` goes to `Chars`. The rows look and act as Settings rows, and `Start` is the button of the training start screen. So the user knows both. | Focus on `Mode` at each opening, as a list does (three presses to start). `Start` as a third row in row 3 (it reads as a setting). A start with a long `enter` (tap mode is off, so `enter` has no long event). |
+| UX-81 | User decision (plan 2026-11-03): the rows act as the choice rows of Settings (U-36, section 5.21.2). `enter` on a row starts edit mode (UX-4). `prev` and `next` step the value and stop at the limits, with no wrap. The new value is in RAM at once. `enter` or `menu/back` ends edit mode and keeps the value. `enter` (or the tip) on `Start` starts a session at the press, or shows the message of UX-83. A `menu/back` press in browse mode opens the Free Training list. | One grammar for every choice in the device. The press acts at once, as on the training start screen (UX-55). | `prev` and `next` change the value with no edit mode (a focus step and a value step then look alike). A `menu/back` in edit mode that leaves the screen (Settings keeps the user in the list). |
+| UX-82 | `Chars` shows the level (U-38, section 5.21.2). Learned shows as `Learned L<n>`. `n` is the shown level of the mode of row 1, at the speed of that mode. Full shows as `Full`. fw 14. A Mode step changes the level in the same redraw. | The user knows levels from the main menu, the start screen and the header. The learned count shows nowhere else. The message of UX-83 names a level (`L25`), so the user compares two levels on one screen. The level follows Mode at once, so the user sees that RX and TX have their own levels. | The learned count `Learned 18` (a number the user does not know, and `18` can read as a level). No level (the user cannot see why a start blocks). A read-only row `Level L12` (it looks like a row that the focus can reach). |
+| UX-83 | "No digit learned" message (U-37, section 5.21.3). Rows 4 and 5, centered, normal video: `No digit learned yet` and `Use Full or reach L25`. A blocked start shows it. It has no time limit. A value step of `Mode` or `Chars`, or an exit, clears it. A focus step and edit mode keep it. No sound. | The text gives the reason and the two ways out. It stays while the user moves to `Chars`, so the user can read it during the fix. A value step can remove the reason, so it removes the text. The device has no timeout (section 6.1). | A message screen with `OK` (one more press, and the user loses the values from view). A timed text (a timer state, and a slow reader misses it). A text before the start press (the user decision: a message at the start). `Learn more chars` (it does not say which level). |
+| UX-84 | Header of a free session (U-39, section 5.21.4). `Callsigns` in columns 9-17 in place of `L<level>`. The item field is `<i>/20`. The worst case `RX 50/50 Callsigns  20/20` has 25 cells and 2 blank cells before the item. | The full program name fits, so no short form is necessary. The header tells the user that this is not a Koch session and that no level is at stake. | `CS` or `Calls` (new short forms). `FT` (unclear). The level of the mode (the session trains no level). |
+| UX-85 | Free end screen (U-40, section 5.21.5). The frame of UX-68: the header with `20/20`, row 2 `Score <c>/20` from column 7, rows 1 and 3-6 blank, row 7 `OK` (band x 52-71). No pass or fail text. No `Not saved`. | User decision: the score with no pass or fail. The frame and the button of the Koch end screen, so the user knows them. A blank row 3 adds no string. | A row 3 text such as `Level not changed` (the same text after each session, and the header already says `Callsigns`). A percent value (a new format). A `Start` band (no session starts at this press). |
+| UX-86 | `menu/back` on the free end screen (U-41, section 5.21.5): the Free Training list, cursor on `Callsigns`. `enter` (or the tip) opens the configuration screen. Long events, `prev`, `next` and the ring do nothing. | The Koch end screen works the same way (UX-69). `enter` means "again" and opens the screen before the session. `menu/back` leaves the mode to the list that holds it. Two buttons give two different results. The long `menu/back` has the same target (D-T87). | `menu/back` to the configuration screen (the same result as `enter`, and the user needs a second press to leave). |
+| UX-87 | Redraw budget of the configuration screen (U-36, section 5.21.6). The byte rule of UX-70. A step can redraw only the rows that it changes, but the frame must equal a whole-screen draw of the new state. A focus step changes 2 pages. A value step changes 1 to 4 pages. An opening changes pages 0, 1, 2 and 7. A press with no effect changes no page. | The rule needs no page list in the code. A step stays short during the 80 ms repeat. | Pages marked by hand (rejected in UX-70). |
 
 ## 11. Device checks (unverified until the user tests on the device)
 
@@ -3587,6 +4042,11 @@ These tests use the probes of sections 9, 9.2 and 9.4. The setting ids are the n
 | D-50 | Unlimited attempts (UX-76). Set `RX Attempts` and `TX Attempts` to `Unlimited`. Receiving: answer a character item wrong 5 times, then right. Sending: key a word wrong, then with a pause error, then right. Then set both settings to `3` and do the same once. | The status counts `Try 2`, `Try 3` and on. The answer never shows by itself. The right answer gives `Correct` and the next item. The score does not count these items. With `3`, the behaviour does not change. Record whether the user notices the setting from the missing `of 3`. |
 | D-51 | Skip key (UX-77, UX-78). Contrast 32, backlight 8 and 0, 30-60 cm. Receiving: hold `next` for 1 s in Item during the playback, after some picks, and in a `Wrong` result. Also tap `next` fast once. Sending: hold `next` in a word with a character half keyed (the other hand on the paddle), and in a `Wrong: N` result. In both modes, also skip the last item. | At about 0.8 s, Receiving shows `Skipped. The answer is:`, plays the answer from its start and shows `Next` (`Finish` on the last item). The fast tap selects run 2 and does not skip. Sending shows `Skipped`, the bar under the character where the user stopped, and its code in row 5. The half-keyed character gives no `Wrong:`. After the last item, the end screen follows. Record whether a user expects a short `next` to skip, and whether `Next` above `enter` makes the user press `next`. |
 | D-52 | Skip at the item change (UX-77, accepted risk). In both modes, after a right answer, hold `next` for 1 s from the `Correct` result into the next item. Then practise for 10 minutes and record each skip that the user did not want. | The rule holds: if the long event comes in the new item, that item is skipped. Record how often an unwanted skip happens. If it happens in normal use, report it to `architector` (UX-77, rejected alternatives). |
+| D-53 | Main menu and the Free Training list on the glass (UX-79). Contrast 32, backlight 8 and 0, 30-60 cm. | The user reads all six main menu rows and the `>` on `Free Training`. The user finds `Callsigns` in the list with no help. |
+| D-54 | Configuration screen on the glass (UX-80 to UX-83). Contrast 32, backlight 8 and 0, 30-60 cm. Move the focus through the three places. Edit both rows. Press `Start` with Learned at L1. | The user sees at a glance which place has the focus: a row band or the `Start` band. The plain `Start` reads as a button that the focus can reach. The wide band of the `Chars` edit (x 36-127) reads as the edit of the value. The two message lines are readable. The user understands `Learned L1` and `reach L25` with no manual. |
+| D-55 | Free session header and end screen (UX-84, UX-85). RX and TX sessions at 20/20 and 50/50 WPM. | `Callsigns` and the item number read as two fields, also at `12/20` with 2 blank cells. The end screen with only the score does not look like an error. |
+| D-56 | Response time on the configuration screen (UX-87, D-6). Hold `next` from `Mode` in browse mode. Step `Mode` in edit mode with Learned and the message on the screen. | Each change shows within 100 ms after the press event. The repeat steps show at 12.5 per second. |
+| D-57 | Mode and Chars after a power-off (D-T65, F-28). Set Mode TX and Chars Full. Switch the device off and on. Open Callsigns. | The configuration screen shows `RX` and `Learned L<n>`. Host tests cannot show it, because a host power-on keeps the C variables (V-214). |
 
 ## 12. Open questions
 
@@ -3693,6 +4153,22 @@ Resolved by the user on 2026-11-02 (plan "Unlimited attempts and word skip in th
 - The score and the level logic do not change.
 - `ui-ux-embedded-designer` chose the labels, the choice texts `3` and `Unlimited`, the status `Try <N>` with the cap
   `Try 99+`, the skip texts `Skipped. The answer is:` and `Skipped`, and the Sending skip screen.
+
+Resolved by the user on 2026-11-03 (plan "Free Training section with the Callsigns program", `training_spec.md`
+section 23, UX-79 to UX-87):
+
+- A new main menu item `Free Training`, after `Sending`, holds programs that never change the learning progress. The
+  first program is `Callsigns`.
+- The configuration screen has `Mode` (RX or TX) and `Chars` (Learned or Full), and a start action. The rows act as
+  the choice rows of Settings. The values stay in RAM until a power-off.
+- Learned with no digit learned shows a message and does not start.
+- A session has 20 callsigns. The end screen shows the score with no pass or fail. `enter` there opens the
+  configuration screen. `menu/back` on the configuration screen opens the Free Training list. A long `menu/back`
+  opens the Free Training list from every state.
+- `ui-ux-embedded-designer` chose the focus on `Start` at each opening and the value `Learned L<n>` (U-38). The
+  designer also chose the message `No digit learned yet` / `Use Full or reach L25` and the header text `Callsigns`.
+  The free end screen shows only the score. `menu/back` on the end screen opens the Free Training list (U-41). Gate
+  G2: the user approves this screen specification before T18 Part B starts.
 
 Resolved by the user after the training specification:
 

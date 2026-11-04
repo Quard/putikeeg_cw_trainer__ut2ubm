@@ -157,6 +157,7 @@ target_include_directories(koch_group PUBLIC ${HOST_INCLUDE_DIRS})
 set(TRAINING_TEST_PATTERN "^test_(qa_)?training")
 add_library(training_group STATIC
     "${FIRMWARE_DIR}/src/modes/training.c"
+    "${FIRMWARE_DIR}/src/callsign/callsign.c"
     ${KOCH_SOURCES}
     "${FIRMWARE_DIR}/src/koch/koch_item.c"
     ${PROGRESS_SOURCES}
@@ -206,17 +207,20 @@ target_compile_definitions(free_input_group PUBLIC ${TARGET_DEFINITIONS})
 
 # The menu group also links the buttons, so the start-up tests run the real recovery window. The mode tests of
 # Receiving and Sending use the same group: their scenarios start from the menu (ui-ux.md section 9.4). Items come
-# from fake_koch_item.c (training_spec.md D-T18), the player and the keyer are fakes.
+# from fake_koch_item.c (training_spec.md D-T18), free items from the real callsign.c (D-T88), the player and the
+# keyer are fakes.
 set(MENU_TEST_PATTERN "^test_(qa_)?menu")
 set(MODES_TEST_PATTERN "^test_(qa_)?(receiving|sending)")
 file(GLOB MENU_SOURCES CONFIGURE_DEPENDS "${FIRMWARE_DIR}/src/menu/menu*.c")
 add_library(menu_group STATIC
     ${MENU_SOURCES}
     "${FIRMWARE_DIR}/src/modes/free_input.c"
+    "${FIRMWARE_DIR}/src/modes/free_training.c"
     "${FIRMWARE_DIR}/src/modes/receiving.c"
     "${FIRMWARE_DIR}/src/modes/sending.c"
     "${FIRMWARE_DIR}/src/modes/training.c"
     "${FIRMWARE_DIR}/src/modes/training_screen.c"
+    "${FIRMWARE_DIR}/src/callsign/callsign.c"
     ${KOCH_SOURCES}
     fakes/fake_koch_item.c
     ${PROGRESS_SOURCES}

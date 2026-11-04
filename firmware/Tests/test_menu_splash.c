@@ -302,14 +302,14 @@ static void test_v157_held_next(void) {
   run_to(repeat_time);
   TEST_ASSERT_EQUAL(1U, menu_cursor());
   run_to((uint16_t)(skip_time + BUTTONS_LONG_PRESS_MS - 1U));
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
-  TEST_ASSERT(is_main_frame(4));
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
+  TEST_ASSERT(is_main_frame(5));
   clear_dirty();
   run_to(1500U);
   set_pins(0U);
   run_to(1600U);
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
-  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT_EQUAL(5U, menu_cursor());
   TEST_ASSERT_EQUAL(0U, lcd_fb_dirty_mask());
   TEST_ASSERT(has_no_side_effect());
 }

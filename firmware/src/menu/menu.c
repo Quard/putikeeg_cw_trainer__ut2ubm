@@ -9,6 +9,7 @@
 #include "lcd/lcd.h"
 #include "menu_internal.h"
 #include "modes/free_input.h"
+#include "modes/free_training.h"
 #include "modes/receiving.h"
 #include "modes/sending.h"
 #include "settings/settings.h"
@@ -17,9 +18,10 @@
 #include "tick/tick.h"
 
 /* menu_handle() takes every screen from MENU_SCREEN_FREE_INPUT on as a mode screen. */
-#if (MENU_SCREEN_RECEIVING <= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_SENDING <= MENU_SCREEN_FREE_INPUT) || \
-    (MENU_SCREEN_MESSAGE >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_DIALOG >= MENU_SCREEN_FREE_INPUT) ||    \
-    (MENU_SCREEN_SPLASH >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_ABOUT >= MENU_SCREEN_FREE_INPUT)
+#if (MENU_SCREEN_RECEIVING <= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_SENDING <= MENU_SCREEN_FREE_INPUT) ||     \
+    (MENU_SCREEN_FREE_TRAINING <= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_MESSAGE >= MENU_SCREEN_FREE_INPUT) || \
+    (MENU_SCREEN_DIALOG >= MENU_SCREEN_FREE_INPUT) || (MENU_SCREEN_SPLASH >= MENU_SCREEN_FREE_INPUT) ||         \
+    (MENU_SCREEN_ABOUT >= MENU_SCREEN_FREE_INPUT)
 #error "The mode screens must have the highest screen numbers"
 #endif
 
@@ -141,6 +143,9 @@ static void menu_enter_item(void) {
     } else if (item->target == MENU_MODE_RECEIVING) {
       menu_show_screen(MENU_SCREEN_RECEIVING);
       receiving_enter();
+    } else if (item->target == MENU_MODE_CALLSIGNS) {
+      menu_show_screen(MENU_SCREEN_FREE_TRAINING);
+      free_training_enter();
     } else {
       menu_show_screen(MENU_SCREEN_SENDING);
       sending_enter();
@@ -243,12 +248,14 @@ static void menu_leave_mode(void) {
     receiving_leave();
   } else if (menu_current_screen == MENU_SCREEN_SENDING) {
     sending_leave();
+  } else if (menu_current_screen == MENU_SCREEN_FREE_TRAINING) {
+    free_training_leave();
   }
 }
 
 /*
  * A long menu/back leaves every mode screen. Free Input acts only on long presses (ui-ux.md sections 6.1 and 6.6).
- * Receiving and Sending get every other event (training_spec.md section 12.1).
+ * Receiving, Sending and Free Training get every other event (training_spec.md sections 12.1 and 23.6).
  */
 static void menu_handle_mode_screen(button_event_t event) {
   bool is_leaving = false;
@@ -259,6 +266,8 @@ static void menu_handle_mode_screen(button_event_t event) {
     is_leaving = receiving_handle(event);
   } else if (menu_current_screen == MENU_SCREEN_SENDING) {
     is_leaving = sending_handle(event);
+  } else if (menu_current_screen == MENU_SCREEN_FREE_TRAINING) {
+    is_leaving = free_training_handle(event);
   } else if (handle_is_long) {
     if (handle_code == BUTTON_EVENT_PREV) {
       free_input_clear();
@@ -338,6 +347,8 @@ void menu_poll(void) {
       receiving_poll();
     } else if (menu_current_screen == MENU_SCREEN_SENDING) {
       sending_poll();
+    } else if (menu_current_screen == MENU_SCREEN_FREE_TRAINING) {
+      free_training_poll();
     }
   }
   if (!menu_is_preview_running) {

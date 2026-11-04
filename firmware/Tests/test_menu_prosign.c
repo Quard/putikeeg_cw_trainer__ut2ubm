@@ -86,10 +86,10 @@ static void send_times(button_event_t event, unsigned count) {
 
 static size_t eeprom_writes(void) { return fake_iap_command_count(CMD_PROGRAM) + fake_iap_command_count(CMD_ERASE); }
 
-/* From the main menu with any cursor: Settings is the last item. */
+/* From the main menu with the cursor at or before Settings, item 4 (training_spec.md D-T64). */
 static void open_settings(void) {
   TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-  send_times(NEXT, 3U - menu_cursor());
+  send_times(NEXT, 4U - menu_cursor());
   send(ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
 }
@@ -328,7 +328,7 @@ static void test_v82_save(void) {
   for (style = 0U; style < 3U; ++style) {
     edit_prosigns_and_leave(moves[style], counts[style]);
     TEST_ASSERT_EQUAL(MENU_NODE_MAIN, menu_node());
-    TEST_ASSERT(probe_sel(4));
+    TEST_ASSERT(probe_sel(5));
     TEST_ASSERT_EQUAL(1U, fake_iap_command_count(CMD_ERASE));
     TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(CMD_PROGRAM));
     TEST_ASSERT_EQUAL(SETTINGS_LAYOUT_VERSION, fake_iap_memory()[RECORD_VERSION]);
