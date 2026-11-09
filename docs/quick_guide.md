@@ -108,7 +108,8 @@ checks each character at once. Use it to learn to send clean Morse code.
    its dots and dashes show, also with `Show CW Code` = `Off`.
 3. Select a level with `prev` and `next`, and press `enter`.
 4. Key the item at the `TX Speed` setting. In a word, a bar shows the next character to key. With
-   `TX Char Marker` = `Off`, the bar shows only after an error, under the failed character.
+   `TX Char Marker` = `Off`, the bar shows under the first character at the start of each item and of each retry.
+   The first correct character turns it off. After an error, the bar shows under the failed character.
 5. A wrong character ends the attempt. Then key the whole item again. `TX Attempts` sets the attempts for each item:
    `3` (default) or `Unlimited`.
 6. To skip an item, hold `next`. The status line shows `Skipped` for 2.5 s. Below the item, the dots and dashes of
@@ -188,7 +189,7 @@ leave `Settings` and go back to the main menu, the trainer saves the settings. B
 | `Settings > Training` | `TX Attempts` | The attempts for each item in `Sending`. | `3`, `Unlimited` | `3` |
 | `Settings > Training` | `Max Word Length` | The longest word in the training modes. | 4 to 8 characters | 5 |
 | `Settings > Training` | `Show CW Code` | Shows the dots and dashes that you key in `Sending`. | `Off`, `On` | `On` |
-| `Settings > Training` | `TX Char Marker` | Shows the bar under the next character of a word in `Sending`. With `Off`, the bar shows only after an error. | `On`, `Off` | `On` |
+| `Settings > Training` | `TX Char Marker` | Shows the bar under the next character of a word in `Sending`. With `Off`, the bar shows only under the first character until the first correct character, and after an error. | `On`, `Off` | `On` |
 | `Settings` | `Prosigns` | How AR, BT, KN and AS show, for example `+`, `<AR>` or `<AR/+>`. | `Punctuation`, `Prosign`, `Both` | `Both` |
 | `Settings > Display` | `Backlight` | The brightness of the screen light. | `Off`, 1 to 10 | 8 |
 | `Settings > Display` | `Contrast` | The contrast of the screen. | 0 to 63 | 32 |

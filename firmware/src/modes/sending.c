@@ -68,7 +68,10 @@ static uint8_t tx_result_slot(void) {
   return slot;
 }
 
-/* The item in the 8 x 16 font; in a word item, the bar under the next character (marker On) or the failed one. */
+/*
+ * The item in the 8 x 16 font. A word item has the bar under the next character or under the failed one. With
+ * marker Off, ITEM shows the bar only before the first accepted character of an attempt.
+ */
 static void tx_draw_item_line(void) {
   const training_phase_t phase = training_phase();
   const uint8_t length = training_item_length();
@@ -86,7 +89,7 @@ static void tx_draw_item_line(void) {
     }
     /* After an error, the bar stays under the failed character, also with TX Char Marker Off. */
     bar_slot = tx_result_slot();
-  } else if (!tx_is_marker_shown) {
+  } else if (!tx_is_marker_shown && (bar_slot != 0U)) {
     return;
   }
   if (length > 1U) {

@@ -4,9 +4,9 @@
  */
 
 /*
- * Sending mode scenarios (references/internal/training_spec.md section 12.3, AC-T20, AC-T52, AC-T53, AC-T55, AC-T56;
- * ui-ux.md sections 9.4, 9.7 and 9.8, V-110 to V-119, V-121, V-197 to V-205 and V-209 to V-213). The real menu,
- * buttons, engine and progress run with a fake keyer and fake items.
+ * Sending mode scenarios (references/internal/training_spec.md section 12.3, AC-T20, AC-T52, AC-T53, AC-T55, AC-T56,
+ * AC-T58; ui-ux.md sections 9.4, 9.7 and 9.8, V-110 to V-119, V-121, V-197 to V-205 and V-209 to V-215). The real
+ * menu, buttons, engine and progress run with a fake keyer and fake items.
  */
 
 #include "cw/morse.h"
@@ -2143,30 +2143,78 @@ static void tx_open_marker(uint16_t level, bool is_marker_shown, bool is_code_sh
   harness_open_mode(1U);
 }
 
-/* The bar slot of phase ITEM: @p slot with On, no bar (-1) with Off. */
-static int item_bar(bool is_marker_shown, int slot) { return is_marker_shown ? slot : -1; }
+/* The bar slot of phase ITEM: @p slot with On. With Off, only slot 0 has the bar (D-T69, UX-82); else no bar (-1). */
+static int item_bar(bool is_marker_shown, int slot) { return (is_marker_shown || (slot == 0)) ? slot : -1; }
 
-/* The item rows (pages 3 and 4, y 24-39) equal those of snapshot_before. */
-static bool are_item_rows_unchanged(void) {
-  return (memcmp(&snapshot_before[3U * LCD_WIDTH], lcd_fb_page(3U), LCD_WIDTH) == 0) &&
-         (memcmp(&snapshot_before[4U * LCD_WIDTH], lcd_fb_page(4U), LCD_WIDTH) == 0);
+static bool is_page_unchanged(uint8_t page) {
+  return memcmp(&snapshot_before[(size_t)page * LCD_WIDTH], lcd_fb_page(page), LCD_WIDTH) == 0;
 }
 
-/* V-209 (Off) and V-116 with MARKER(On) (V-212): a wrong character, the retry and a correct word. */
+/* The item rows (pages 3 and 4, y 24-39) equal those of snapshot_before. */
+static bool are_item_rows_unchanged(void) { return is_page_unchanged(3U) && is_page_unchanged(4U); }
+
+/*
+ * AC-T58 (1): the frames at an answer length of 0 in ITEM. The Off run of a check records them, and the On run of the
+ * same check compares its frames with them.
+ */
+#define ZERO_FRAMES_MAX 12U
+static uint8_t zero_frames[ZERO_FRAMES_MAX][FB_SIZE];
+static size_t zero_frame_count;
+
+/* ITEM of @p word at an answer length of 0: the bar under the first character, and the same frame for On and Off. */
+static void expect_word_at_zero(bool is_marker_shown, const char* word) {
+  uint8_t frame[FB_SIZE];
+
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  expect_word(word, 0);
+  if (!TEST_ASSERT(zero_frame_count < ZERO_FRAMES_MAX)) {
+    return;
+  }
+  snapshot(frame);
+  if (is_marker_shown) {
+    if (!TEST_ASSERT_EQUAL(0, memcmp(zero_frames[zero_frame_count], frame, FB_SIZE))) {
+      fprintf(stderr, "frame %zu at answer length 0 differs between On and Off\n", zero_frame_count);
+    }
+  } else {
+    memcpy(zero_frames[zero_frame_count], frame, FB_SIZE);
+  }
+  ++zero_frame_count;
+}
+
+typedef void (*marker_check_t)(bool is_marker_shown);
+
+/* One check with MARKER(Off), then with MARKER(On); both runs have the same frames at an answer length of 0. */
+static void check_both_values(marker_check_t check) {
+  size_t off_count;
+
+  zero_frame_count = 0U;
+  check(false);
+  off_count = zero_frame_count;
+  zero_frame_count = 0U;
+  check(true);
+  TEST_ASSERT_EQUAL(off_count, zero_frame_count);
+}
+
+/*
+ * V-209 (Off) and V-116 with MARKER(On) (V-212), AC-T58 (1) and (2): a wrong character, the retry and a correct word.
+ * The item start and the retry show the bar under the first character with both values (D-T69, UX-82).
+ */
 static void check_v209_wrong_char(bool is_marker_shown) {
   const char* const items[1] = {"KMRS"};
   uint16_t t;
 
   tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, items, 1U);
   harness_run_to(HARNESS_T0 + 1000U);
-  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   TEST_ASSERT(status(NULL));
   snapshot(snapshot_before);
   key("K");
   expect_word("KMRS", item_bar(is_marker_shown, 1));
   if (!is_marker_shown) {
-    TEST_ASSERT(are_item_rows_unchanged());
+    /* The first accepted character turns the bar off: page 4 changes, page 3 does not. */
+    TEST_ASSERT(is_page_unchanged(3U));
+    TEST_ASSERT(!is_page_unchanged(4U));
   }
   TEST_ASSERT(marks_are(7, 2, "-.-"));
   key("N");
@@ -2179,21 +2227,27 @@ static void check_v209_wrong_char(bool is_marker_shown) {
   expect_word("KMRS", 1);
   harness_run_to((uint16_t)(t + 1200U));
   TEST_ASSERT(status("Try 2 of 3"));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   TEST_ASSERT(body_off(7, 7));
   key("K");
   expect_word("KMRS", item_bar(is_marker_shown, 1));
+  snapshot(snapshot_before);
   key("M");
   expect_word("KMRS", item_bar(is_marker_shown, 2));
   key("R");
   expect_word("KMRS", item_bar(is_marker_shown, 3));
+  if (!is_marker_shown) {
+    TEST_ASSERT(are_item_rows_unchanged());
+  }
   key("S");
   TEST_ASSERT(status("Correct"));
   expect_word("KMRS", -1);
   TEST_ASSERT_EQUAL(0U, training_score());
 }
 
-/* V-210: word-space errors and a wrong character up to FAILED; each RESULT shows the bar, each RETRY follows the value.
+/*
+ * V-210, AC-T58 (1): word-space errors and a wrong character up to FAILED. Each RESULT shows the bar at the failed
+ * character. Each RETRY and the next item after FAILED show the bar under the first character with both values.
  */
 static void check_v210_word_space_failed(bool is_marker_shown) {
   const char* const items[2] = {"KMRS", "UAPT"};
@@ -2203,6 +2257,7 @@ static void check_v210_word_space_failed(bool is_marker_shown) {
 
   tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, items, 2U);
   run_to_item();
+  expect_word_at_zero(is_marker_shown, "KMRS");
   key("K");
   word_gap();
   u = harness_now;
@@ -2211,7 +2266,7 @@ static void check_v210_word_space_failed(bool is_marker_shown) {
   TEST_ASSERT(body_off(5, 5));
   harness_run_to((uint16_t)(u + 1200U));
   TEST_ASSERT(status("Try 2 of 3"));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   key("K");
   key("N");
   v = harness_now;
@@ -2219,7 +2274,7 @@ static void check_v210_word_space_failed(bool is_marker_shown) {
   expect_word("KMRS", 1);
   harness_run_to((uint16_t)(v + 1200U));
   TEST_ASSERT(status("Try 3 of 3"));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   key("KM");
   word_gap();
   w = harness_now;
@@ -2234,11 +2289,14 @@ static void check_v210_word_space_failed(bool is_marker_shown) {
   TEST_ASSERT(body_off(1, 7));
   TEST_ASSERT(hdr(tx_header(2U, training_item_count())));
   harness_run_to((uint16_t)(w + 2800U));
-  expect_word("UAPT", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "UAPT");
   TEST_ASSERT(status(NULL));
 }
 
-/* AC-T55 (2): an unknown pattern and the third wrong character show the bar under the failed character. */
+/*
+ * AC-T55 (2): an unknown pattern and the third wrong character show the bar under the failed character. AC-T58 (1):
+ * the RETRY after an unknown pattern shows the bar under the first character with both values.
+ */
 static void check_unknown_and_failed_char(bool is_marker_shown) {
   const char* const items[1] = {"KMRS"};
   uint8_t attempt;
@@ -2251,7 +2309,7 @@ static void check_unknown_and_failed_char(bool is_marker_shown) {
   expect_word("KMRS", 1);
   for (attempt = 2U; attempt <= TRAINING_ATTEMPTS; ++attempt) {
     run_to_item();
-    expect_word("KMRS", item_bar(is_marker_shown, 0));
+    expect_word_at_zero(is_marker_shown, "KMRS");
     key("KM");
     keyp("-.");
     TEST_ASSERT(status("Wrong: N"));
@@ -2261,7 +2319,10 @@ static void check_unknown_and_failed_char(bool is_marker_shown) {
   TEST_ASSERT(marks_are(5, 56, ".-."));
 }
 
-/* V-211 runs 1 to 3 (V-202 run 1 and V-203 with MARKER(On), V-212): a skip shows the bar at the D-T59 (1) slot. */
+/*
+ * V-211 runs 1 to 3 (V-202 run 1 and V-203 with MARKER(On), V-212): a skip shows the bar at the D-T59 (1) slot.
+ * AC-T58 (1): the next item after a skip shows the bar under the first character with both values.
+ */
 static void check_v211_skip_word(bool is_marker_shown) {
   const char* const items[2] = {"KMRS", "UAPT"};
   uint16_t t;
@@ -2273,10 +2334,12 @@ static void check_v211_skip_word(bool is_marker_shown) {
   next_down_at(t);
   harness_run_to((uint16_t)(t + 799U));
   TEST_ASSERT(status(NULL));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  snapshot(snapshot_before);
   harness_run_to((uint16_t)(t + 800U));
   TEST_ASSERT(status("Skipped"));
   expect_word("KMRS", 0);
+  TEST_ASSERT(is_page_unchanged(4U));
   TEST_ASSERT(marks_are(5, 54, "-.-"));
   TEST_ASSERT(body_off(7, 7));
   next_up();
@@ -2285,7 +2348,7 @@ static void check_v211_skip_word(bool is_marker_shown) {
   harness_run_to((uint16_t)(t + 3300U));
   TEST_ASSERT(body_off(1, 7));
   run_to_item();
-  expect_word("UAPT", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "UAPT");
 
   /* Run 2: K keyed before the hold. */
   tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, items, 2U);
@@ -2367,7 +2430,10 @@ static void check_char_item(bool is_marker_shown) {
   TEST_ASSERT(body_off(1, 7));
 }
 
-/* V-198 with MARKER(On) and MARKER(Off) (V-212), Q9 F12: unlimited attempts, five wrong answers in a row. */
+/*
+ * V-198 with MARKER(On) and MARKER(Off) (V-212), Q9 F12: unlimited attempts, five wrong answers in a row. AC-T58 (1):
+ * each RETRY shows the bar under the first character with both values.
+ */
 static void check_unlimited_word(bool is_marker_shown) {
   const char* const items[1] = {"KMRS"};
   uint8_t attempt;
@@ -2375,6 +2441,7 @@ static void check_unlimited_word(bool is_marker_shown) {
 
   tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, true, items, 1U);
   run_to_item();
+  expect_word_at_zero(is_marker_shown, "KMRS");
   key("K");
   key("N");
   TEST_ASSERT(status("Wrong: N"));
@@ -2382,7 +2449,7 @@ static void check_unlimited_word(bool is_marker_shown) {
   TEST_ASSERT(body_off(5, 5));
   run_to_item();
   TEST_ASSERT(text_at(1, 10, "Try 2"));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   TEST_ASSERT(body_off(7, 7));
   key("K");
   word_gap();
@@ -2392,7 +2459,7 @@ static void check_unlimited_word(bool is_marker_shown) {
     run_to_item();
     (void)snprintf(text, sizeof(text), "Try %u", attempt);
     TEST_ASSERT(text_at(1, 10, text));
-    expect_word("KMRS", item_bar(is_marker_shown, 0));
+    expect_word_at_zero(is_marker_shown, "KMRS");
     key("KMR");
     key("N");
     TEST_ASSERT(status("Wrong: N"));
@@ -2401,29 +2468,157 @@ static void check_unlimited_word(bool is_marker_shown) {
   }
   run_to_item();
   TEST_ASSERT(text_at(1, 10, "Try 7"));
-  expect_word("KMRS", item_bar(is_marker_shown, 0));
+  expect_word_at_zero(is_marker_shown, "KMRS");
   key("KMRS");
   TEST_ASSERT(status("Correct"));
   expect_word("KMRS", -1);
   TEST_ASSERT_EQUAL(0U, training_score());
 }
 
-/* AC-T55, V-209 to V-212 (Sending part): every Sending check with MARKER(Off) and again with MARKER(On). */
-static void test_marker_sending_screens(void) {
-  unsigned value;
+/*
+ * V-214, AC-T58 (2) and (3): a WORD_GAP, the elements of a half-keyed first character and an OVERFLOW at an answer
+ * length of 0 keep the bar under the first character. The first accepted character changes the pixels of page 4
+ * only: with Off the bar goes off, with On it moves.
+ */
+static void check_v214_first_char_elements(bool is_marker_shown) {
+  const char* const items[1] = {"KMRS"};
+  uint8_t attempts;
 
-  for (value = 0U; value < 2U; ++value) {
-    const bool is_marker_shown = value != 0U;
-    check_v209_wrong_char(is_marker_shown);
-    check_v210_word_space_failed(is_marker_shown);
-    check_unknown_and_failed_char(is_marker_shown);
-    check_v211_skip_word(is_marker_shown);
-    check_char_item(is_marker_shown);
-    check_unlimited_word(is_marker_shown);
+  tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, items, 1U);
+  harness_run_to(HARNESS_T0 + 1000U);
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  TEST_ASSERT(status(NULL));
+  TEST_ASSERT(body_off(7, 7));
+  harness_run_to(HARNESS_T0 + 1499U);
+  attempts = expect_no_effect_before();
+  word_gap();
+  TEST_ASSERT(is_no_effect(attempts));
+  element(true);
+  TEST_ASSERT(marks_are(7, 2, "-"));
+  TEST_ASSERT(are_item_rows_unchanged());
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  element(false);
+  TEST_ASSERT(marks_are(7, 2, "-."));
+  TEST_ASSERT(are_item_rows_unchanged());
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  element(true);
+  TEST_ASSERT(marks_are(7, 2, "-.-"));
+  TEST_ASSERT(are_item_rows_unchanged());
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  harness_mark_frame();
+  char_gap();
+  TEST_ASSERT(status(NULL));
+  expect_word("KMRS", item_bar(is_marker_shown, 1));
+  TEST_ASSERT_EQUAL(PAGE(4), harness_changed_pages());
+  TEST_ASSERT(marks_are(7, 2, "-.-"));
+  snapshot(snapshot_before);
+  key("M");
+  expect_word("KMRS", item_bar(is_marker_shown, 2));
+  if (!is_marker_shown) {
+    TEST_ASSERT(are_item_rows_unchanged());
   }
+  TEST_ASSERT(marks_are(7, 2, "--"));
+
+  /* An OVERFLOW drops the half-keyed first character up to its CHAR_GAP (D-T16); the next character counts. */
+  tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, items, 1U);
+  run_to_item();
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  snapshot(snapshot_before);
+  element(true);
+  element(false);
+  fake_keyer_push_event(KEYER_EVENT_OVERFLOW);
+  drain();
+  TEST_ASSERT(are_item_rows_unchanged());
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  char_gap();
+  TEST_ASSERT(are_item_rows_unchanged());
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  TEST_ASSERT(status(NULL));
+  key("K");
+  TEST_ASSERT_EQUAL(1U, training_answer_length());
+  expect_word("KMRS", item_bar(is_marker_shown, 1));
 }
 
-/* V-213 run 1, AC-T56: an edit of TX Char Marker in Settings > Training acts at the next entry to Sending. */
+/*
+ * V-215, AC-T58 (1) and (4): a wrong first character keeps the bar under it, and each RETRY shows the bar there with
+ * both values. Run 3: a character item shows no bar with Off, also at an answer length of 0.
+ */
+static void check_v215_wrong_first_char(bool is_marker_shown) {
+  const char* const words[1] = {"KMRS"};
+  const char* const chars[1] = {"K"};
+  uint8_t attempt;
+  uint16_t t;
+
+  /* Run 1: unlimited attempts, Show CW Code Off. */
+  tx_open_marker(LEVEL_WORDS_13, is_marker_shown, false, true, words, 1U);
+  run_to_item();
+  expect_word_at_zero(is_marker_shown, "KMRS");
+  for (attempt = 2U; attempt <= 3U; ++attempt) {
+    snapshot(snapshot_before);
+    key("N");
+    t = harness_now;
+    TEST_ASSERT(status("Wrong: N"));
+    expect_word("KMRS", 0);
+    TEST_ASSERT(is_page_unchanged(4U));
+    harness_run_to((uint16_t)(t + 1200U));
+    TEST_ASSERT(text_at(1, 10, (attempt == 2U) ? "Try 2" : "Try 3"));
+    expect_word_at_zero(is_marker_shown, "KMRS");
+    TEST_ASSERT(body_off(7, 7));
+  }
+  key("K");
+  expect_word("KMRS", item_bar(is_marker_shown, 1));
+  key("MRS");
+  TEST_ASSERT(status("Correct"));
+  expect_word("KMRS", -1);
+
+  /* Run 2: TX Attempts 3; the third wrong first character fails the item. */
+  tx_open_marker(LEVEL_WORDS_13, is_marker_shown, true, false, words, 1U);
+  run_to_item();
+  for (attempt = 1U; attempt <= TRAINING_ATTEMPTS; ++attempt) {
+    if (attempt > 1U) {
+      run_to_item();
+      TEST_ASSERT(status((attempt == 2U) ? "Try 2 of 3" : "Try 3 of 3"));
+    }
+    expect_word_at_zero(is_marker_shown, "KMRS");
+    key("N");
+    TEST_ASSERT(status("Wrong: N"));
+    expect_word("KMRS", 0);
+  }
+  t = harness_now;
+  TEST_ASSERT_EQUAL(TRAINING_CHECK_FAILED, training_last_check());
+  TEST_ASSERT(marks_are(5, 54, "-.-"));
+  harness_run_to((uint16_t)(t + 2499U));
+  TEST_ASSERT(status("Wrong: N"));
+  expect_word("KMRS", 0);
+  TEST_ASSERT(marks_are(5, 54, "-.-"));
+
+  /* Run 3: a character item. */
+  tx_open_marker(LEVEL_KM, is_marker_shown, true, false, chars, 1U);
+  harness_run_to(HARNESS_T0 + 1000U);
+  TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  TEST_ASSERT_EQUAL(0U, training_answer_length());
+  expect_big(60, "K", -1);
+}
+
+/*
+ * AC-T55, AC-T58, V-209 to V-212, V-214 and V-215 (Sending part): every Sending check with MARKER(Off) and again
+ * with MARKER(On).
+ */
+static void test_marker_sending_screens(void) {
+  check_both_values(check_v209_wrong_char);
+  check_both_values(check_v210_word_space_failed);
+  check_both_values(check_unknown_and_failed_char);
+  check_both_values(check_v211_skip_word);
+  check_both_values(check_char_item);
+  check_both_values(check_unlimited_word);
+  check_both_values(check_v214_first_char_elements);
+  check_both_values(check_v215_wrong_first_char);
+}
+
+/*
+ * V-213 run 1, AC-T56: an edit of TX Char Marker in Settings > Training acts at the next entry to Sending. Off shows
+ * the bar under the first character until the first accepted character (D-T69).
+ */
 static void test_v213_marker_edit_next_entry(void) {
   const char* const items[2] = {"KMRS", "KMRS"};
   unsigned step;
@@ -2431,6 +2626,8 @@ static void test_v213_marker_edit_next_entry(void) {
 
   tx_open_marker(LEVEL_WORDS_13, false, true, false, items, 2U);
   harness_run_to(HARNESS_T0 + 1000U);
+  expect_word("KMRS", 0);
+  key("K");
   expect_word("KMRS", -1);
   harness_event(LONG_EVENT(L_TAP));
   TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
@@ -2462,6 +2659,8 @@ static void test_v213_marker_edit_next_entry(void) {
   harness_run_to((uint16_t)(u + 1000U));
   TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
   expect_word("KMRS", 0);
+  key("K");
+  expect_word("KMRS", 1);
 }
 
 /* V-213 run 2: the end screen and the next session keep the value of the mode entry. */
@@ -2479,6 +2678,8 @@ static void test_v213_new_session_keeps_value(void) {
   harness_event(ENTER_EVENT);
   harness_run_to((uint16_t)(v + 1000U));
   TEST_ASSERT_EQUAL(TRAINING_PHASE_ITEM, training_phase());
+  expect_word("KMRS", 0);
+  key("K");
   expect_word("KMRS", -1);
 }
 
@@ -2500,7 +2701,10 @@ static void test_marker_read_once(void) {
     expect_word("KMRS", item_bar(is_marker_shown, 0));
   }
 
-  /* A layout version 3 record (0.1.2) and a version 4 record with byte 14 = 0x03 give the bar; 0xFC gives none. */
+  /*
+   * A layout version 3 record (0.1.2) and a version 4 record with byte 14 = 0x03 give the bar; 0xFC gives the bar only
+   * before the first accepted character (D-T69).
+   */
   harness_marker(true);
   memcpy(record, fake_iap_memory(), sizeof(record));
   record[2] = 3U;
@@ -2522,7 +2726,9 @@ static void test_marker_read_once(void) {
     fake_koch_item_push("KMRS");
     harness_open_mode(1U);
     run_to_item();
-    expect_word("KMRS", (value < 2U) ? 0 : -1);
+    expect_word("KMRS", 0);
+    key("K");
+    expect_word("KMRS", (value < 2U) ? 1 : -1);
   }
 }
 
