@@ -16,7 +16,9 @@ This version has the menu, the settings, the display controls, the [Free Input](
   device shows characters and words and you key them. Both modes teach the characters in Koch order, one level at
   a time. Before each session, you choose the level. You can repeat each level up to the level that you reached.
   Each mode has its own attempt setting: 3 attempts for each item, or unlimited attempts. In both modes, a hold of
-  `next` skips the current item (see [Skip an item](#skip-an-item)).
+  `next` skips the current item (see [Skip an item](#skip-an-item)). In Sending, you can hide the bar under the
+  next character of a word after the first correct character (see
+  [TX Char Marker setting](#tx-char-marker-setting)).
 - The device makes these sounds: the sidetone in Free Input and Sending, the Morse playback in Receiving, and the
   preview of the `Tone` and `Ramp` settings (see [Tone and Ramp preview](#tone-and-ramp-preview)). `Ramp` sets how
   fast each tone starts and stops (see [Ramp setting](#ramp-setting)). The volume knob sets the loudness. With
@@ -158,7 +160,8 @@ CW Trainer
 │   │   ├── RX Attempts
 │   │   ├── TX Attempts
 │   │   ├── Max Word Length
-│   │   └── Show CW Code
+│   │   ├── Show CW Code
+│   │   └── TX Char Marker
 │   ├── Prosigns
 │   ├── Display
 │   │   ├── Backlight
@@ -657,6 +660,7 @@ setting, and leave `Settings` to save it. Then open the mode again.
 | `RX Attempts` | The attempts for each item: `3` or `Unlimited` (see [Results and attempts](#results-and-attempts)). | No effect. |
 | `TX Attempts` | No effect. | The attempts for each item: `3` or `Unlimited` (see [Results and attempts](#results-and-attempts)). |
 | `Show CW Code` | No effect. | Shows the dots and dashes that you key (see [Code row](#code-row)). It has no effect on the start screen: the start screen always shows the code of the new character. |
+| `TX Char Marker` | No effect. | Shows the bar under the next character of a word, or with `Off` only under the first character until the first correct character (see [TX Char Marker setting](#tx-char-marker-setting)). |
 | `Prosigns` | How BT, SK and AR show in the items, in the keyboard labels and in the level description of the start screen. | How BT, SK and AR show in the items, in the `Wrong:` text and in the level description of the start screen. |
 | `Max Word Length` | The longest word. | The longest word. |
 
@@ -885,9 +889,11 @@ In Sending, you read an item and key it. The device decodes each character and c
 
 1. Set the keyer in `Settings > CW`: `Key Type`, `Paddle`, `TX Speed`, `TX Eff. Speed` and `Tone`. Sending uses
    the same keyer as Free Input (see [Key types](#key-types) and [Speeds and pauses](#speeds-and-pauses)).
-2. Set `Show CW Code` and `TX Attempts` in `Settings > Training`. With `Show CW Code` = `On`, the screen shows the
-   dots and dashes that you key. `TX Attempts` sets the attempts for each item (see
-   [Results and attempts](#results-and-attempts)).
+2. Set `Show CW Code`, `TX Attempts` and `TX Char Marker` in `Settings > Training`. With `Show CW Code` = `On`, the
+   screen shows the dots and dashes that you key. `TX Attempts` sets the attempts for each item (see
+   [Results and attempts](#results-and-attempts)). With `TX Char Marker` = `Off`, the bar shows only under the
+   first character of a word, until the first correct character (see
+   [TX Char Marker setting](#tx-char-marker-setting)).
 3. Press `menu/back` until the main menu shows. The device saves the changed settings.
 4. Insert the plug of the key or paddle into the key/paddle socket.
 
@@ -906,7 +912,8 @@ In Sending, you read an item and key it. The device decodes each character and c
 4. Wait 1 s. The first item shows in large characters.
 5. Key the item. You hear the sidetone. After a pause of 2 dits, the device decodes the character and checks it.
 6. In a word, a short bar shows under the character that you key next. After each correct character, the bar moves
-   to the next character. The status line shows nothing.
+   to the next character. The status line shows nothing. With `TX Char Marker` = `Off`, the bar shows under the
+   first character. The first correct character turns it off.
 7. After the last correct character, the status line shows `Correct`. Then the next item comes.
 8. To skip an item, hold `next` for about 0.8 s (see [Skip an item](#skip-an-item)).
 9. After the last item, the [session end screen](#session-end-screen) shows your result. Press `enter` to see the
@@ -936,6 +943,37 @@ one character. With `Off`, the bottom row stays blank.
 The start screen shows the code of the new character for each value of `Show CW Code` (see
 [The start screen](#the-start-screen)).
 
+#### TX Char Marker setting
+
+`Settings > Training > TX Char Marker` sets the bar under the next character of a word. With `Off`, you key a word
+with no help from the screen after its first character, as on the air.
+
+- `On` (default): in a word, a short bar shows under the character that you key next. After each correct
+  character, the bar moves to the next character.
+- `Off`: at the start of each item and of each retry, the bar shows under the first character of the word, as with
+  `On`. It stays there while you key the first character. The first correct character turns the bar off. Then it
+  stays off for the rest of the attempt, and a correct character does not change the item line. You hear the
+  sidetone. With `Show CW Code` = `On`, the code row shows the dots and dashes that you key.
+
+After an error, the bar always shows under the failed character, also with `Off`. The bar shows at the same time as
+the status text, and it stays until the result ends. The failed character is the same for both values:
+
+| Result | The bar is under |
+| --- | --- |
+| `Wrong:` and the keyed character | The character of the item that you did not key correctly. |
+| `Wrong: pause too long` | The next character, where the pause came. |
+| The third wrong attempt, with `TX Attempts` = `3` | The character of the error in this attempt, as in the two rows above. |
+| `Skipped` | The character that you did not key correctly: the next character to key, or the character of the wrong attempt. |
+
+- At the start of the retry, the bar goes back to the first character, with each value. This tells you that you
+  can start the retry.
+- A `Correct` result shows no bar, with each value.
+- An item of one character shows no bar, with each value.
+- `TX Char Marker` and `Show CW Code` are independent. With both set to `Off`, the screen shows only the header,
+  the status line and the item.
+- Only Sending uses this setting. Receiving, Free Input and the start screen do not change.
+- A change applies the next time you open Sending.
+
 #### Pause between characters of a word
 
 In a word session, key the word as one word. Start the next character before the pause reaches 5 units of the
@@ -946,7 +984,8 @@ element of a character. It ends at the start of the first element of the next ch
 A longer pause is a wrong attempt, the same as a wrong character:
 
 - The status line shows `Wrong: pause too long`.
-- The bar stays under the next character. It shows where the pause came.
+- The bar stays under the next character. It shows where the pause came. With `TX Char Marker` = `Off`, the bar
+  shows there too.
 - The pause uses an attempt. In the next attempt, key the whole word again from its first character.
 - If the pause ends the item, the code of the character under the bar shows below the item. This occurs after the
   third wrong attempt with `TX Attempts` = `3`.
@@ -983,7 +1022,8 @@ or 2. With `TX Attempts` = `Unlimited`, this is every wrong attempt.
    bottom row shows the code of the last correct character.
 2. Then the retry starts. The status line shows `Try 2 of 3` or `Try 3 of 3`. With `TX Attempts` = `Unlimited`, it
    shows `Try` and the number of the attempt, for example `Try 4`. The rows below the item are blank, with
-   `Show CW Code` = `On` and with `Off`. In a word, the bar goes back to the first character.
+   `Show CW Code` = `On` and with `Off`. In a word, the bar goes back to the first character, also with
+   `TX Char Marker` = `Off`. The bar move tells you that you can start the retry.
 3. Key the whole item again from its first character.
 
 Only the status line tells you that this is a retry. The rest of the screen looks like a new item.
@@ -1012,7 +1052,7 @@ The status line shows the result of each check. The device makes no sound for a 
 | Result | Status line | Time on the screen | Then |
 | --- | --- | --- | --- |
 | Correct | `Correct` | 0.6 s | The blank moment, then the next item. |
-| Wrong, a retry comes: attempt 1 or 2 with `3`, every attempt with `Unlimited` | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. With `Unlimited`, it shows `Try 2`, `Try 3` and so on, up to `Try 99`. From attempt 100, it shows `Try 99+`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character. |
+| Wrong, a retry comes: attempt 1 or 2 with `3`, every attempt with `Unlimited` | Receiving: `Wrong`. Your picks stay on the screen. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The code that you keyed stays in the bottom row. | 1.2 s | The next attempt. The status line shows `Try 2 of 3` or `Try 3 of 3`. With `Unlimited`, it shows `Try 2`, `Try 3` and so on, up to `Try 99`. From attempt 100, it shows `Try 99+`. In Receiving, the slots are empty and the item plays again at once. In Sending, the bottom row is blank, and in a word the bar goes back to the first character, also with `TX Char Marker` = `Off`. |
 | Wrong, attempt 3 with `3` | Receiving: `Wrong. The answer is:`. The answer shows in the middle of the screen and plays once more. The bottom row shows `Next` above `enter`, or `Finish` on the last item. Sending: `Wrong:` and the keyed character, or `Wrong: pause too long`. The dots and dashes of the expected character show below the item. After a pause error, this is the character under the bar. | Receiving: until you tap `enter`, with no time limit (see [After the third wrong attempt](#after-the-third-wrong-attempt)). Sending: 2.5 s. | The blank moment, then the next item. |
 | Skipped, with each setting | Receiving: `Skipped. The answer is:`. The rest is the same as after attempt 3. Sending: `Skipped`. The dots and dashes of the expected character show below the item. | Receiving: until you tap `enter`. Sending: 2.5 s. | The blank moment, then the next item (see [Skip an item](#skip-an-item)). |
 
@@ -1088,7 +1128,8 @@ After a skip:
 - The dots and dashes of the expected character show below the item. They show also with `Show CW Code` = `Off`.
   In a word, this is the character that you did not key correctly: the next character to key, or the expected
   character at the position of the wrong character.
-- In a word, the bar does not move. It stays under the expected character.
+- In a word, the bar does not move. It stays under the expected character. With `TX Char Marker` = `Off`, the bar
+  shows under the expected character too.
 - The code row at the bottom does not change. With `Show CW Code` = `On`, it keeps the marks that you keyed.
 - If you key a character at the moment of the skip, the device ignores that character. This is also true for the
   part that you key after the skip.
@@ -1261,6 +1302,7 @@ Values do not wrap. For example, at 50 WPM a press of `next` does not go to 5 WP
 | Settings > Training | `TX Attempts` | `3`, `Unlimited` | - | - | `3` |
 | Settings > Training | `Max Word Length` | 4 to 8 | 1 | - | 5 |
 | Settings > Training | `Show CW Code` | `Off`, `On` | - | - | `On` |
+| Settings > Training | `TX Char Marker` | `On`, `Off` | - | - | `On` |
 | Settings | `Prosigns` | `Punctuation`, `Prosign`, `Both` | - | - | `Both` |
 | Settings > Display | `Backlight` | `Off`, 1 to 10 | 1 | - | 8 |
 | Settings > Display | `Contrast` | 0 to 63 | 1 | - | 32 |
@@ -1284,6 +1326,7 @@ RX Attempts           3
 TX Attempts           3
 Max Word Length       5
 Show CW Code         On
+TX Char Marker       On
 ```
 
 | Setting | What it sets |
@@ -1292,10 +1335,12 @@ Show CW Code         On
 | `TX Attempts` | The attempts for each item in `Sending`: `3` or `Unlimited`. |
 | `Max Word Length` | The longest word in both training modes (see [Levels and sessions](#levels-and-sessions)). |
 | `Show CW Code` | The code row in `Sending` (see [Code row](#code-row)). |
+| `TX Char Marker` | The bar under the next character of a word in `Sending`: `On` or `Off` (see [TX Char Marker setting](#tx-char-marker-setting)). |
 
 - In the edit of `RX Attempts` or `TX Attempts`, `next` goes from `3` to `Unlimited`, and `prev` goes back. The value
   does not wrap.
 - The `3` is the same number as in the status `Try 2 of 3`.
+- In the edit of `TX Char Marker`, `next` goes from `On` to `Off`, and `prev` goes back. The value does not wrap.
 - A change applies the next time you open the mode. The edit plays no sound.
 - Free Input does not use these settings.
 
@@ -1385,9 +1430,9 @@ The device uses the default values in these cases. It shows no message.
 
 A firmware download can keep or delete the saved settings. If the device keeps the settings of an earlier firmware
 version, the settings stay as they were. A setting that the earlier version did not have gets its default value:
-`Prosigns` is `Both`, `Paddle` is `Normal`, `Ramp` is 6 ms, and `RX Attempts` and `TX Attempts` are `3`. The
-device shows no message. `Max Word Length` and `Show CW Code` keep their saved values in their new place in
-`Settings > Training`.
+`Prosigns` is `Both`, `Paddle` is `Normal`, `Ramp` is 6 ms, `RX Attempts` and `TX Attempts` are `3`, and
+`TX Char Marker` is `On`. The device shows no message. `Max Word Length` and `Show CW Code` keep their saved values
+in their new place in `Settings > Training`.
 
 This version saves the settings in a new format. It writes the new format at the first save, after you change a
 setting. An earlier firmware version cannot read the new format. If you download an earlier firmware version after

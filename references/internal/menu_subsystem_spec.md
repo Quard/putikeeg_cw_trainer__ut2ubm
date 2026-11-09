@@ -5,7 +5,9 @@ start-up screen, `About` item, approved plan of 2026-10-08): specification publi
 Change request `Ramp` setting (plan `noble-bubbling-dahl.md`, user-approved 2026-10-16): specification published on
 2026-10-16, section 18. It revises sections 4.8, 5.1, 5.2, 6.1, 6.2 and 6.3 in place. Change request unlimited attempts
 and the long `next` skip (plan `harmonic-doodling-dragonfly.md`, user-approved, `training_spec.md` D-T52 to D-T60):
-specification published on 2026-11-02, section 19. It revises sections 4.8, 5.1, 5.2 and 6.1 in place. Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
+specification published on 2026-11-02, section 19. It revises sections 4.8, 5.1, 5.2 and 6.1 in place. Change request
+`TX Char Marker` (plan `glowing-inventing-horizon.md`, user-approved, `training_spec.md` D-T63 to D-T65):
+specification published on 2026-11-03, section 20. It revises sections 5.1, 5.2 and 6.1 in place. Readers: `c-embedded-developer`, `qa-embedded`, `ui-ux-embedded-designer`, `technical-writer`.
 
 ## 1. Sources and precedence
 
@@ -843,7 +845,7 @@ only file that sets `EA`.
 | 11 | 1 | max word length | |
 | 12 | 1 | backlight level | |
 | 13 | 1 | contrast | |
-| 14 | 1 | training flags | Bit 0 = `RX Attempts` unlimited. Bit 1 = `TX Attempts` unlimited. Bits 2-7 = 0 (a load clears them). Version 4 only. |
+| 14 | 1 | training flags | Bit 0 = `RX Attempts` unlimited. Bit 1 = `TX Attempts` unlimited. Bit 2 = `TX Char Marker` hidden (1 = `Off`, section 20). Bits 3-7 = 0 (a load clears them). Version 4 only. |
 | 15 | 1 | CRC-8 over bytes 0..14 | Version 4. Versions 1 to 3 have the CRC-8 over bytes 0..13 in byte 14 and no byte 15. |
 
 Serialize and parse byte by byte. Never copy a C struct. Bytes 0x010-0x1FF of page 0 stay erased and unused.
@@ -852,7 +854,7 @@ CRC-8: polynomial `0x07`, initial value `0x00`, no reflection, no final XOR, MSB
 value: ASCII `123456789` gives `0xF4`.
 
 Default record (test vector, version 4): `43 57 04 58 02 20 20 14 14 02 69 05 08 20 00 D4`. Section 19.4 gives the
-version 4 vectors. The version 3 default record was `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B`.
+version 4 vectors. Section 20.4 adds the vectors of bit 2 and changes the load result of two 19.4 vectors. The version 3 default record was `43 57 03 58 02 20 20 14 14 02 69 05 08 20 0B`.
 
 Section 18.2 gives the test vectors of version 3. `keyer_spec.md` section 17.4.2 gives the vectors of versions 2
 and 1. Its "version 3 gives `SETTINGS_LOAD_BAD_VERSION`" vector is replaced by the version 4 vector of 18.2.
@@ -869,10 +871,10 @@ uses the position of the record version (section 19.3). Load of a record with a 
 
 | Version | Flags bits kept (byte 10) | Training flags (byte 14) | Then store the default of | Then |
 | --- | --- | --- | --- | --- |
-| 4 | 0-7 | bits 0-1 kept, bits 2-7 cleared | - | Clamp every field (section 5.3). |
-| 3 | 0-7 | set to 0 | `SETTINGS_ID_RX_UNLIMITED` (0), `SETTINGS_ID_TX_UNLIMITED` (0) | Clamp every field. |
-| 2 | 0-3 (clear 4-7) | set to 0 | `SETTINGS_ID_RAMP_MS` (6), both training ids (0) | Clamp every field. |
-| 1 | 0-1 (clear 2-7) | set to 0 | `SETTINGS_ID_PROSIGN_STYLE` (2), `SETTINGS_ID_RAMP_MS` (6), both training ids (0) | Clamp every field. |
+| 4 | 0-7 | bits 0-2 kept, bits 3-7 cleared (section 20.3) | - | Clamp every field (section 5.3). |
+| 3 | 0-7 | set to 0 | `SETTINGS_ID_RX_UNLIMITED` (0), `SETTINGS_ID_TX_UNLIMITED` (0), `SETTINGS_ID_TX_MARKER_HIDDEN` (0) | Clamp every field. |
+| 2 | 0-3 (clear 4-7) | set to 0 | `SETTINGS_ID_RAMP_MS` (6), the three training ids (0) | Clamp every field. |
+| 1 | 0-1 (clear 2-7) | set to 0 | `SETTINGS_ID_PROSIGN_STYLE` (2), `SETTINGS_ID_RAMP_MS` (6), the three training ids (0) | Clamp every field. |
 | Other (0, 5-255) | - | set to 0 | all ids (`SETTINGS_LOAD_BAD_VERSION`) | - |
 
 After a valid load, the status is `SETTINGS_LOAD_OK` and the record in RAM gets version 4. The baseline takes these
@@ -915,6 +917,7 @@ Version 1 test vectors, for load tests only: `43 57 01 58 02 20 20 14 14 02 01 0
 | `RAMP_MS` | Ramp (sidetone rise and fall time) | 4 | 12 | 1 | 6 | ms |
 | `RX_UNLIMITED` | RX Attempts | 0 | 1 | 1 | 0 (3 attempts) | choice (0 three attempts, 1 unlimited, texts from `ui-ux.md`) |
 | `TX_UNLIMITED` | TX Attempts | 0 | 1 | 1 | 0 (3 attempts) | choice (0 three attempts, 1 unlimited, texts from `ui-ux.md`) |
+| `TX_MARKER_HIDDEN` | TX Char Marker | 0 | 1 | 1 | 0 (On) | choice (0 On, 1 Off, texts from `ui-ux.md`, section 20) |
 
 The final unit and choice strings come from `ui-ux.md`.
 
@@ -953,7 +956,8 @@ Node `MENU_NODE_SETTINGS` (title `Settings`, flag: save on exit):
 | 3 | `Display` | submenu | `MENU_NODE_DISPLAY` |
 | 4 | `Reset Statistics` | action | `MENU_ACTION_RESET_STATS` (0) |
 
-Node `MENU_NODE_TRAINING` (title `Settings > Training`, section 19, `ui-ux.md` section 5.19, UX-74 and UX-75):
+Node `MENU_NODE_TRAINING` (title `Settings > Training`, sections 19 and 20, `ui-ux.md` section 5.19, UX-74, UX-75 and
+UX-79 and later):
 
 | Index | Item | Kind | Target |
 | --- | --- | --- | --- |
@@ -961,6 +965,7 @@ Node `MENU_NODE_TRAINING` (title `Settings > Training`, section 19, `ui-ux.md` s
 | 1 | `TX Attempts` | choice | `SETTINGS_ID_TX_UNLIMITED` (`3`, `Unlimited`), field width 9 |
 | 2 | `Max Word Length` | value | `SETTINGS_ID_MAX_WORD_LEN`, field width 1 (no change) |
 | 3 | `Show CW Code` | choice | `SETTINGS_ID_SHOW_CW_CODE` (`Off`, `On`), field width 3 (no change) |
+| 4 | `TX Char Marker` | choice | `SETTINGS_ID_TX_MARKER_HIDDEN` (`On`, `Off`: the index is the stored value), field width 3 (section 20) |
 
 Node `MENU_NODE_CW` (title `Settings > CW`):
 
@@ -2218,3 +2223,150 @@ attempt settings show 3 attempts. The new list shows on the glass with the texts
 | --- | --- |
 | A downgrade to an earlier firmware reads a version 4 record as `SETTINGS_LOAD_BAD_VERSION` and uses the defaults. | Accepted, as for versions 2 and 3. The user can set the values again. |
 | A version 1 to 3 record has its old CRC in byte 14. If the load reads it as training flags, the attempt settings take random values. | The load sets byte 14 to 0 for these versions. Vectors of 19.4 and mutant M11 and M12 of `training_spec.md` 17.8 check it. |
+
+## 20. Change request: `TX Char Marker` setting (2026-11-03)
+
+This section is the binding contract of the settings and menu part of the change. The Sending part is in
+`training_spec.md` D-T63 to D-T65. The task split is `training_spec.md` section 17.9 (task T18 Part A for 20.2 to
+20.4, Part B for 20.5). Where this section differs from sections 1 to 19, this section wins. `ui-ux.md` UX-79 and
+later (section 5.19 and the Sending item-line rule) win for the label, the choice texts and the field width.
+
+### 20.1 User decisions and UI inputs
+
+Plan `glowing-inventing-horizon.md`, approved by the user on 2026-11-03. All decisions are final.
+
+- New setting `TX Char Marker` with the choices `Off` and `On`. The default is `On`, which is the behavior of 0.1.2.
+- Position: the last item of `Settings > Training`, after `Show CW Code`.
+- Scope: Sending only. Receiving does not change.
+- `Off` hides the bar under the next character while the user keys. A RESULT with a wrong check always shows the bar
+  under the failed character (`training_spec.md` D-T63).
+- No change of the layout version. Layout version 4 is not released, so the flag takes a free bit of byte 14.
+
+### 20.2 Settings interface (`settings.h`, task T18 Part A)
+
+```c
+#define SETTINGS_ID_TX_MARKER_HIDDEN 15U /* TX Char Marker: 0 On, 1 Off */
+#define SETTINGS_ID_COUNT 16U
+```
+
+`SETTINGS_RECORD_SIZE` stays 16, and `SETTINGS_LAYOUT_VERSION` stays 4. No new function and no signature change.
+
+The id stores "marker hidden", so the stored value is the inverse of the shown choice: 0 shows `On` and 1 shows
+`Off`. With this storage, the default is 0, and every existing load path gives `On` with no new load code (20.3).
+A caller that wants "shown" tests `settings_get(SETTINGS_ID_TX_MARKER_HIDDEN) == 0U`.
+
+### 20.3 Settings private changes (`settings.c`, task T18 Part A)
+
+| Table or macro | New value |
+| --- | --- |
+| `RECORD_TRAINING_FLAG_TX_MARKER_HIDDEN` (new) | 0x04, bit 2 of byte 14 (`RECORD_TRAINING_FLAGS`) |
+| `RECORD_TRAINING_FLAGS_USED` | 0x07 (was 0x03). The `_Static_assert` checks the OR of the three masks. |
+| `settings_offsets` | id 15: `RECORD_TRAINING_FLAGS` |
+| `settings_flag_masks` | id 15: 0x04 |
+| `settings_flag_shifts` | id 15: 2 |
+| `settings_mins`, `settings_maxes`, `settings_steps`, `settings_defaults` | id 15: 0, 1, 1, 0 |
+| `RECORD_FIELD_COUNT`, `RECORD_CRC`, `RECORD_CRC_V3` | no change. The baseline already covers byte 14, so an edit of id 15 causes a save. |
+
+Comments: the comment that lists the training flag bits names bit 2. The comment in `settings_set_defaults()` says
+"bits 0-2". No other comment changes.
+
+Load rules. `settings_load()` and `settings_check_record()` get no new code. Only the value of
+`RECORD_TRAINING_FLAGS_USED` changes. Each existing path gives `On` (id 15 = 0):
+
+| Path | Byte 14 after the load | Why id 15 is 0 |
+| --- | --- | --- |
+| Version 1 to 3, valid CRC | 0 | The version 1 to 3 step sets byte 14 to 0 (19.3). |
+| Failed load (every status that is not `SETTINGS_LOAD_OK`) | 0 | `settings_set_defaults()` sets byte 14 to 0, then stores the default 0 of id 15. |
+| Version 4 of a 0.1.3 development build before this change | bits 0-1 kept, bit 2 = 0 | That firmware cleared bits 2-7 at each load and never set bit 2, so each of its saves has bit 2 = 0. |
+| Version 4 with bit 2 = 1 | bit 2 kept | A valid record of this firmware with `Off`. The value loads as `Off`. |
+
+- The version 4 step `byte 14 &= RECORD_TRAINING_FLAGS_USED` keeps bits 0-2 and clears bits 3-7. This revises the
+  "clear bits 2-7" rule of 19.3: after every load path, bits 3-7 of byte 14 are 0.
+- The clamp loop runs over ids 0 to 15 in id order, as before. For id 15, it keeps 0 and 1.
+- The three training flag ids cover only bits 0-2 of byte 14. So the D-RM15 rule ("the flag ids cover all 8 bits")
+  still does not apply to byte 14. The explicit clear in `settings_set_defaults()` stays.
+- A load never writes the EEPROM. A version 1 to 3 load and a version 4 load with byte 14 bits 3-7 set leave
+  `settings_has_unsaved_changes()` false, as before.
+- `settings_store()` stays a leaf (no `lcall`, no library helper). The new id needs table rows only.
+
+Memory: settings xdata +0 B (byte 14 is already in the record and in the baseline). No new internal RAM.
+
+### 20.4 Test vectors
+
+CRC-8 of section 5.1, computed by `architector` with a script on 2026-11-03. The script checks the value 0xF4 of
+ASCII `123456789` first. All vectors are 16 bytes, version 4, with the default values in bytes 3..13. RX means
+`RX Attempts` unlimited (id 13), TX means `TX Attempts` unlimited (id 14), and "marker" is the shown choice of id 15.
+
+New vectors:
+
+| Record | Bytes 0..15 | Load result |
+| --- | --- | --- |
+| Version 4, marker `Off` | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 04 C8` | OK, RX 0, TX 0, id 15 = 1 (`Off`). This is the save after one edit of `TX Char Marker` to `Off` from the defaults. |
+| Version 4, RX and marker `Off` | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 05 CF` | OK, RX 1, TX 0, `Off` |
+| Version 4, TX and marker `Off` | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 06 C6` | OK, RX 0, TX 1, `Off` |
+| Version 4, all three flags | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 07 C1` | OK, RX 1, TX 1, `Off` |
+| Version 4, byte 14 = 0xF8 | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 F8 32` | OK, RX 0, TX 0, `On`, byte 14 = 0x00 in RAM, no unsaved change |
+| Version 4, byte 14 = 0xFB | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 FB 3B` | OK, RX 1, TX 1, `On`, byte 14 = 0x03 in RAM, no unsaved change |
+
+Changed load results of two 19.4 vectors (the bytes and the CRC do not change):
+
+| Record | Bytes 0..15 | Load result in 19.4 | New load result |
+| --- | --- | --- | --- |
+| Version 4, byte 14 = 0xFF | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 FF 27` | RX 1, TX 1, byte 14 = 0x03 in RAM | OK, RX 1, TX 1, `Off`, byte 14 = 0x07 in RAM, no unsaved change |
+| Version 4, byte 14 = 0xFC | `43 57 04 58 02 20 20 14 14 02 69 05 08 20 FC 2E` | RX 0, TX 0, byte 14 = 0x00 in RAM | OK, RX 0, TX 0, `Off`, byte 14 = 0x04 in RAM, no unsaved change |
+
+Every other vector of 19.4, 18.2 and `keyer_spec.md` 17.4.2 keeps its load result, and id 15 loads as 0 (`On`). The
+version 4 vectors with byte 14 = 0x00 to 0x03 (CRC `D4`, `D3`, `DA`, `DD`) keep their result with `On`.
+
+### 20.5 Menu changes (task T18 Part B)
+
+- `menu_tree.c`: a new text table `static const menu_text_t MEM_CODE menu_tx_marker_texts[2] = {"On", "Off"};`.
+  The index is the stored value of id 15. Do not reuse `menu_show_code_texts` (`{"Off", "On"}`): its order is the
+  inverse.
+- `menu_training_items[]` gets a fifth and last item:
+  `{"TX Char Marker", NULL, menu_tx_marker_texts, MENU_KIND_CHOICE, SETTINGS_ID_TX_MARKER_HIDDEN, 3U}`.
+- The list has 5 items. 5 is less than `MENU_VISIBLE_ROWS` (7), so the list does not scroll.
+- No change in `menu.h`, `menu_internal.h`, `menu.c` or `menu_render.c`. `MENU_NODE_COUNT` and `MENU_STACK_DEPTH`
+  do not change. `Off` fits `VALUE_TEXT_SIZE` (12). If the `ui-ux.md` label, texts or width need another change,
+  the developer reports it to `architector` first.
+- In the edit mode, the choice steps follow the stored value: `On` (0), then `Off` (1). The user confirmed this order
+  on 2026-11-03 (answer to `ui-ux.md` Q-17, `training_spec.md` D-T66).
+
+Memory: menu xdata +0 B. Flash: one item and one text table with two short texts.
+
+### 20.6 Acceptance criteria
+
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| AC-M22 | Ranges: `settings_min`, `settings_max`, `settings_step` of id 15 are 0, 1, 1. The default after a failed load is 0. `settings_set()` clamps 2..65535 to 1. `SETTINGS_ID_COUNT` is 16, and id 16 gives 0 and false as an unknown id. Replaces the id count and unknown-id part of AC-M13. | test |
+| AC-M23 | Every vector of 20.4 gives its load result and its values. Every other vector of 19.4, 18.2 and `keyer_spec.md` 17.4.2 keeps its load result, with id 15 = 0. | test, QA |
+| AC-M24 | Upgrade: a version 1, 2 or 3 load gives id 15 = 0, leaves `settings_has_unsaved_changes()` false, and a Settings exit with no edit step writes nothing. A failed load of a record with byte 14 = 0xFF, for each load status, gives id 15 = 0 and byte 14 = 0. | test, QA |
+| AC-M25 | Round trip of the eight values of bits 0-2 of byte 14 through a save and a load. Every save writes version 4 and 16 bytes, with the magic last, and programs only bytes 0x000-0x00F. A save after the edit of id 15 to 1 from the defaults writes the 20.4 vector with CRC `C8`. | test |
+| AC-M26 | Flag independence: a change of id 15 changes only bit 2 of byte 14. A change of id 13 or 14 keeps bit 2. Byte 10 does not change at a change of id 15, and a change of each byte 10 flag id keeps bit 2 of byte 14. After every load path, bits 3-7 of byte 14 are 0. Replaces the "bits 2-7" part of AC-M17. | test, QA |
+| AC-M27 | `settings_store()` has no `lcall` and no library helper (`.asm`). The training flags `_Static_assert` checks `(0x01 \| 0x02 \| 0x04) == RECORD_TRAINING_FLAGS_USED`. The diff of `settings_load()` and `settings_check_record()` is empty. | review |
+| AC-M28 | Tree: `Settings > Training` has 5 items. Indexes 0 to 3 do not change. Index 4 is `TX Char Marker`, kind choice, id 15, texts `On` for 0 and `Off` for 1, field width 3. The edit order is `On`, then `Off` (Q-17). The list does not scroll. Label, texts and width match `ui-ux.md` UX-79 to UX-81, and V-207 and V-208 pass. With the defaults, the row shows `On`. | test |
+| AC-M29 | Edit `TX Char Marker` to `Off`, back to `Settings`, exit `Settings`: one save, byte 14 = 0x04, CRC `C8`, and `Off` after a load. Back from `Settings > Training` with no edit: no write. The cursor returns to `Training` in `Settings`. | test, QA |
+| AC-M30 | Memory within the T18 budget of `training_spec.md` section 14.2: settings and menu xdata +0 B, no new internal RAM. | report |
+
+### 20.7 Memory budget
+
+| Part | Flash | xdata | Internal RAM |
+| --- | --- | --- | --- |
+| Part A, settings (6 table bytes, the new mask) | about +10 B | +0 B | +0 B |
+| Part B, menu (one item, one text table, two texts) | about +25 B | +0 B | +0 B |
+
+The whole T18 budget, with the Sending part, is in `training_spec.md` section 14.2.
+
+### 20.8 Device checks (unverified until the user tests on the device)
+
+`training_spec.md` DC-T13: a settings upgrade from a 0.1.2 record (layout version 3) and from a 0.1.3 development
+record shows `TX Char Marker` = `On`, and all other values stay. The fifth item shows on the glass with the texts of
+`ui-ux.md`.
+
+### 20.9 Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| The stored value is the inverse of the shown choice. A test or a caller can read 1 as `On`. | The id name says "hidden", the `settings.h` comment gives the mapping, and AC-M28 checks the text for each value. Mutant M16 of `training_spec.md` 17.9 checks it. |
+| A downgrade to a 0.1.3 development build loses the `Off` value. | That firmware clears bits 2-7 of byte 14 at each load, so only the marker goes back to `On`. Accepted: development builds only. |
+| The edit order is `On`, then `Off`, the inverse of `Show CW Code` (`Off`, `On`). | User decision 2026-11-03 (answer to `ui-ux.md` Q-17): keep `On`, then `Off`. The order follows the stored value, so the menu needs no map. |

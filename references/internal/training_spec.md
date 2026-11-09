@@ -16,7 +16,12 @@ Change request D-T45 to D-T47 (start screen with a big level description, split 
 (D-T48). T16 and Q7 done. Final review `approved` on 2026-10-15 after C1 to C6 (section 22.6). W7 ready to start. The release notes wait for the version decision. Change request D-T51 (the CW player early release follows the `Ramp` setting, plan `noble-bubbling-dahl.md`, 2026-10-16): specification published on 2026-10-16, section 17.7. Change request D-T52 to D-T60 (unlimited attempts per mode and a
 long `next` skip, plan `harmonic-doodling-dragonfly.md`, user-approved): specification published on 2026-11-02,
 section 17.8. D7 done, review `approved` on 2026-11-02 (D-T61). T17 and Q8 done. Final review `approved` on
-2026-11-02 (section 22.7, D-T62). W8 ready to start. The release notes wait for the version decision. The user answered Q-T1 and Q-T2 (section 20). Section 21
+2026-11-02 (section 22.7, D-T62). W8 ready to start. The release notes wait for the version decision. Change request
+D-T63 to D-T65 (`TX Char Marker` setting, plan `glowing-inventing-horizon.md`, user-approved 2026-11-03):
+specification published on 2026-11-03, section 17.9. D8 done, review `approved` (D-T66). T18 and Q9 done. Final
+review `approved` on 2026-11-03 after C7 (section 22.8). W9 ready to start. Change request D-T69 and D-T70 (the
+Sending bar under the first character with `TX Char Marker` `Off`, user decision 2026-11-04 after a device test):
+specification published on 2026-11-04, section 17.10. D9 (UX-82) `approved` after C8 and C9 (D-T71). T19 and Q10 done. Final review `approved` on 2026-11-04 (section 22.9). W10 ready to start. The user answered Q-T1 and Q-T2 (section 20). Section 21
 reconciles this contract with the final `ui-ux.md` (sections 3.3.1, 5.11-5.15, 6.8-6.10, 9.4, UX-39 to UX-50).
 Readers: `c-embedded-developer`, `qa-embedded`,
 `ui-ux-embedded-designer`, `technical-writer`.
@@ -186,6 +191,16 @@ fails. Do not try another layout.
 | D-T60 | Settings and menu part (`menu_subsystem_spec.md` section 19). New ids `SETTINGS_ID_RX_UNLIMITED` (13) and `SETTINGS_ID_TX_UNLIMITED` (14): 0 gives 3 attempts (default), 1 gives unlimited attempts. Settings record layout version 4: training flags in byte 14, CRC in byte 15. New node `MENU_NODE_TRAINING` (4). `receiving_enter()` reads `SETTINGS_ID_RX_UNLIMITED` once (UX-49), and `sending_enter()` reads `SETTINGS_ID_TX_UNLIMITED` once. Each mode keeps the value in a `static MEM_XDATA bool` with plain stores, as `tx_is_swapped`, and gives it to `training_prepare()`. | SDCC needs a bit of internal RAM for a `bool` from a compare (comment in `sending_enter()`). Plain stores keep the internal RAM unchanged. |
 | D-T61 | Review of D7 (2026-11-02): `approved`. Accepted UI values of `ui-ux.md`: UX-74 to UX-78 and sections 5.19 and 5.20, with the engine facts E-1 to E-6 of 5.20.5. Also the rows of 5.3, 5.14, 6.1, 6.8 and 6.9, and F-27. Also V-192 to V-206 of 9.7, the changed V-02, V-20, V-21, V-80, V-96, V-119 and V-182, and D-48 to D-52. (1) Status texts: `Skipped. The answer is:` (Receiving, column 1) and `Skipped` (Sending, column 9). (2) Unlimited retry status: `Try <N>` for N 2 to 99, then `Try 99+`. (3) Sending row 5 after a skip: the code of one character, at the failed position of D-T54 (6). Row 7 does not change. The bar does not move. (4) Training list: choices `3` and `Unlimited`, fw 9. `Max Word Length` and `Show CW Code` keep fw 1 and fw 3. (5) The skip acts in Item and in a `Wrong` result only. This equals D-T54 (1), (2) and (5). (6) Editorial note E-1 for `ui-ux-embedded-designer`, not blocking: the result column of V-119 says "The long `next` skips (V-202)", but the setup of V-119 has no long `next`. A later pass makes it a plain reference to V-202. The notes for T17 Part C are in section 17.8. | Every value fits the D-T53 to D-T59 limits. No interface of section 5.10 changes. E-1 to E-6 match the engine contract, and E-3 is the D-T59 (1) bar rule. U-34 is resolved. |
 | D-T62 | Decisions of the T17 final review (2026-11-02). (1) Flash +559 B is above the +450 B target and below the +700 B hard limit: accepted. `training.c` +126 B is above the Part B target of +100 B: accepted inside the whole budget. The image uses 29 664 of 61 440 B. (2) xdata +7 B is above the +6 B target and below the +8 B hard limit: accepted. The extra byte is the `MEM_XDATA bool` parameter of `training_prepare()` (D-T53). The 14.2 estimate left it out. (3) `rx_show_answer()` in `receiving.c` holds `player_stop()`, `player_start()` of the item and `training_hold_result(true)`. Each caller then calls `rx_draw_input()`. This is an accepted detail of D-T56: the call order is the same, and the pick path keeps its stack depth. (4) CRC-8 over the 16-byte record misses one 2-bit error pattern (bits 0 and 127). The magic check catches it, because bit 0 is in magic byte 0. Residual risk, no change. | (1) and (2) are inside the hard limits. No internal RAM changed, and the stack has 188 B free as before. (3) The behavior equals D-T56, and QA verified it. (4) QA finding, no field case. |
+| D-T63 | User decisions (2026-11-03, plan `glowing-inventing-horizon.md`), Sending only. (1) New setting `TX Char Marker` with the choices `Off` and `On`. The default is `On`, the behavior of 0.1.2. It is the last item of `Settings > Training`, after `Show CW Code`. (2) With `Off`, the bar under the next character does not show in phase ITEM. (3) A RESULT with a wrong check always shows the bar under the failed character, with `On` and with `Off`. A wrong check is a wrong character, a word-space error (`Wrong: pause too long`), the third wrong attempt (FAILED) and a skip (FAILED). (4) A RESULT with CORRECT shows no bar, and a character item (length 1) shows no bar, as before. (5) Receiving does not change. | User decisions. The bar after an error shows the user where the error is. |
+| D-T64 | Sending screen contract of D-T63 (section 12.3). (1) `sending.c` has `static MEM_XDATA bool tx_is_marker_shown;`. `sending_enter()` sets it once with plain stores, as `tx_is_code_shown`: `false`, then `true` when `settings_get(SETTINGS_ID_TX_MARKER_HIDDEN) == 0U` (UX-49). (2) `tx_draw_item_line()` draws the item text as before. Then the RESULT branch does not change, and a new `else if (!tx_is_marker_shown) return;` branch ends the ITEM path before the bar. The sketch is in 17.9 (confirmed by D-T68). (3) The bar slot rules of D-T59 (1) and the length check (`length > 1U`) do not change. (4) `training_screen_draw_item_text()` clears the item rows (y 24-39) before it draws, so the bar of a RESULT goes away at RETRY and at the next ITEM with no extra code. (5) No change in `training.c`, `training_screen.c`, `receiving.c`, the engine interface of section 5.10 or the ISR files. (6) The setting does not act on the start screen (SELECT) or on the end screen. | The RESULT branch already draws the bar for every wrong check. One branch in ITEM is the smallest change. A `bool` from a compare needs a bit of internal RAM in SDCC, so plain stores keep internal RAM unchanged (D-T60). |
+| D-T65 | Settings and menu part (`menu_subsystem_spec.md` section 20). New id `SETTINGS_ID_TX_MARKER_HIDDEN` (15), `SETTINGS_ID_COUNT` 16. The id stores "marker hidden": 0 shows `On` (default), 1 shows `Off`. Bit 2 (0x04) of byte 14, `RECORD_TRAINING_FLAGS_USED` 0x07. No layout version change and no new load code. The menu item is the fifth item of `Settings > Training`, with the text table `{"On", "Off"}` indexed by the stored value and field width 3. Labels and texts: `ui-ux.md` UX-79 and later. | Layout version 4 is not released (0.1.3 is open). With inverted storage, every existing load path gives the default `On`: versions 1 to 3 and a failed load set byte 14 to 0, and the version 4 records of the development builds have bit 2 = 0. |
+| D-T66 | Review of D8 (2026-11-03): `approved`. Accepted UI values of `ui-ux.md`: UX-79 to UX-81, the rows of 5.3, 5.13.5, 5.14, 5.19 and 5.20.4, E-7, and V-207 to V-213 of 9.8. Also the feedback rows of UX-79 and UX-80 and the device checks D-48 and D-53. (1) Label `TX Char Marker`, choices `On` and `Off` in this order, fw 3, default `On`. Browse mode: `On` in columns 21-22, `Off` in columns 20-22. (2) The 5.13.5 behavior table equals the 17.9 table and D-T63. With `Off`, the bar shows in the redraw of the status text and goes off at RETRY. (3) The list has 5 items and does not scroll (UX-81). (4) User answer to `ui-ux.md` Q-17 (2026-11-03): keep the edit order `On`, then `Off`. The text table is `{"On", "Off"}`, and the index is the stored value (`menu_subsystem_spec.md` 20.5). (5) Notes for T18 are in 17.9 (N9 to N11). | The values fit D-T63 to D-T65 and `menu_subsystem_spec.md` section 20. The bar positions of V-209 to V-211 follow D-T59 (1): slot x `68 - 8n + 16k` gives 36, 52, 68 and 84 for `KMRS`. U-35 is resolved. |
+| D-T67 | Decisions on the T18 developer report (2026-11-03). (1) Scope addition to 15.3: the developer fixes four more developer test files that fail only by the contract change of `menu_subsystem_spec.md` section 20. `test_settings.c` (the min, max and step tables get the id 15 entry 0, 1, 1), `test_settings_paddle.c`, `test_settings_prosign.c` and `test_settings_ramp.c` (`SETTINGS_ID_COUNT` 16). Only these expected values change. The QA files with the same cause are `test_qa_menu_training.c`, `test_qa_settings.c`, `test_qa_settings_prosign.c`, `test_qa_settings_ramp.c` and `test_qa_settings_training.c` (Q9 Part A). (2) Flash +73 B is above the +60 B target and below the +120 B hard limit: accepted. Part C (`sending.c`) is +35 B against +20 B. D-T64 (1) does not change: `tx_is_marker_shown` keeps the plain-store `bool` pattern. | (1) The 15.3 list missed these files. Each change traces to section 20 and loosens no check. (2) The plain-store pattern is the one rule for every Sending setting flag (`tx_is_swapped`, `tx_is_code_shown`, `tx_is_unlimited`). A raw `uint8_t` saves about 12 B but adds a second pattern for one flag. The image stays near 29.7 of 61.4 KB. |
+| D-T68 | User review of T18 (2026-11-03). (1) The user proposed one draw condition, `if ((length > 1U) && (tx_is_marker_shown \|\| (phase == TRAINING_PHASE_RESULT)))`, in place of the `else if (!tx_is_marker_shown) return;` branch. (2) Measured: `sending.c` 0x438 B, image 29 750 B, +13 B against the `else if` form (0x42B B, image 29 737 B). Five more variants (the term moved, a second `training_phase()` call, other orders) gave 0x438 or 0x43A B. No variant was smaller. (3) The user kept the `else if` form for flash size. D-T64 (2) and the 17.9 sketch do not change. | SDCC saves a register around the calls for the single-condition forms. The behavior of both forms is the same. |
+| D-T69 | User decision (2026-11-04, device test of T18), Sending only. It amends D-T63 (2). (1) With `TX Char Marker` `Off`, ITEM of a word item shows the bar under the first character at an answer length of 0. This is the start of each word item and the start of each retry after a wrong result. (2) After the first accepted character (PARTIAL), the bar does not show in ITEM for the rest of the attempt, as in D-T63 (2). (3) `On` does not change. (4) The RESULT rules of D-T63 (3) and (4) do not change: the bar under the failed character after a wrong check, no bar after CORRECT. (5) A character item (length 1) shows no bar in every phase, as before. (6) Receiving, the start screen and the end screen do not change. (7) The setting, its label, its choices, its storage and its default do not change (D-T65). | User decision after a device test. The bar at slot 0 tells the user that a new attempt starts and where. A half-keyed first character does not redraw the item line, so the bar stays until the first accepted character. User feedback, verbatim: "At least for me not really clear when I can start my retry of wrong sending, moving the char indicator to the first char was totally clear for me. I suggest to always show the indicator for the first char." |
+| D-T70 | Sending screen contract of D-T69. It amends D-T64 (2). (1) In `tx_draw_item_line()`, the ITEM branch ends before the bar only with marker Off and an attempt that has an accepted character: `} else if (!tx_is_marker_shown && (bar_slot != 0U)) {`. Here `bar_slot` is already `training_answer_length()`. The `else if` form of D-T68 stays. The developer can put the two terms in either order, or use an inner `if (bar_slot != 0U)` in the branch. The developer measures the forms and keeps the smallest (17.10). (2) No new redraw is needed. Checked in `sending.c` at HEAD `e1ecc9d`: at RETRY, `training_poll()` calls `training_clear_answer()` before it returns `TRAINING_EVENT_RETRY`, and `sending_poll()` then calls `tx_draw_input()` -> `tx_draw_item_line()` with an answer length of 0. The ITEM event of a new item takes the same path. At PARTIAL, `tx_handle_keyer_event()` calls `tx_draw_item_line()`, and `training_screen_draw_item_text()` clears the item rows (D-T64 (4)) before the ITEM branch returns, so the bar goes off. A DIT, DAH or OVERFLOW event does not redraw the item line. (3) `tx_is_marker_shown`, `sending_enter()`, `tx_result_slot()`, the RESULT branch, the `length > 1U` check and the D-T59 (1) slot rules do not change. (4) The comment above `tx_draw_item_line()` changes to the text of 17.10, because the old text says the bar shows only with marker On. (5) No change in `training.c`, `training_screen.c`, `receiving.c`, settings, menu, the engine interface of section 5.10 or the ISR files. | One added term in the existing branch is the smallest change. The redraw paths already exist, so the change has no new call and no new state. |
+| D-T71 | Review of D9 (2026-11-04): `changes_requested`, limited to C8 and C9 below. Accepted UI values of `ui-ux.md`: UX-82 and its rows of 5.3, 5.11.2, 5.13, 5.13.5, 5.14, 5.19 and 5.20.4. Also E-7, the changed V-209 to V-213, the new V-215 and the device check D-54. (1) UX-82 equals D-T69: with `Off`, the bar is under the first character of a word item while the answer of the attempt is empty. The first correct character turns it off. Elements and a WORD_GAP before the first character keep it. A wrong check at the first character keeps it. `On`, the result rules, character items, Receiving and the start screen do not change. (2) C8: the V-214 result at t asks that page 3 is not dirty. This is a dirty-page rule that the 17.10 table and D-T70 do not have (D-T72). The designer replaces the text with the C8 text of 17.10. (3) C9: the 5.13.5 sentence "In the item line, this redraw changes only page 4." can be read as a dirty-page rule. The designer replaces it with the C9 text of 17.10. (4) Editorial note E-2, not blocking: E-7 names D-T64 only. A later pass names D-T64 and D-T70. (5) After C8 and C9, `architector` checks that the two texts equal the 17.10 texts and that no other line changed. Then D9 is `approved` with no new review decision. | Every other value fits D-T69 and D-T70. The bar positions follow D-T59 (1): `KMRS` slots at x 36, 52, 68 and 84. V-215 run 1 and run 2 cover a wrong first character, unlimited attempts and FAILED at slot 0. |
+| D-T72 | Redraw rule of the Sending item line (coordinator question of 2026-11-04 on V-214). (1) The item-line contract of Sending is a pixel contract: the pixels of pages 3 and 4 after each event. No dirty-page rule applies to the item line at ITEM, PARTIAL, RESULT or RETRY. (2) `training_screen_draw_item_text()` clears rows 3 and 4 and draws them again. So pages 3 and 4 are both dirty after each item-line redraw. The final bytes of page 3 do not matter. This is the 0.1.2 behavior at every PARTIAL with `On`. (3) The redraw budget of `ui-ux.md` 5.16.4 (UX-70, D-T49) covers the start screen only. (4) T19 keeps its scope: no change of `training_screen.c`. The T19 test of V-214 checks the pixels (`harness_changed_pages()` gives page 4 only), not the dirty mask. This is accepted. (5) Q10 checks the pixel rule. A Q10 check that page 3 is not dirty at PARTIAL is out of contract. | A clean page 3 needs a redraw of page 4 only, a change in `training_screen.c` for every caller. The gain is one page of 128 B over the software SPI at a correct character. The 0.1.2 `On` path sends this page at every correct character, and the user reported no delay. If a device test shows a delay, `architector` opens a separate change. |
 | D-T19 | A failed `Reset Statistics` shows `Not saved` over the Settings list. The menu stack does not change, so `OK` returns to Settings with the cursor on `Reset Statistics`. A failed settings save still shows the message after the pop, so its `OK` returns to the main menu. | This is the behavior of the current `menu_show_message()`. No menu change beyond D-T11. |
 
 ## 4. Baseline (measured)
@@ -1337,7 +1352,8 @@ Poll (`receiving_poll()`): `training_poll()`, then the reaction to its event. `r
 
 Entry (`sending_enter()`), in this order: `rng_seed(tick_now())`. Read `Key Type`, `Paddle`, `TX Speed`,
 `TX Eff. Speed`, `Tone`, `Max Word Length`, `Show CW Code` and `Prosigns` once into xdata (UX-49). Also read
-`TX Attempts` (`SETTINGS_ID_TX_UNLIMITED`, D-T60) once. `sidetone_set_tone_hz()`.
+`TX Attempts` (`SETTINGS_ID_TX_UNLIMITED`, D-T60) and `TX Char Marker` (`SETTINGS_ID_TX_MARKER_HIDDEN`, D-T64) once.
+`sidetone_set_tone_hz()`.
 `training_prepare(TRAINING_MODE_SENDING, tx_wpm, max_word_len, tx_has_unlimited_attempts)`. Tap mode stays off.
 Revised by D-T40: no `buttons_set_enter_enabled()` call and no `keyer_start()` at the entry. P3.2 stays with the
 menu, so `enter` and the paddle tip act on the start screen.
@@ -1394,18 +1410,18 @@ Check results:
 
 | Result | Action |
 | --- | --- |
-| PARTIAL | Move the bar to the next character of the word. |
+| PARTIAL | Move the bar to the next character of the word. With `TX Char Marker` `Off`: no bar (D-T64, D-T70). |
 | CORRECT | Status `Correct`. No bar. |
-| WRONG | Keyed character: status `Wrong: ` and the `morse_format()` text of the keyed character. Word space (the last answer character is `TRAINING_CHAR_WORD_SPACE`): status `Wrong: pause too long` (`ui-ux.md` 5.14, UX-52), a `MEM_CODE` constant. Row 7 keeps its marks (the last correct character). The bar stays under the failed position. |
+| WRONG | Keyed character: status `Wrong: ` and the `morse_format()` text of the keyed character. Word space (the last answer character is `TRAINING_CHAR_WORD_SPACE`): status `Wrong: pause too long` (`ui-ux.md` 5.14, UX-52), a `MEM_CODE` constant. Row 7 keeps its marks (the last correct character). The bar stays under the failed position, with each `TX Char Marker` value (D-T63 (3)). |
 | FAILED | As WRONG. Row 5 shows the centered marks of the expected character (`morse_encode()` of the item character at the failed position), for every `Show CW Code` value. The draw is `training_screen_draw_code_group(pattern, MORSE_PATTERN_EMPTY)` (D-T47). For a word space, the failed position is the character that the user had to key next. |
-| FAILED after a skip (`training_is_skipped()`) | The failed position is `training_answer_length()` (D-T54 (6), D-T59). The answer can be empty, so no code reads its last character. The status text, row 5 and row 7 come from ui-ux.md (new UX decisions for unlimited attempts and skip). The bar stays under the failed position (WS-4). |
+| FAILED after a skip (`training_is_skipped()`) | The failed position is `training_answer_length()` (D-T54 (6), D-T59). The answer can be empty, so no code reads its last character. The status text, row 5 and row 7 come from ui-ux.md (new UX decisions for unlimited attempts and skip). The bar stays under the failed position (WS-4), with each `TX Char Marker` value (D-T63 (3)). |
 
 `training_poll()` event reactions:
 
 | Event | Action |
 | --- | --- |
-| ITEM | Draw the item in the 8 x 16 font. Word item: bar under the first character. |
-| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. With unlimited attempts, the `Try N` text and its cap of ui-ux.md (D-T59). Bar back to the first character. Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
+| ITEM | Draw the item in the 8 x 16 font. Word item: bar under the first character, with each `TX Char Marker` value (D-T69, D-T70). |
+| RETRY | Status `Try 2 of 3` or `Try 3 of 3`. With unlimited attempts, the `Try N` text and its cap of ui-ux.md (D-T59). Bar back to the first character, with each `TX Char Marker` value (D-T69, D-T70). Rows 5 and 7 off (D-T30), as at ITEM. The next mark starts at x 2. |
 | GAP | Blank moment: rows 1-7 off, header shows `training_shown_item_number()`. |
 | END | `keyer_stop()`, `buttons_set_enter_enabled(true)`, `buttons_set_tap_mode(false)` (D-T43: drops a held `prev` or `next` and its repeat), `training_screen_draw_end()`. |
 
@@ -1710,6 +1726,38 @@ Stack candidates for T17:
 
 T17 reports the 14.2 table before and after each part, the flash per changed file and the deepest chain by name.
 
+Change D-T63 to D-T65 (task T18): `TX Char Marker` setting. No new file, no ISR change. The baseline is the T17
+result of section 22.7. T18 measures it again before the first change.
+
+| Resource | Baseline (T17 result) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 29 664 of 61 440 B | Part A: at most +15 B. Part B: at most +30 B. Part C: at most +20 B. Whole T18: at most +60 B | +120 B |
+| xdata | 1830 of 3072 B | +1 B: `tx_is_marker_shown`. Settings record and baseline +0 B (byte 14 is already in both). | +1 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | 188 B free | deepest main-loop chain +0 B: the new branch adds no call | margin at least 64 B |
+| Timer 0 ISR | unchanged | no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+
+Flash estimate: settings tables 6 B and the mask. Menu item, text table and the texts `On` and `Off` about +25 B.
+Sending: one xdata store pair at the entry and one test and branch in `tx_draw_item_line()` about +15 B.
+
+T18 reports the 14.2 table before and after each part, the flash per changed file and the deepest chain by name.
+
+Change D-T69 and D-T70 (task T19): the bar under the first character with `TX Char Marker` `Off`. No new file, no
+ISR change. The baseline is the T18 result of section 22.8. T19 measures it again before the first change.
+
+| Resource | Baseline (T18 result) | Target | Hard limit (above it, `architector` decides) |
+| --- | --- | --- | --- |
+| Flash | 29 737 of 61 440 B, `sending.c` 0x42B B | at most +8 B | +16 B |
+| xdata | 1831 of 3072 B | +0 B | +0 B |
+| DSEG, overlay, bit bytes | unchanged | +0 B | +0 B |
+| Stack | 188 B free | deepest main-loop chain +0 B: the change adds no call | margin at least 64 B |
+| Timer 0 ISR | unchanged | no change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c` or `player.c` | - |
+
+Flash estimate: one compare of `bar_slot` with 0 and one branch, about 4 to 6 B. D-T68 showed that SDCC can save a
+register for a longer condition (+13 B). So T19 builds each allowed form of D-T70 (1) and keeps the smallest.
+
+T19 reports the 14.2 table before and after, the `sending.c` size of each measured form, and the deepest chain by name.
+
 Report table from `build.sh`, `.map` and `.mem`, before and after each task:
 
 | Task | Flash B | DSEG B | Overlay B | Bit bytes | xdata B | Stack start | Stack free B | Deepest main-loop stack B | Largest ISR frame B | Margin B |
@@ -1870,6 +1918,35 @@ Player tests define `PLAYER_SIDETONE_ON()` and `PLAYER_SIDETONE_OFF()`, include 
     "version 4 gives `SETTINGS_LOAD_BAD_VERSION`" vector change to `menu_subsystem_spec.md` section 19.
   - Each file keeps its owner: `qa-embedded` changes the `test_qa_*` files (D-T43 (4)). Each changed expected value
     traces to D-T52 to D-T60, to `menu_subsystem_spec.md` section 19, or to a V-vector of task D7.
+- D-T63 to D-T65 (task T18):
+  - Settings tests that expect `SETTINGS_ID_COUNT` 15, id 15 as an unknown id, `RECORD_TRAINING_FLAGS_USED` 0x03,
+    "bits 2-7 of byte 14 are 0 after a load", or the 19.4 load results of the vectors with byte 14 = 0xFF and 0xFC
+    change to `menu_subsystem_spec.md` section 20. The unknown id becomes 16. Byte 14 in RAM after the 0xFF vector is
+    0x07, and after the 0xFC vector 0x04. Known files: `test_settings_training.c`, `test_qa_settings_training.c`.
+  - Menu tests that expect 4 items in `Settings > Training` change to 5. Known files: `test_menu_training.c`,
+    `test_qa_menu_training.c`.
+  - Existing Sending and Receiving tests keep their expected values: the default `On` gives the screens of 0.1.2.
+    New tests are added, not changed.
+  - Developer test files of T18. Changed and added cases: `test_settings_training.c` (AC-M22 to AC-M27),
+    `test_menu_training.c` (AC-M28, AC-M29, V-207, V-208). Added cases only: `test_sending.c` (AC-T55, AC-T56,
+    V-209 to V-213, the Sending part of V-212), `test_receiving.c` (the Receiving part of V-212). A `MARKER(v)`
+    helper can go into `Tests/support/training_harness.h` as an addition. No new developer test file is needed.
+    Added by D-T67 (1): `test_settings.c`, `test_settings_paddle.c`, `test_settings_prosign.c` and
+    `test_settings_ramp.c`, only the id 15 table entries and `SETTINGS_ID_COUNT` 16. No other test file changes.
+  - QA files of Q9 Part A: `test_qa_menu_training.c`, `test_qa_settings.c`, `test_qa_settings_prosign.c`,
+    `test_qa_settings_ramp.c` and `test_qa_settings_training.c` (D-T67 (1)).
+  - Each file keeps its owner: `qa-embedded` changes the `test_qa_*` files (D-T43 (4)). Each changed expected value
+    traces to D-T63 to D-T65, to `menu_subsystem_spec.md` section 20 or to a V-vector of task D8.
+- D-T69 and D-T70 (task T19):
+  - Sending tests with `TX Char Marker` `Off` that expect no bar in ITEM at an answer length of 0 change. They
+    expect the bar under the first character of a word item: at the start of the item, at RETRY after WRONG, and
+    after a skip at the next item. At an answer length of 1 or more in ITEM, `Off` still expects no bar.
+  - Tests with `On`, RESULT tests, character-item tests and Receiving tests keep their expected values.
+  - Developer test file of T19: `test_sending.c` (AC-T55 (1) as amended, AC-T58, the changed V-vectors of task D9).
+    `test_receiving.c` does not change and passes.
+  - QA file of Q10: `test_qa_sending_marker.c`. Also every other `test_qa_*` file that fails only for the D-T70
+    reason above. Each file keeps its owner (D-T43 (4)).
+  - Each changed expected value traces to D-T69, D-T70 or a V-vector of task D9.
 - No change removes a check or loosens an expected value.
 
 ## 16. Acceptance criteria
@@ -1933,6 +2010,11 @@ Developer test files: `test_morse_encode.c`, `test_timing.c`, `test_player.c`, `
 | AC-T52 | Sending skip (D-T57), through the menu with the fake keyer, both attempt settings. (1) Cases: long `next` in ITEM with an empty answer and after accepted characters of a word. Also in RESULT after a wrong character and after a word space. Each case gives FAILED, the status and row 5 of ui-ux.md, and the bar under the failed position. (2) A half-keyed character at the skip: its later elements and its CHAR_GAP make no check, and the first character of the next item counts. (3) A skip with an empty pattern and no keying until the next item: the first character of the next item counts (the D-T57 refinement). (4) A `next` press and its repeats do nothing. Long `next` in GAP: nothing. (5) ASan and UBSan report no read outside the answer or item arrays. (6) The V-vectors of task D7 for Sending pass. |
 | AC-T53 | Settings in the modes (D-T60), through the menu. `RX Attempts` set to unlimited changes only Receiving, and `TX Attempts` only Sending. Each mode reads its value once at the entry. The status line in ITEM after a wrong answer shows the `Try N` text of ui-ux.md with unlimited attempts, and `Try 2 of 3` or `Try 3 of 3` with 3 attempts. The cap of N follows ui-ux.md, also at a wrong counter of 255. |
 | AC-T54 | Change D-T52 to D-T60: memory within the T17 budget of section 14.2, with the before and after report of each part and the deepest chain by name. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. No change in `sidetone.c`, `keyer_service.h`, `player_service.h`, `keyer.c`, `player.c`, `buttons.c`, `koch.c`, `koch.h`, `progress.c`, `progress.h` or `firmware/drivers/`. |
+| AC-T55 | `TX Char Marker` in Sending (D-T63, D-T64), `test_sending.c`, through the menu with the fake keyer. (1) Amended by D-T69 (AC-T58): `Off`, word item: after each accepted character, the item rows (pages 3 and 4) hold the item text and no bar pixel. The text pixels are equal to those with `On`, without the bar. (2) `Off`, word item, RESULT after a wrong character, an unknown pattern (`*`), a word-space error, a third wrong attempt (3 attempts) and a skip in ITEM and in RESULT after WRONG: the item rows are equal to those with `On` in the same state, with the bar at the D-T59 (1) position. (3) `On` and `Off`: RESULT after CORRECT shows no bar. A character item shows no bar in every phase. (4) `On`: every existing Sending test passes with no change of its expected values. (5) Receiving screens are equal with `On` and `Off`. |
+| AC-T56 | Setting read once (D-T64 (1), UX-49), through the menu. An edit of `TX Char Marker` in `Settings > Training` acts at the next entry to Sending. A `settings_set()` of id 15 during a session does not change the item rows until the next `sending_enter()`. A version 1 to 3 record gives the bar in ITEM. |
+| AC-T57 | Change D-T63 to D-T65: memory within the T18 budget of section 14.2, with the before and after report of each part and the deepest chain by name. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. Only the files of 17.9.1 change, and the `tx_draw_item_line()` control flow matches the 17.9 sketch. |
+| AC-T58 | Bar under the first character with `Off` (D-T69, D-T70), `test_sending.c`, through the menu with the fake keyer. (1) `Off`, word item, ITEM at an answer length of 0: the item rows (pages 3 and 4) are pixel-equal to those with `On` in the same state. This holds at the start of each item and at each RETRY. The RETRY cases are a wrong character, an unknown pattern, a word-space error and unlimited attempts. It also holds at the next item after a skip or a FAILED result. (2) `Off`: the first accepted character (PARTIAL) removes the bar, and no bar shows in ITEM until the next RETRY or item. (3) `Off`: elements of a half-keyed first character and an OVERFLOW at an answer length of 0 keep the bar under the first character. (4) The RESULT rows of AC-T55 (2) and (3) do not change. A character item shows no bar with `Off`, also at an answer length of 0. (5) `On`: every Sending test passes with no change of its expected values. Receiving screens are equal with `On` and `Off`. |
+| AC-T59 | Change D-T69 and D-T70: memory within the T19 budget of section 14.2, with the before and after report and the size of each measured form. `check_asm.sh` passes. `pre-commit run --files <changed files>` passes. Only the files of 17.10.1 change. The `tx_draw_item_line()` control flow matches the 17.10 sketch or an allowed form of D-T70 (1). The comment above `tx_draw_item_line()` is the text of 17.10. |
 | AC-T26 | `firmware/test.sh` and `firmware/build.sh` pass. All host tests pass under ASan and UBSan. No regression: existing tests change only as section 15.3 allows. |
 
 ## 17. Tasks
@@ -2227,6 +2309,257 @@ to `architector` first.
 Exit rule. T17 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
 tests that the 15.3 changes cover can fail. Q8 Part A updates them. Q8 ends with `test.sh` passing in full.
 
+### 17.9 Change D-T63 to D-T65: `TX Char Marker` setting
+
+User decisions 2026-11-03 (D-T63). Plan `glowing-inventing-horizon.md` approved by the user. The settings and menu
+part is in `menu_subsystem_spec.md` section 20. Receiving, the engine and the level logic do not change. This is a
+new function in the open version 0.1.3. After the work, the coordinator asks the user about the version
+(AGENTS.md). Proposal: keep 0.1.3, because 0.1.3 is not released.
+
+Amended by D-T69 and D-T70 (2026-11-04): the ITEM row of the behavior table below and the ITEM branch of the
+sketch. Section 17.10 holds the current table and sketch.
+
+D8 ran at the same time as this specification. `ui-ux.md` UX-79 to UX-81 (sections 5.3, 5.13.5, 5.19 and 5.20.4)
+win for the label, the choice texts and the field width. The behavior of D-T63 is a user decision and does not
+change.
+
+Review of D8 (2026-11-03): `approved` (D-T66). Notes for T18:
+
+| ID | Note |
+| --- | --- |
+| N9 | Menu (Part B): `menu_tx_marker_texts[2] = {"On", "Off"}` and the item of `menu_subsystem_spec.md` 20.5. The edit order `On`, then `Off` is the user answer to Q-17. Vectors V-207 and V-208. |
+| N10 | Sending (Part C): vectors V-209 to V-213 of `ui-ux.md` 9.8. `MARKER(v)` is a valid version 4 record in the fake EEPROM with bit 2 of byte 14 = 1 for `Off`, 0 for `On`, before the power-on. V-212 runs existing vectors again with `MARKER(On)` and `MARKER(Off)`: V-101 and V-199 are Receiving vectors. |
+| N11 | V-209 "no pixel of y 24-39 changes" after a correct character means the pixel values. `training_screen_draw_item_text()` clears and draws the rows again, so the test does not ask for a clean page. |
+| N12 | Decisions on the T18 report (D-T67): the four extra developer test files of 15.3 are in scope, and flash +73 B is accepted with D-T64 (1) unchanged. |
+
+Behavior (D-T63, D-T64). "Bar" is the 2-pixel bar under one character of the item line.
+
+| Phase and state | `On` (default) | `Off` |
+| --- | --- | --- |
+| ITEM, word item: at the start, after each accepted character, after a RETRY | bar under the next character | no bar |
+| RESULT after WRONG: a wrong character or an unknown pattern (`*`) | bar under the failed character | bar under the failed character |
+| RESULT after WRONG: a word-space error (`Wrong: pause too long`) | bar under the expected next character | bar under the expected next character |
+| RESULT after FAILED: the third wrong attempt, of each kind above | bar under the failed character | bar under the failed character |
+| RESULT after FAILED: a skip in ITEM or in RESULT after WRONG | bar at `training_answer_length()` (D-T59 (1)) | bar at `training_answer_length()` |
+| RESULT after CORRECT | no bar | no bar |
+| Character item (length 1), every phase | no bar | no bar |
+| SELECT (start screen), GAP, END | no change | no change |
+
+The failed position follows D-T59 (1) for each value. Each mode visit reads the setting once, at
+`sending_enter()` (UX-49). A change in the menu acts at the next entry to Sending.
+
+Implementation sketch of `tx_draw_item_line()` in `src/modes/sending.c` (binding for the control flow, not for the
+comment text):
+
+```c
+  training_screen_draw_item_text(training_item_text(), tx_prosign_style);
+  bar_slot = training_answer_length();
+  if (phase == TRAINING_PHASE_RESULT) {
+    if (training_last_check() == TRAINING_CHECK_CORRECT) {
+      return;
+    }
+    /* After an error, the bar stays under the failed character, also with TX Char Marker Off. */
+    bar_slot = tx_result_slot();
+  } else if (!tx_is_marker_shown) {
+    return;
+  }
+  if (length > 1U) {
+    training_screen_draw_mark(bar_slot, length, false);
+  }
+```
+
+D-T68 keeps this form for flash size. A single draw condition was measured 13 B larger.
+
+`sending_enter()`, after the `Show CW Code` read:
+
+```c
+  tx_is_marker_shown = false;
+  if (settings_get(SETTINGS_ID_TX_MARKER_HIDDEN) == 0U) {
+    tx_is_marker_shown = true;
+  }
+```
+
+The comment above `tx_draw_item_line()` stays true for both values. The comment in the RESULT branch names an error,
+not only a wrong character (open note of section 22.7).
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D8 | `ui-ux-embedded-designer` | Done, review `approved` (D-T66). `ui-ux.md` UX-79 to UX-81: the label `TX Char Marker`, the choice texts `Off` and `On`, field width 3, the fifth item of the 5.19 list, and the Sending item-line rule of 5.13 and 5.14 (the behavior table above). Also the V-vectors of 9.7 for the menu and for Sending, and a device check row. All within D-T63 and D-T64. A need outside these limits goes to `architector`. `architector` reviews D8 and records the result as a new decision. | - |
+| T18 | `c-embedded-developer` | Part A: settings (`menu_subsystem_spec.md` 20.2 to 20.4). Part B: the menu item (`menu_subsystem_spec.md` 20.5) with the texts of D8. Part C: Sending (D-T64, the sketch above). Scope: 17.9.1. | Part A: -. Part B: Part A, D8 review (done). Part C: Part A |
+| Q9 | `qa-embedded` | Part A: update the `test_qa_*` files of 15.3 to the contract after T18 Part A and Part B. Part B: independent verification of AC-T26, AC-T55 to AC-T57 and `menu_subsystem_spec.md` AC-M22 to AC-M30 after T18 Part C. Fault and mutation cases below. LCD page diffs of the item rows (pages 3 and 4, y 24-39) for each row of the behavior table, with `On` and `Off`. Files: `test_qa_settings_training.c`, `test_qa_menu_training.c` and `test_qa_sending*.c` (a new `test_qa_sending_marker.c` is allowed). Verdict `approved`, `changes_requested` or `blocked`. | Part A: T18 Part B. Part B: T18 Part C |
+| W9 | `technical-writer` | `docs/user_manual.md`: the `TX Char Marker` item in `Settings > Training` (`On` default, `Off`), and in the Sending section, what `Off` hides and that the bar still shows under the failed character after an error, a word-space error and a skip. `docs/quick_guide.md` if it lists the `Settings > Training` items. `docs/release_notes.md`: one entry in the 0.1.3 section. `Settings > Training` now has five items. Texts from `ui-ux.md` UX-79 and later. | `architector` approval of T18 |
+
+Q9 fault cases:
+
+| ID | Case |
+| --- | --- |
+| F10 | `Off`: a skip while a character is half keyed. The RESULT shows the bar at the D-T59 (1) position. The next ITEM shows no bar, and the first character of the next item counts (D-T57). |
+| F11 | `Off`: a word-space error after the second-to-last character of a word. The bar shows under the expected next character. At RETRY, the bar goes away. |
+| F12 | `Off`, `TX Attempts` unlimited: five wrong answers in a row. Each RESULT shows the bar, and each RETRY removes it. |
+| F13 | `settings_set(SETTINGS_ID_TX_MARKER_HIDDEN, ...)` during a session, not through the menu. The screen keeps the value of the entry until the next `sending_enter()`. |
+| F14 | A version 3 record and a version 4 record with byte 14 = 0x03: Sending shows the bar in ITEM (`On`). A version 4 record with byte 14 = 0xFC: no bar in ITEM. |
+
+Q9 mutation cases:
+
+| ID | Mutant |
+| --- | --- |
+| M15 | The ITEM test is inverted: a bar with `Off`, no bar with `On`. |
+| M16 | The menu text table is `{"Off", "On"}`, so the row shows `Off` for the stored value 0. |
+| M17 | The RESULT branch also returns with `Off`, so an error shows no bar. |
+| M18 | `RECORD_TRAINING_FLAGS_USED` stays 0x03, so bit 2 does not survive a load. |
+| M19 | Id 15 uses mask 0x04 with shift 0, or offset `RECORD_FLAGS` (byte 10). |
+| M20 | The default of id 15 is 1. |
+| M21 | `tx_draw_item_line()` reads `settings_get()` at each draw, not the value of the entry. |
+
+#### 17.9.1 Scope of T18
+
+| Part | Area | Files | Content |
+| --- | --- | --- | --- |
+| A | Settings | `inc/settings/settings.h`, `src/settings/settings.c` | `menu_subsystem_spec.md` 20.2 to 20.4. Tests: AC-M22 to AC-M27 in `test_settings_training.c`, with the new vectors and the changed results of the 0xFF and 0xFC vectors. |
+| B | Menu | `src/menu/menu_tree.c` | `menu_subsystem_spec.md` 20.5, with the label, texts and width of D8. Tests: AC-M28 and AC-M29 and V-207 and V-208 in `test_menu_training.c`. |
+| C | Sending | `src/modes/sending.c` | D-T64 and the sketch above. Tests: AC-T55, AC-T56 and V-209 to V-213 in `test_sending.c`, the Receiving part of V-212 (V-101, V-199 with `MARKER(Off)`) in `test_receiving.c`. |
+| C | Report | - | AC-T57 and `menu_subsystem_spec.md` AC-M30: the 14.2 table before and after each part, the flash per changed file, the deepest chain by name, the `check_asm.sh` result, the `pre-commit` result. A list of the `test_qa_*` tests that fail only for a 15.3 reason, each with its reason. |
+
+Not in T18: a change of `training.c`, `training.h`, `training_screen.c`, `receiving.c`, `menu.c`,
+`menu_render.c`, `menu.h`, `menu_internal.h`, the ISR files, `buttons.c`, `keyer.c`, `player.c`, `koch`,
+`progress`, `eeprom` or `firmware/drivers/`. T18 does not change `test_qa_*` files (D-T43 (4)). If T18 needs a
+change outside this scope, the developer reports to `architector` first.
+
+Exit rule. T18 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
+tests that the 15.3 changes cover can fail. Q9 Part A updates them. Q9 ends with `test.sh` passing in full.
+
+### 17.10 Change D-T69 and D-T70: the bar under the first character with `TX Char Marker` `Off`
+
+User decision 2026-11-04 after a device test of T18 (D-T69). Only the ITEM rule of `Off` changes. Settings, menu,
+Receiving, the engine and the level logic do not change. The change is part of the open version 0.1.3, and the
+`TX Char Marker` setting is not released. After the work, the coordinator asks the user about the version
+(AGENTS.md). Proposal: keep 0.1.3.
+
+D9 runs at the same time as this specification. `ui-ux-embedded-designer` records a new UX decision after UX-81 in
+`ui-ux.md`. The behavior of D-T69 is a user decision and does not change. `architector` reviews D9 and records the
+result as a new decision.
+
+Behavior (D-T63, D-T69). This table replaces the 17.9 table. "Bar" is the 2-pixel bar under one character of the
+item line.
+
+| Phase and state | `On` (default) | `Off` |
+| --- | --- | --- |
+| ITEM, word item, answer length 0: the start of an item, the start of each RETRY | bar under the first character | bar under the first character |
+| ITEM, word item, answer length 1 or more: after each accepted character | bar under the next character | no bar |
+| RESULT after WRONG: a wrong character or an unknown pattern (`*`) | bar under the failed character | bar under the failed character |
+| RESULT after WRONG: a word-space error (`Wrong: pause too long`) | bar under the expected next character | bar under the expected next character |
+| RESULT after FAILED: the third wrong attempt, of each kind above | bar under the failed character | bar under the failed character |
+| RESULT after FAILED: a skip in ITEM or in RESULT after WRONG | bar at `training_answer_length()` (D-T59 (1)) | bar at `training_answer_length()` |
+| RESULT after CORRECT | no bar | no bar |
+| Character item (length 1), every phase | no bar | no bar |
+| SELECT (start screen), GAP, END | no change | no change |
+
+With `Off`, the screen of an attempt is equal to the screen with `On` until the first accepted character. Elements of
+a half-keyed first character do not redraw the item line, so the bar stays under the first character.
+
+Implementation sketch of `tx_draw_item_line()` in `src/modes/sending.c` (binding for the control flow, not for the
+RESULT comment text, which does not change):
+
+```c
+/*
+ * The item in the 8 x 16 font. A word item has the bar under the next character or under the failed one. With
+ * marker Off, ITEM shows the bar only before the first accepted character of an attempt.
+ */
+static void tx_draw_item_line(void) {
+  ...
+  training_screen_draw_item_text(training_item_text(), tx_prosign_style);
+  bar_slot = training_answer_length();
+  if (phase == TRAINING_PHASE_RESULT) {
+    if (training_last_check() == TRAINING_CHECK_CORRECT) {
+      return;
+    }
+    /* After an error, the bar stays under the failed character, also with TX Char Marker Off. */
+    bar_slot = tx_result_slot();
+  } else if (!tx_is_marker_shown && (bar_slot != 0U)) {
+    return;
+  }
+  if (length > 1U) {
+    training_screen_draw_mark(bar_slot, length, false);
+  }
+}
+```
+
+The function comment above is binding text: it replaces the C7 line of section 22.8, which says that the bar shows
+only with marker On.
+
+Allowed forms of the ITEM branch (D-T70 (1)). Each form has the same behavior. T19 builds each form, reports the
+`sending.c` size of each, and keeps the smallest. At an equal size, T19 keeps form A.
+
+| Form | ITEM branch |
+| --- | --- |
+| A | `} else if (!tx_is_marker_shown && (bar_slot != 0U)) { return; }` |
+| B | `} else if ((bar_slot != 0U) && !tx_is_marker_shown) { return; }` |
+| C | `} else if (!tx_is_marker_shown) { if (bar_slot != 0U) { return; } }` |
+
+Notes for T19:
+
+| ID | Note |
+| --- | --- |
+| N13 | The redraw paths already exist (D-T70 (2)). T19 adds no draw call. If a test shows a missing redraw, the developer reports to `architector` and adds no call. |
+| N14 | D9 can change V-209 to V-213 of `ui-ux.md` 9.8, or add vectors. The 17.10 table is binding now. T19 writes its tests from the table and AC-T58. After the D9 review, T19 names the D9 vector ids in the test comments. A D9 vector that differs from the table goes to `architector`. |
+| N15 | The `TX Char Marker` comment of `sending_enter()` and the `tx_is_marker_shown` name do not change. In `Off`, the flag still means "the bar of ITEM shows after the first character". |
+| N16 | D-T72: the item line has a pixel contract, not a dirty-page contract. At PARTIAL, pages 3 and 4 are both dirty. Tests check the pixels of pages 3 and 4. |
+
+Required changes of D9 (D-T71). The owner is `ui-ux-embedded-designer`.
+
+| ID | Place in `ui-ux.md` | Old text | New text |
+| --- | --- | --- | --- |
+| C8 | V-214, column "Expected result" | "At t: `STATUS()`, no bar, page 4 is dirty, page 3 is not dirty, `MARKS(7,2,"-.-")`." | "At t: `STATUS()`, no bar, `MARKS(7,2,"-.-")`. No pixel of page 3 changes. In page 4, only the pixels of `BAR(36)` go off. No dirty-page rule applies at t: the item-line redraw draws pages 3 and 4 again, as at every correct character with `On` (`training_spec.md` D-T72)." |
+| C9 | 5.13.5, the bullet "With `Off`, the check of the first correct character" | "In the item line, this redraw changes only page 4." | "In the item line, this redraw changes only the bar pixels in page 4. It draws pages 3 and 4 again, so both pages go to the LCD (`training_spec.md` D-T72)." |
+
+| Task | Owner | Content | Depends on |
+| --- | --- | --- | --- |
+| D9 | `ui-ux-embedded-designer` | Done, review `approved` after C8 and C9 of the table above (D-T71). A new UX decision after UX-81 in `ui-ux.md` (expected UX-82): the `Off` rule of 5.13.5 and the bar rows of 5.3, 5.14 and the item-line rows (the behavior table above). Also the changed V-vectors of 9.8 and a device check row. All within D-T69. A need outside these limits goes to `architector`. | - |
+| T19 | `c-embedded-developer` | Sending: D-T70 and the sketch above. Scope: 17.10.1. | D9 review for the vector ids only (N14) |
+| Q10 | `qa-embedded` | Independent verification of AC-T55 (as amended), AC-T58, AC-T59 and DC-T14 preparation. Update `test_qa_sending_marker.c` to D-T70 (15.3). Fault and mutation cases below. LCD page diffs of the item rows (pages 3 and 4, y 24-39) with `On` and `Off`. Verdict `approved`, `changes_requested` or `blocked`. | T19 |
+| W10 | `technical-writer` | `docs/user_manual.md`, `docs/quick_guide.md` and `docs/release_notes.md` (0.1.3 section): with `TX Char Marker` = `Off`, the bar shows under the first character of a word at the start of each item and of each retry. It goes off after the first correct character. After an error, the bar still shows under the failed character. Texts from the D9 UX decision. | `architector` approval of T19, D9 review |
+
+Q10 fault cases:
+
+| ID | Case |
+| --- | --- |
+| F15 | `Off`: a wrong first character. The RESULT shows the bar at slot 0, and the RETRY shows the bar at slot 0. Both item-row frames equal the `On` frames. |
+| F16 | `Off`: a word-space error after the second-to-last character of a word (the F11 setup). The RESULT shows the bar under the expected next character. At RETRY, the bar moves to slot 0. |
+| F17 | `Off`, `TX Attempts` unlimited: five wrong answers in a row at different slots. Each RESULT shows the bar at the failed slot. Each RETRY shows the bar at slot 0. The first accepted character after each RETRY removes it. |
+| F18 | `Off`: the elements of a half-keyed first character, then an OVERFLOW, at an answer length of 0. The bar stays at slot 0 and the item rows do not change. The next accepted character removes the bar. |
+| F19 | `Off`: a skip in ITEM with nothing keyed, and a skip while a character is half keyed (the F10 setup). The RESULT shows the bar at the D-T59 (1) slot. The next item shows the bar at slot 0. Its first character counts (D-T57) and removes the bar. |
+| F20 | `Off`, character items: ITEM at an answer length of 0 shows no bar, also at RETRY and after a skip. |
+| F21 | `settings_set(SETTINGS_ID_TX_MARKER_HIDDEN, ...)` during a session (the F13 setup). The screen keeps the value of the entry. With both values, slot 0 shows the bar. Only an answer length of 1 or more shows the difference. |
+| F22 | A version 4 record with byte 14 = 0xFC (the F14 setup): ITEM shows the bar at slot 0 and no bar at slot 1 or more. |
+
+Q10 mutation cases:
+
+| ID | Mutant |
+| --- | --- |
+| M22 | The T18 code: `} else if (!tx_is_marker_shown) {` with no slot term. `Off` shows no bar at slot 0. |
+| M23 | The slot term is inverted: `(bar_slot == 0U)`. `Off` shows no bar at slot 0 and a bar at slot 1 or more. |
+| M24 | The ITEM branch never returns. `Off` shows the bar at every slot, as `On`. |
+| M25 | The slot 0 bar shows only at the start of an item, not at RETRY. For example, the term also tests `training_wrong_attempts() == 0U`, or the RETRY path does not redraw the item line. |
+| M26 | The slot 0 bar shows only at RETRY, not at the start of an item. |
+| M27 | The `Off` slot 0 path draws the bar with no `length > 1U` check, so a character item shows the bar with `Off`. |
+| M28 | The slot term reads `tx_result_slot()` in ITEM, in place of `training_answer_length()`. |
+
+#### 17.10.1 Scope of T19
+
+| Area | Files | Content |
+| --- | --- | --- |
+| Sending | `firmware/src/modes/sending.c` | D-T70 and the sketch above: the ITEM branch of `tx_draw_item_line()` and the function comment of 17.10. No other line changes. |
+| Tests | `firmware/Tests/test_sending.c` | The 15.3 changes for D-T70, AC-T58, and the D9 vector ids after the D9 review (N14). `test_receiving.c` passes with no change. |
+| Report | - | AC-T59. The 14.2 table before and after, and the `sending.c` size of forms A, B and C. Also the deepest chain by name and the `check_asm.sh` and `pre-commit` results. A list of the `test_qa_*` tests that fail only for the 15.3 D-T70 reason, each with its reason. |
+
+Not in T19: a change of `training.c`, `training.h`, `training_screen.c`, `training_screen.h`, `receiving.c`,
+settings, menu, the ISR files, `buttons.c`, `keyer.c`, `player.c`, `koch`, `progress`, `eeprom`,
+`Tests/support/` or `firmware/drivers/`. T19 does not change `test_qa_*` files (D-T43 (4)). If T19 needs a change
+outside this scope, the developer reports to `architector` first.
+
+Exit rule. T19 hands over with `build.sh`, `check_asm.sh` and `pre-commit` passing. In `test.sh`, only `test_qa_*`
+tests that the 15.3 D-T70 change covers can fail. Q10 updates them. Q10 ends with `test.sh` passing in full.
+
 ## 18. Device checks (unverified until the user tests on the device)
 
 | ID | Check |
@@ -2243,6 +2576,8 @@ tests that the 15.3 changes cover can fail. Q8 Part A updates them. Q8 ends with
 | DC-T10 | D-T44. Receiving: after the third wrong attempt, wait 10 s. The answer stays on the screen, and row 7 shows only `Next`. A long `enter` and a tip closure of 800 ms play the answer again. An `enter` tap and a short tip closure go on to the blank moment. On the last item, row 7 shows `Finish`, and an `enter` tap shows the end screen. Record whether a plug insertion in the answer state goes on (R-T12). |
 | DC-T11 | D-T45 to D-T47, both modes, `ui-ux.md` D-42 to D-44. On the start screen, the 8 x 16 level text and the Sending code marks are clear on the glass: L1, a character level, the AR level with `<AR/+>`, the level of `,`, and a word level. During auto-repeat, a step redraws pages 0-5. The last level shows within 100 ms after the release (`ui-ux.md` UX-16, D-35). Record the time of one step redraw and of the full redraw from the end screen to the start screen. On the end screen, `enter` and a tip closure show the start screen, and a second press starts the session. |
 | DC-T12 | D-T52 to D-T60, both modes. With `RX Attempts` and `TX Attempts` set to unlimited, five wrong answers in a row: the item comes again each time, and the status shows the `Try N` text of ui-ux.md. A long `next` in an item and right after a wrong answer: the answer shows as after a third wrong attempt. In Sending, skip while a character is half keyed: the first character of the next item counts. A settings upgrade from a 0.1.2 record: all values stay, and both attempt settings show 3. Record whether a `next` hold skips the next item by mistake (R-T16). |
+| DC-T13 | D-T63 to D-T65, Sending word session. With `TX Char Marker` `Off`: no bar after each accepted character (the start of an item and a retry: DC-T14). A wrong character, a word-space error (a pause of about 6 units), a third wrong attempt and a long `next` skip each show the bar under the failed character, and the retry moves it to the first character (DC-T14). A correct word shows no bar. With `On`, the screen is as in 0.1.2. A settings upgrade from a 0.1.2 record (layout version 3) and from a 0.1.3 development record shows `TX Char Marker` = `On`, and all other values stay. Receiving does not change. |
+| DC-T14 | D-T69 and D-T70, Sending word session with `TX Char Marker` `Off`. The bar shows under the first character at the start of each word item and at each retry: after a wrong character, after a word-space error, and with `TX Attempts` unlimited. The first correct character removes the bar. A wrong character, a word-space error and a skip still show the bar under the failed character. A character item shows no bar. The user records whether the start of a retry is now clear (D-T69 feedback). With `On`, the screen is as in DC-T13. |
 
 ## 19. Risks
 
@@ -2264,6 +2599,7 @@ tests that the 15.3 changes cover can fail. Q8 Part A updates them. Q8 ends with
 | R-T15: with unlimited attempts, an item never ends while the user answers wrong and does not skip. | The status shows the try number. A long `next` skips, and a long `menu/back` leaves with no level change. W8 tells the user. |
 | R-T16: a `next` hold that starts near the end of one item reaches 800 ms in the next item and skips it (D-T54 (7)). | A hold of 800 ms is a deliberate action, and a skip changes no level: the item gives no point, as a wrong item. DC-T12 records whether users hit this case. |
 | R-T17: in Sending, the user takes a hand off the paddle to hold `next`. A half-keyed character can stay in the keyer. | D-T57 drops the rest of that character. The first character of the next item still counts. AC-T52 (2) and (3). |
+| R-T18: with `TX Char Marker` `Off`, a user who loses the place in a long word gets no position help until an error. | User decision (D-T63). The default is `On`. The bar shows at every error, so the user sees where the error is. With D-T69, the bar also shows at the start of each attempt, so the user sees where a retry starts. W9 and W10 tell the user. |
 
 ## 20. Answered questions
 
@@ -2282,6 +2618,11 @@ Level selection (U-26 to U-31): resolved by D4, review `approved` (D-T42). T14 P
 
 Unlimited attempts and the long `next` skip (U-34): resolved by D7, review `approved` (D-T61). T17 Part C can start
 after Part B.
+
+`TX Char Marker` (U-35): resolved by D8, review `approved` (D-T66). T18 Parts A, B and C can start.
+
+Bar under the first character with `Off` (U-36): resolved by D9 (UX-82), review `approved` after C8 and C9
+(D-T71). The vector ids of D9 are final: V-209 to V-215.
 
 | ID | Item | Resolution | Source in `ui-ux.md` |
 | --- | --- | --- | --- |
@@ -2319,6 +2660,8 @@ after Part B.
 | U-33 | Start screen with a big level description, split end screen (D-T45 to D-T47) | Resolved by D6 (UX-65 to UX-70), review `approved` on 2026-10-15 (D-T48). Labels `New chars` and `New char` (column 8). Big line at `x = 64 - 4 m`. L1 code gap 9 px. End screen band `OK`, x 52-71. Steps redraw pages 0-5 in both modes. New vector V-171, device checks D-42 to D-44. | 5.15, 5.16, 6.1, 6.8, 6.9, 6.10, 9.4, UX-65 and up |
 | U-25 | Sending word-space result (D-T30, D-T31) | `Wrong: pause too long`, bar under the next character, row 5 at FAILED the code of that character, row 7 kept (WS-1 to WS-5). Resolved by D2 (UX-52). The arming condition text waits for fix F-1. | 5.13.1, 5.13.2, 5.14, 9.4 |
 | U-34 | Unlimited attempts and the long `next` skip (D-T52 to D-T59) | Resolved by D7 (UX-74 to UX-78), review `approved` on 2026-11-02 (D-T61). Settings order `CW`, `Training`, `Prosigns`, `Display`, `Reset Statistics`. Training list `RX Attempts`, `TX Attempts` (choices `3`, `Unlimited`, fw 9), `Max Word Length`, `Show CW Code`. Skip status `Skipped. The answer is:` (Receiving) and `Skipped` (Sending). Sending row 5: one code at the failed position, row 7 unchanged, bar unchanged. Retry status `Try <N>`, N 2 to 99, then `Try 99+`. | 5.3, 5.14, 5.19, 5.20, 6.1, 6.8, 6.9, 9.7 |
+| U-35 | `TX Char Marker` setting (D-T63 to D-T65) | Resolved by D8 (UX-79 to UX-81), review `approved` on 2026-11-03 (D-T66). Label `TX Char Marker`, choices `On`, `Off` in this order (user answer to Q-17), fw 3, default `On`, last item of `Settings > Training`. The behavior table of 17.9 and 5.13.5. | 5.3, 5.13.5, 5.14, 5.19, 5.20.4, 9.8 |
+| U-36 | Bar under the first character with `TX Char Marker` `Off` (D-T69, D-T70) | Resolved by D9 (UX-82), review `approved` on 2026-11-04 after C8 and C9 (D-T71). Item-line redraw rule: pixels only (D-T72). The behavior is the 17.10 table. | 5.3, 5.11.2, 5.13, 5.13.5, 5.14, 5.19, 5.20.4, 9.8 |
 
 ## 22. Final review (2026-10-06)
 
@@ -2554,3 +2897,43 @@ expected character." Change it only together with a later change of this code.
 T17 is closed. W8 (`technical-writer`) can start with the scope of section 17.8. The release notes entry waits for the
 version decision of the user (proposal: MINOR). Open, not blocking: the device checks DC-T12 and `ui-ux.md` D-48 to
 D-52, and the editorial note E-1 of D-T61 for `ui-ux.md` V-119. Do not commit `firmware/Tests/tools/__pycache__/`.
+
+### 22.8 Final review of D-T63 to D-T67, task T18 (2026-11-03)
+
+Verdict T18: `approved` on 2026-11-03 after C7. The first verdict was `changes_requested` (C7, one comment line).
+QA verdict (Q9): `approved` (host level). D8 review `approved` (D-T66).
+
+| Area | Evidence checked by `architector` |
+| --- | --- |
+| Contract | `settings.h`: id 15, `SETTINGS_ID_COUNT` 16. `settings.c`: mask 0x04, `RECORD_TRAINING_FLAGS_USED` 0x07, the `_Static_assert` over three masks, one row per table for id 15 (0, 1, 1, 0, shift 2). `settings_load()` and `settings_check_record()` have no diff. `menu_tree.c`: `{"On", "Off"}` and the fifth item with fw 3. `sending.c`: the plain-store `bool` and the `else if` branch of the 17.9 sketch. |
+| Build | `build.sh` passes with the post-build `check_asm.sh`. Flash 29 664 -> 29 737 B (+73, accepted by D-T67 (2)). xdata 1830 -> 1831 B. Stack starts at 0x44 with 188 B free, as before. |
+| Tests | `test.sh`: 95 of 95 pass. The developer test changes stay inside 15.3 and D-T67 (1). The rewritten training flag checks cover three flags, and no check is removed without a stronger one. New vectors with CRC `C8`, `C1`, `32` and `3B` are in `test_settings_training.c`. V-209 to V-213 are in `test_sending.c`. QA added `test_qa_sending_marker.c` and killed M15 to M21. |
+| Format | `pre-commit` passes on every changed file. |
+
+| ID | Finding | Required change |
+| --- | --- | --- |
+| C7 | `firmware/src/modes/sending.c:71`: the comment says the word item has the bar under the next character. With `TX Char Marker` `Off`, this is wrong in ITEM. The coding convention asks for a fix of a wrong comment. | The developer replaces the line with: `/* The item in the 8 x 16 font; in a word item, the bar under the next character (marker On) or the failed one. */` |
+
+C7 check: `sending.c:71` has the required line, and no other line changed. After the approval, the user reviewed the
+draw condition and kept the `else if` form for flash size (D-T68). The code is the approved code. `architector`
+checks that `sending.c` equals the approved diff before the commit. `build.sh` passes (flash 29 737 B, xdata
+1831 B, stack start 0x44, 188 B free). `test.sh` passes 95 of 95. `pre-commit` passes on `sending.c`. T18 is closed.
+Open, not blocking: device check DC-T13 and `ui-ux.md` D-48 and D-53 stay unverified until the user tests on the
+device. W9 (`technical-writer`) can start with the scope of section 17.9. The version stays 0.1.3 if the user agrees
+(proposal of 17.9). Do not commit `firmware/Tests/tools/__pycache__/` or the `.sr` and `.pvs` captures.
+
+### 22.9 Final review of D-T69 to D-T72, task T19 (2026-11-04)
+
+Verdict T19: `approved`. QA verdict (Q10): `approved` (host level). D9 review: `approved` after C8 and C9 (D-T71).
+
+| Area | Evidence checked by `architector` |
+| --- | --- |
+| Contract | `git diff firmware/src/`: only `sending.c` changes. The ITEM branch is form A of 17.10 (`!tx_is_marker_shown && (bar_slot != 0U)`). The comment above `tx_draw_item_line()` is the 17.10 text. No other production line changes. |
+| Build | `build.sh` run by `architector` passes with the post-build `check_asm.sh`. Flash 29 737 -> 29 740 B (+3, target +8). xdata 1831 B. Stack starts at 0x44 with 188 B free, as before. QA measured `sending.c` 0x42B -> 0x42E and forms A, B and C of equal size, so form A stays. DSEG, overlay and bit bytes do not change. |
+| Tests | `test.sh` run by `architector`: 95 of 95 pass. `test_sending.c`: the `Off` slot 0 checks follow 15.3. AC-T58 (1) compares the `Off` and `On` frames at each answer length of 0. V-214 checks the pixels (`harness_changed_pages()` gives page 4), as D-T72 says. QA changed only `test_qa_sending_marker.c`: F10 to F14 updated, F15 to F22 added, M22 to M28 killed, M25 in two variants. |
+| Format | `pre-commit` passes on `sending.c`, `test_sending.c` and `test_qa_sending_marker.c`. |
+| UI | `ui-ux.md` V-214 holds the C8 text, and 5.13.5 holds the C9 text. Editorial, not blocking: the C9 line in 5.13.5 is longer than the lines around it. |
+
+Open, not blocking: device check DC-T14 and `ui-ux.md` D-54 stay unverified until the user tests on the device.
+W10 (`technical-writer`) can start with the scope of section 17.10. If the user agrees, the version stays 0.1.3
+(proposal of 17.10). Do not commit `firmware/Tests/tools/__pycache__/`, `ann.txt` or the `.sr` and `.pvs` captures.

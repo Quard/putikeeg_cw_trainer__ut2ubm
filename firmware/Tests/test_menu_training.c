@@ -5,7 +5,8 @@
 
 /*
  * Menu parts of the training change (references/internal/training_spec.md D-T8, D-T11, D-T12, D-T19, sections 12.1
- * and 12.4; AC-T21, AC-T22), and Settings > Training (menu_subsystem_spec.md section 19.5, AC-M19, AC-M20).
+ * and 12.4; AC-T21, AC-T22), and Settings > Training (menu_subsystem_spec.md sections 19.5 and 20.5, AC-M19, AC-M20,
+ * AC-M28, AC-M29).
  */
 
 #include <stdlib.h>
@@ -338,6 +339,7 @@ static void test_v150_level_after_pass_and_reset(void) {
 #define TRAINING_ROW_TX 2
 #define TRAINING_ROW_WORD 3
 #define TRAINING_ROW_CODE 4
+#define TRAINING_ROW_MARKER 5
 
 /* A list row: @p label, and @p value right-aligned to column 22 or the submenu mark in column 24 for NULL. */
 static bool list_row(int r, const char* label, const char* value, bool is_selected) {
@@ -390,12 +392,13 @@ static bool settings_list_is(unsigned selected) {
          action_row(5, "Reset Statistics", selected == 4U) && blank(6) && blank(7);
 }
 
-/* The Training list with the values @p rx, @p tx, @p word and @p code and the cursor on row 1. */
-static bool training_list_is(const char* rx, const char* tx, const char* word, const char* code) {
+/* The Training list with the values @p rx, @p tx, @p word, @p code and @p marker and the cursor on row 1. */
+static bool training_list_is(const char* rx, const char* tx, const char* word, const char* code, const char* marker) {
   return hdr("Settings > Training") && list_row(TRAINING_ROW_RX, "RX Attempts", rx, true) &&
          list_row(TRAINING_ROW_TX, "TX Attempts", tx, false) &&
          list_row(TRAINING_ROW_WORD, "Max Word Length", word, false) &&
-         list_row(TRAINING_ROW_CODE, "Show CW Code", code, false) && blank(5) && blank(6) && blank(7);
+         list_row(TRAINING_ROW_CODE, "Show CW Code", code, false) &&
+         list_row(TRAINING_ROW_MARKER, "TX Char Marker", marker, false) && blank(6) && blank(7);
 }
 
 /* TRAINING of ui-ux.md section 9.7 without the power-on: open Settings, then Training. */
@@ -409,12 +412,13 @@ static void open_training(void) {
 
 static size_t settings_writes(void) { return fake_iap_command_count(2U) + fake_iap_command_count(3U); }
 
-/* AC-M19: the tree of menu_subsystem_spec.md section 19.5. */
+/* AC-M19, AC-M28: the tree of menu_subsystem_spec.md sections 19.5 and 20.5. */
 static void test_training_node_tree(void) {
-  static const char* const labels[4] = {"RX Attempts", "TX Attempts", "Max Word Length", "Show CW Code"};
-  static const uint8_t ids[4] = {SETTINGS_ID_RX_UNLIMITED, SETTINGS_ID_TX_UNLIMITED, SETTINGS_ID_MAX_WORD_LEN,
-                                 SETTINGS_ID_SHOW_CW_CODE};
-  static const uint8_t widths[4] = {9U, 9U, 1U, 3U};
+  static const char* const labels[5] = {"RX Attempts", "TX Attempts", "Max Word Length", "Show CW Code",
+                                        "TX Char Marker"};
+  static const uint8_t ids[5] = {SETTINGS_ID_RX_UNLIMITED, SETTINGS_ID_TX_UNLIMITED, SETTINGS_ID_MAX_WORD_LEN,
+                                 SETTINGS_ID_SHOW_CW_CODE, SETTINGS_ID_TX_MARKER_HIDDEN};
+  static const uint8_t widths[5] = {9U, 9U, 1U, 3U, 3U};
   const menu_node_t* settings = &menu_nodes[MENU_NODE_SETTINGS];
   const menu_node_t* training = &menu_nodes[MENU_NODE_TRAINING];
   size_t index;
@@ -425,9 +429,10 @@ static void test_training_node_tree(void) {
   TEST_ASSERT_EQUAL(MENU_NODE_TRAINING, settings->items[1].target);
   TEST_ASSERT(settings->is_save_on_exit);
   TEST_ASSERT_EQUAL(0, strcmp("Settings > Training", training->title));
-  TEST_ASSERT_EQUAL(4U, training->item_count);
+  TEST_ASSERT_EQUAL(5U, training->item_count);
+  TEST_ASSERT(training->item_count < MENU_VISIBLE_ROWS);
   TEST_ASSERT(!training->is_save_on_exit);
-  for (index = 0U; index < 4U; ++index) {
+  for (index = 0U; index < 5U; ++index) {
     const menu_item_t* item = &training->items[index];
     TEST_ASSERT_EQUAL(0, strcmp(labels[index], item->label));
     TEST_ASSERT_EQUAL(ids[index], item->target);
@@ -442,6 +447,10 @@ static void test_training_node_tree(void) {
   }
   TEST_ASSERT_EQUAL(MENU_KIND_VALUE, training->items[2].kind);
   TEST_ASSERT_EQUAL(MENU_KIND_CHOICE, training->items[3].kind);
+  /* The marker id stores "hidden", so the texts are in the inverse order of Show CW Code. */
+  TEST_ASSERT_EQUAL(MENU_KIND_CHOICE, training->items[4].kind);
+  TEST_ASSERT_EQUAL(0, strcmp("On", training->items[4].texts[0]));
+  TEST_ASSERT_EQUAL(0, strcmp("Off", training->items[4].texts[1]));
 }
 
 /* V-192, AC-M20: the lists; the back from Training with no edit writes nothing and keeps the cursor on Training. */
@@ -455,7 +464,7 @@ static void test_v192_training_list(void) {
   TEST_ASSERT(settings_list_is(1U));
   harness_event(BUTTON_EVENT_ENTER);
   TEST_ASSERT_EQUAL(MENU_NODE_TRAINING, menu_node());
-  TEST_ASSERT(training_list_is("3", "3", "5", "On"));
+  TEST_ASSERT(training_list_is("3", "3", "5", "On", "On"));
   harness_event(BUTTON_EVENT_MENU);
   TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
   TEST_ASSERT_EQUAL(1U, menu_cursor());
@@ -500,7 +509,7 @@ static void test_v193_attempts_edit(void) {
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_RX_UNLIMITED));
   TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_UNLIMITED));
   open_training();
-  TEST_ASSERT(training_list_is("Unlimited", "Unlimited", "5", "On"));
+  TEST_ASSERT(training_list_is("Unlimited", "Unlimited", "5", "On", "On"));
 }
 
 /* V-194: the two moved items edit the same ids and keep their field widths. */
@@ -531,7 +540,7 @@ static void test_v194_moved_items(void) {
   TEST_ASSERT_EQUAL(7U, settings_get(SETTINGS_ID_MAX_WORD_LEN));
   TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_SHOW_CW_CODE));
   open_training();
-  TEST_ASSERT(training_list_is("3", "3", "7", "Off"));
+  TEST_ASSERT(training_list_is("3", "3", "7", "Off", "On"));
   harness_event(BUTTON_EVENT_MENU);
   TEST_ASSERT(settings_list_is(1U));
 }
@@ -555,7 +564,7 @@ static void test_v195_version_3_upgrade(void) {
   TEST_ASSERT(list_row(3, "Prosigns", "Prosign", false));
   harness_event(BUTTON_EVENT_NEXT);
   harness_event(BUTTON_EVENT_ENTER);
-  TEST_ASSERT(training_list_is("3", "3", "7", "Off"));
+  TEST_ASSERT(training_list_is("3", "3", "7", "Off", "On"));
   harness_event(BUTTON_EVENT_MENU);
   harness_event(BUTTON_EVENT_PREV);
   harness_event(BUTTON_EVENT_ENTER);
@@ -573,7 +582,105 @@ static void test_v195_version_3_upgrade(void) {
     TEST_ASSERT_EQUAL(0U, settings_get((settings_id_t)(SETTINGS_ID_RX_UNLIMITED + step)));
   }
   open_training();
-  TEST_ASSERT(training_list_is("3", "3", "7", "Off"));
+  TEST_ASSERT(training_list_is("3", "3", "7", "Off", "On"));
+}
+
+/* The Training list with the cursor on item @p selected and the default values. */
+static bool training_cursor_is(unsigned selected) {
+  return hdr("Settings > Training") && list_row(TRAINING_ROW_RX, "RX Attempts", "3", selected == 0U) &&
+         list_row(TRAINING_ROW_TX, "TX Attempts", "3", selected == 1U) &&
+         list_row(TRAINING_ROW_WORD, "Max Word Length", "5", selected == 2U) &&
+         list_row(TRAINING_ROW_CODE, "Show CW Code", "On", selected == 3U) &&
+         list_row(TRAINING_ROW_MARKER, "TX Char Marker", "On", selected == 4U) && blank(6) && blank(7);
+}
+
+static bool page_0_unchanged(void) { return (harness_changed_pages() & PAGE(0U)) == 0U; }
+
+/* V-207, AC-M28: the fifth item, the cursor wraps both ways, and the list does not scroll. */
+static void test_v207_marker_item_cursor(void) {
+  unsigned step;
+
+  start();
+  open_training();
+  TEST_ASSERT(training_cursor_is(0U));
+  for (step = 1U; step <= 4U; ++step) {
+    harness_mark_frame();
+    harness_event(BUTTON_EVENT_NEXT);
+    TEST_ASSERT(page_0_unchanged());
+    TEST_ASSERT(training_cursor_is(step));
+  }
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  harness_mark_frame();
+  harness_event(BUTTON_EVENT_NEXT);
+  TEST_ASSERT(page_0_unchanged());
+  TEST_ASSERT_EQUAL(0U, menu_cursor());
+  TEST_ASSERT(training_cursor_is(0U));
+  harness_mark_frame();
+  harness_event(BUTTON_EVENT_PREV);
+  TEST_ASSERT(page_0_unchanged());
+  TEST_ASSERT_EQUAL(4U, menu_cursor());
+  TEST_ASSERT(training_cursor_is(4U));
+  TEST_ASSERT_EQUAL(0U, fake_iap_access_count());
+}
+
+/* Opens the edit of TX Char Marker from the Training list with the cursor on row 1. */
+static void edit_marker(void) {
+  unsigned step;
+
+  for (step = 0U; step < 4U; ++step) {
+    harness_event(BUTTON_EVENT_NEXT);
+  }
+  harness_event(BUTTON_EVENT_ENTER);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_EDIT, menu_screen());
+}
+
+/* V-208, AC-M29: the edit order is On, then Off; each exit from Settings saves once, and the value survives a re-init.
+ */
+static void test_v208_marker_edit_and_save(void) {
+  start();
+  open_training();
+  edit_marker();
+  TEST_ASSERT(edit_row(TRAINING_ROW_MARKER, "TX Char Marker", "On", 3, false, true));
+  harness_clear_dirty();
+  harness_event(BUTTON_EVENT_PREV);
+  TEST_ASSERT(dirty_is(0U));
+  harness_event(BUTTON_EVENT_NEXT);
+  TEST_ASSERT(edit_row(TRAINING_ROW_MARKER, "TX Char Marker", "Off", 3, true, false));
+  harness_clear_dirty();
+  harness_event(BUTTON_EVENT_NEXT);
+  TEST_ASSERT(dirty_is(0U));
+  harness_event(BUTTON_EVENT_ENTER);
+  TEST_ASSERT_EQUAL(MENU_SCREEN_LIST, menu_screen());
+  TEST_ASSERT(list_row(TRAINING_ROW_MARKER, "TX Char Marker", "Off", true));
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(0U, settings_writes());
+  TEST_ASSERT_EQUAL(MENU_NODE_SETTINGS, menu_node());
+  TEST_ASSERT_EQUAL(1U, menu_cursor());
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
+  TEST_ASSERT_EQUAL(SETTINGS_RECORD_SIZE, fake_iap_command_count(2U));
+  TEST_ASSERT_EQUAL(0x04U, fake_iap_memory()[14]);
+  TEST_ASSERT_EQUAL(0xC8U, fake_iap_memory()[15]);
+
+  harness_power_on();
+  TEST_ASSERT_EQUAL(1U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  open_training();
+  TEST_ASSERT(training_list_is("3", "3", "5", "On", "Off"));
+  edit_marker();
+  TEST_ASSERT(edit_row(TRAINING_ROW_MARKER, "TX Char Marker", "Off", 3, true, false));
+  harness_event(BUTTON_EVENT_PREV);
+  TEST_ASSERT(edit_row(TRAINING_ROW_MARKER, "TX Char Marker", "On", 3, false, true));
+  harness_event(BUTTON_EVENT_ENTER);
+  harness_event(BUTTON_EVENT_MENU);
+  harness_event(BUTTON_EVENT_MENU);
+  TEST_ASSERT_EQUAL(1U, fake_iap_erase_count(0U));
+  TEST_ASSERT_EQUAL(0x00U, fake_iap_memory()[14]);
+
+  harness_power_on();
+  TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
+  open_training();
+  TEST_ASSERT(training_list_is("3", "3", "5", "On", "On"));
 }
 
 int main(void) {
@@ -592,5 +699,7 @@ int main(void) {
   TEST_RUN(test_v193_attempts_edit);
   TEST_RUN(test_v194_moved_items);
   TEST_RUN(test_v195_version_3_upgrade);
+  TEST_RUN(test_v207_marker_item_cursor);
+  TEST_RUN(test_v208_marker_edit_and_save);
   return TEST_FINISH();
 }

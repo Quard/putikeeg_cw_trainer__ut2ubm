@@ -44,17 +44,22 @@ static const uint8_t default_record_v4[SETTINGS_RECORD_SIZE] = {0x43U, 0x57U, 0x
 #define BASE_RECORD_COUNT 4U
 static const uint8_t* const base_records[BASE_RECORD_COUNT] = {default_record, default_record_v2, default_record_v3,
                                                                default_record_v4};
-static const uint16_t default_values[SETTINGS_ID_COUNT] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U,
-                                                           8U,   32U, 0U,  2U,  6U,  0U, 0U};
+static const uint16_t default_values[] = {600U, 32U, 32U, 20U, 20U, 2U, 1U, 5U, 8U, 32U, 0U, 2U, 6U, 0U, 0U, 0U};
 
 /*
- * Spec section 5.2, keyer_spec.md section 6.13 for Paddle and 17.4.2 for Prosigns, section 18.2 for Ramp. Effective
- * speeds use the current base speed as max.
+ * Spec section 5.2, keyer_spec.md section 6.13 for Paddle and 17.4.2 for Prosigns, section 18.2 for Ramp, sections 19
+ * and 20 for the training flags. Effective speeds use the current base speed as max.
  */
-static const uint16_t spec_min[SETTINGS_ID_COUNT] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U, 0U, 0U};
-static const uint16_t spec_max[SETTINGS_ID_COUNT] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U,
-                                                     10U,   63U, 1U,  2U,  12U, 1U, 1U};
-static const uint16_t spec_step[SETTINGS_ID_COUNT] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+static const uint16_t spec_min[] = {400U, 5U, 5U, 5U, 5U, 0U, 0U, 4U, 0U, 0U, 0U, 0U, 4U, 0U, 0U, 0U};
+static const uint16_t spec_max[] = {1000U, 50U, 50U, 50U, 50U, 2U, 1U, 8U, 10U, 63U, 1U, 2U, 12U, 1U, 1U, 1U};
+static const uint16_t spec_step[] = {10U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U};
+
+/* A table without one entry per id would get a silent 0 entry. */
+_Static_assert((sizeof(default_values) == SETTINGS_ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(spec_min) == SETTINGS_ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(spec_max) == SETTINGS_ID_COUNT * sizeof(uint16_t)) &&
+                   (sizeof(spec_step) == SETTINGS_ID_COUNT * sizeof(uint16_t)),
+               "each oracle table needs one entry per settings id");
 
 /* The CRC position follows the record version (menu_subsystem_spec.md section 19.3). */
 static uint8_t crc_offset_of(const uint8_t* record) {
@@ -129,6 +134,8 @@ static void values_of(const uint8_t* record, uint16_t* values) {
       (record[RECORD_VERSION_OFFSET] < 4U) ? 0U : (uint16_t)(record[RECORD_TRAINING_FLAGS_OFFSET] & 0x01U);
   values[SETTINGS_ID_TX_UNLIMITED] =
       (record[RECORD_VERSION_OFFSET] < 4U) ? 0U : (uint16_t)((record[RECORD_TRAINING_FLAGS_OFFSET] >> 1) & 0x01U);
+  values[SETTINGS_ID_TX_MARKER_HIDDEN] =
+      (record[RECORD_VERSION_OFFSET] < 4U) ? 0U : (uint16_t)((record[RECORD_TRAINING_FLAGS_OFFSET] >> 2) & 0x01U);
 }
 
 /* The flags byte that a save writes after a load of @p record with @p flags. */

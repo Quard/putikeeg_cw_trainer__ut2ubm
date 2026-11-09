@@ -6,19 +6,27 @@ user can see, hear or press. The [user manual](user_manual.md) tells you how to 
 ## Version 0.1.3 (in development)
 
 Version 0.1.3 adds the `Settings > Training` list. Each training mode gets its own attempt setting, with 3 attempts
-or unlimited attempts. In both modes, a hold of `next` skips the current item. The device saves the settings in a
-new format. It is not released. Work on it continues, and the next changes go into this version too.
+or unlimited attempts. In both modes, a hold of `next` skips the current item. In Sending, a new setting hides the
+bar under the next character of a word after the first correct character. The device saves the settings in a new
+format. It is not released. Work on it continues, and the next changes go into this version too.
 
 ### Settings: the Training list
 
-- **New list `Settings > Training`.** It has four items: `RX Attempts`, `TX Attempts`, `Max Word Length` and
-  `Show CW Code`.
+- **New list `Settings > Training`.** It has five items: `RX Attempts`, `TX Attempts`, `Max Word Length`,
+  `Show CW Code` and `TX Char Marker`.
 - **Two items moved.** `Max Word Length` and `Show CW Code` moved from `Settings` to `Settings > Training`. Their
   values, ranges and defaults do not change.
 - **New `Settings` order.** `CW`, `Training`, `Prosigns`, `Display` and `Reset Statistics`.
 - **New settings `RX Attempts` and `TX Attempts`.** `RX Attempts` sets the attempts for each item in Receiving.
   `TX Attempts` sets them in Sending. The values are `3` (default) and `Unlimited`. A change applies the next time
   that you open the mode.
+- **New setting `TX Char Marker`.** It is the last item of `Settings > Training`, after `Show CW Code`. The values
+  are `On` (default) and `Off`. It acts only in Sending. With `On`, the screen is the same as in earlier versions.
+  With `Off`, the bar shows under the first character of a word at the start of each item and of each retry. This
+  tells you that you can start the retry. The first correct character turns the bar off, and it stays off for the
+  rest of the attempt. After an error, the bar always shows under the failed character, also with `Off`. This is
+  true after a wrong character, after `Wrong: pause too long`, after the third wrong attempt and after a skip. A
+  `Correct` result and an item of one character show no bar. A change applies the next time that you open Sending.
 
 ### Koch training: Receiving and Sending
 
@@ -41,8 +49,10 @@ new format. It is not released. Work on it continues, and the next changes go in
 ### Saved settings
 
 - **Your settings stay.** A firmware download can keep the settings of version 0.1.2 or earlier. Then they stay as
-  they were, and `RX Attempts` and `TX Attempts` are `3`. `Max Word Length` and `Show CW Code` keep their values.
-  The device shows no message.
+  they were, `RX Attempts` and `TX Attempts` are `3`, and `TX Char Marker` is `On`. `Max Word Length` and
+  `Show CW Code` keep their values. The device shows no message.
+- **Settings of an earlier build of this version stay.** `TX Char Marker` does not change the settings format. If
+  an earlier build of this version saved your settings, they stay, and `TX Char Marker` is `On`.
 - **New settings format.** At the first save after you change a setting, the device writes a new settings format.
   An earlier firmware version cannot read it. If you download an earlier version after that save, it uses all
   default values and shows no message. Set the values again.

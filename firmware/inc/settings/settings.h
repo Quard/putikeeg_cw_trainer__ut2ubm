@@ -29,12 +29,13 @@ typedef uint8_t settings_id_t;
 #define SETTINGS_ID_MAX_WORD_LEN 7U
 #define SETTINGS_ID_BACKLIGHT 8U
 #define SETTINGS_ID_CONTRAST 9U
-#define SETTINGS_ID_PADDLE_SWAP 10U   /* 0 Normal, 1 Reversed */
-#define SETTINGS_ID_PROSIGN_STYLE 11U /* SETTINGS_PROSIGN_*: 0 Punctuation, 1 Prosign, 2 Both */
-#define SETTINGS_ID_RAMP_MS 12U       /* sidetone rise and fall time, 4..12 ms */
-#define SETTINGS_ID_RX_UNLIMITED 13U  /* RX Attempts: 0 gives 3 attempts, 1 unlimited */
-#define SETTINGS_ID_TX_UNLIMITED 14U  /* TX Attempts: 0 gives 3 attempts, 1 unlimited */
-#define SETTINGS_ID_COUNT 15U
+#define SETTINGS_ID_PADDLE_SWAP 10U      /* 0 Normal, 1 Reversed */
+#define SETTINGS_ID_PROSIGN_STYLE 11U    /* SETTINGS_PROSIGN_*: 0 Punctuation, 1 Prosign, 2 Both */
+#define SETTINGS_ID_RAMP_MS 12U          /* sidetone rise and fall time, 4..12 ms */
+#define SETTINGS_ID_RX_UNLIMITED 13U     /* RX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_TX_UNLIMITED 14U     /* TX Attempts: 0 gives 3 attempts, 1 unlimited */
+#define SETTINGS_ID_TX_MARKER_HIDDEN 15U /* TX Char Marker: 0 On, 1 Off */
+#define SETTINGS_ID_COUNT 16U
 
 #define SETTINGS_KEY_STRAIGHT 0U
 #define SETTINGS_KEY_IAMBIC_A 1U

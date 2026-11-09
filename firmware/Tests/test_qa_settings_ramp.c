@@ -162,7 +162,7 @@ static bool are_other_fields_default(void) {
 /* AC-M1, AC-28 side: the id, the ranges and the default. */
 static void test_contract(void) {
   TEST_ASSERT_EQUAL(RAMP_ID, SETTINGS_ID_RAMP_MS);
-  TEST_ASSERT_EQUAL(15U, SETTINGS_ID_COUNT);
+  TEST_ASSERT_EQUAL(16U, SETTINGS_ID_COUNT);
   TEST_ASSERT_EQUAL(4U, SETTINGS_LAYOUT_VERSION);
   TEST_ASSERT_EQUAL(4U, settings_min(SETTINGS_ID_RAMP_MS));
   TEST_ASSERT_EQUAL(12U, settings_max(SETTINGS_ID_RAMP_MS));
@@ -189,6 +189,8 @@ static void test_vectors(void) {
     TEST_ASSERT_EQUAL(vector->show, settings_get(SETTINGS_ID_SHOW_CW_CODE));
     TEST_ASSERT_EQUAL(vector->paddle, settings_get(SETTINGS_ID_PADDLE_SWAP));
     TEST_ASSERT_EQUAL(vector->prosigns, settings_get(SETTINGS_ID_PROSIGN_STYLE));
+    /* AC-M23: every 18.2 vector loads TX Char Marker as On (id 15 = 0). */
+    TEST_ASSERT_EQUAL(0U, settings_get(SETTINGS_ID_TX_MARKER_HIDDEN));
     TEST_ASSERT(are_other_fields_default());
     TEST_ASSERT_EQUAL(0U, write_operations());
     /* No edit step: a Settings exit writes nothing (UX-15), also after a version 1, 2 or 4 load. */
